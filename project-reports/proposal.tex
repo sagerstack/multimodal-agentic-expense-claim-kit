@@ -1,7 +1,10 @@
 \documentclass{article}
 
-% --- NeurIPS 2025 style (submission mode — anonymous, with line numbers) ---
-\usepackage{neurips_2025}
+% --- NeurIPS 2025 style (preprint mode — named authors, no line numbers) ---
+\usepackage[preprint]{neurips_2025}
+\makeatletter
+\renewcommand{\@notice}{}
+\makeatother
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -12,41 +15,32 @@
 \usepackage{nicefrac}
 \usepackage{microtype}
 \usepackage{graphicx}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{enumitem}
 
 % ============================================================
-\title{Agentic Expense Claims: A Multi-Agent Multimodal System \\
-for Automated Expense Report Processing}
+\title{Agentic Expense Claims: A Multi-Agent Multimodal\\System for Automated Expense Report Processing}
 % ============================================================
 
-% --- Authors (hidden in submission mode; shown in final) ---
 \author{%
-  Author 1 \\
-  \texttt{author1@sutd.edu.sg} \\
+  Nguyen Thanh Tung \\
+  1011011 \\
   \And
-  Author 2 \\
-  \texttt{author2@sutd.edu.sg} \\
+  Josiah Lau \\
+  1001530 \\
   \And
-  Author 3 \\
-  \texttt{author3@sutd.edu.sg} \\
+  James Oon \\
+  1010718 \\
   \And
-  Author 4 \\
-  \texttt{author4@sutd.edu.sg} \\
+  Sagar Pratap Singh \\
+  1010736 \\
 }
 
 \begin{document}
-
+\vspace{-1em}
 \maketitle
-
-% ============================================================
-\begin{abstract}
-% [TODO] ~150 words. Summarize:
-% - Problem: expense claims are manual, error-prone, multi-modal
-% - Approach: 4-agent system (Intake, Compliance, Fraud, Advisor)
-%   orchestrated by LangGraph, grounded in receipt images + policy text + structured DB
-% - Key contribution: agentic redesign that eliminates manual data entry,
-%   prevents policy violations pre-submission, and auto-approves low-risk claims
-% - Preliminary results / evaluation plan
-\end{abstract}
+\vspace{-2em}
 
 % ============================================================
 \section{Problem Decomposition}
@@ -56,104 +50,86 @@ for Automated Expense Report Processing}
 \subsection{Problem Statement}
 \label{sec:problem-statement}
 
-% [TODO] Define the expense claims problem.
-% - Current process: form-based, manual data entry, multi-level approval
-% - Context: SUTD SAP Concur system
-% - Core argument: why this cannot be solved by a single model call
-%   (multiple reasoning stages, multiple modalities, multiple stakeholders)
+The expense claim process in many corporate environments including SUTD using SAP Concur contains operational inefficiencies for both students and administrative reviewers. Reimbursements may take up to two months due to multiple validation stages, manual data entry, policy interpretation challenges, and repeated claim resubmissions that often lead to errors and claim rejections.
 
 \subsection{Current Workflow Pain Points}
 \label{sec:pain-points}
 
-% [TODO] Empirically observed pain points from SUTD SAP Concur analysis:
-%
-% \begin{enumerate}
-%   \item High error rates in OCR-based receipt scanning
-%   \item Lengthy submission times (15--25 min per claim)
-%   \item Policy confusion across 5 claim policies and 20+ GL codes
-%   \item Repeated claim rejections (missing/incorrect fields)
-%   \item Multi-modal complexity (receipts, PDFs, itineraries, policy text)
-%   \item No automated validation or intelligent suggestions
-% \end{enumerate}
+The current workflow faces several inefficiencies, including OCR errors in receipt extraction, time-consuming manual data entry, and complex policy rules with numerous GL codes. These issues frequently lead to claim rejections, require manual cross-checking of multimodal documents (receipts, PDFs, itineraries), and provide no real-time validation before submission.
 
 \subsection{Sub-Task Decomposition}
 \label{sec:subtasks}
 
-% [TODO] Explicit decomposition into distinct reasoning/decision-making stages.
-% Must have >= 3 stages that cannot be merged into a single model invocation.
-%
-% Stage 1: Multimodal data extraction (receipt images -> structured data via VLM)
-% Stage 2: Policy compliance validation (pre-submission evaluator-optimizer loop)
-% Stage 3: Post-submission parallel assessment (compliance audit + fraud investigation)
-% Stage 4: Risk-based routing and advisory (risk scoring + human-assisted review)
-%
-% Argue why merging these into one prompt is infeasible:
-% - Different modalities at each stage
-% - Different tools required
-% - Independent concerns (compliance vs fraud)
-% - Human-in-the-loop at review stage
-
+The proposed workflow decomposes the process into four agent nodes orchestrated through a shared state: multimodal data extraction using vision-language models, policy compliance validation using retrieval-augmented reasoning~\cite{lewis2020rag}, and parallel compliance and fraud detection checks. A final risk-based routing node aggregates the results and conditionally directs the claim toward automated approval, correction requests, or human review. These stages cannot be merged into a single model invocation because they require different models (VLM vs.\ LLM), different external tools (database, currency API, email), and different reasoning contexts.
 % ============================================================
 \section{Agent Architecture}
 \label{sec:architecture}
 % ============================================================
 
+The system exposes a Chainlit-based~\cite{chainlit2024} conversational interface supporting two user personas:
+
+\textbf{Claimant persona} --- Interacts with the Intake Agent via image uploads and text input. The agent guides claim preparation, flags policy violations, and iterates until all pre-submission checks pass.
+
+\textbf{Reviewer persona} --- Receives escalated claims with the Advisor Agent's risk summary, compliance and fraud findings, and cited policy clauses. Can approve, reject, or return the claim with comments.
+
 \subsection{System Diagram}
 \label{sec:system-diagram}
 
-% [TODO] Insert system architecture figure showing:
-% - Entry point (role-based routing)
-% - Intake Agent -> Compliance Agent + Fraud Agent (parallel) -> Advisor Agent
-% - MCP server connections
-% - User interfaces (Claimant chat, Reviewer inbox)
-%
-% \begin{figure}[h]
-%   \centering
-%   \includegraphics[width=\textwidth]{figures/system-architecture.pdf}
-%   \caption{System architecture of the agentic expense claims pipeline.}
-%   \label{fig:architecture}
-% \end{figure}
+Figure~\ref{fig:architecture} presents the four-agent pipeline orchestrated by LangGraph~\cite{langgraph2024}, separated into pre-submission and post-submission stages. Details of each agent's role and tools follow in Sections~\ref{sec:agent-roles} and~\ref{sec:model-tools}.
 
 \subsection{Agent Roles}
 \label{sec:agent-roles}
 
-% [TODO] Define each agent. Use table below as starting point.
-%
-% \begin{table}[h]
-%   \centering
-%   \caption{Agent definitions and agentic design patterns.}
-%   \label{tab:agents}
-%   \begin{tabular}{@{}llll@{}}
-%     \toprule
-%     Agent & Pattern & Serves & Responsibility \\
-%     \midrule
-%     Intake Agent      & ReAct + Evaluator-Optimizer & Claimant & [TODO] \\
-%     Compliance Agent  & Evaluator-Optimizer         & System   & [TODO] \\
-%     Fraud Agent       & Prompt Chaining             & System   & [TODO] \\
-%     Advisor Agent     & Reflection + Routing        & Reviewer & [TODO] \\
-%     \bottomrule
-%   \end{tabular}
-% \end{table}
+The system is built on LangGraph, which acts as the multi-agent orchestrator, with each node hosting one or more agentic processes~\cite{anthropic2024agents} as part of the claim expense workflow:
+
+\begin{table}[h]
+  \centering
+  \caption{Agent definitions and agentic design patterns.}
+  \label{tab:agents}
+  \small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{1.5cm} >{\raggedright\arraybackslash}p{1.7cm} X@{}}
+    \toprule
+    \textbf{Agent} & \textbf{Pattern} & \textbf{Responsibility} \\
+    \midrule
+    Intake Agent & ReAct~\cite{yao2023react} + Evaluator Gate & Interacts with the claimant in a conversation loop, extracts receipt data via VLM, validates against policy rules, converts currencies, and iterates until all pre-submission checks pass. \\
+    \addlinespace
+    Compliance Agent & Evaluator & Audits the claim against organizational policies (budgets, spending limits, approval thresholds) and produces a pass/fail finding with cited policy clauses. \\
+    \addlinespace
+    Fraud Agent & Tool call & Queries historical claims to detect fraudulent, anomalous, or duplicate receipts. Returns a fraud/legit finding per receipt. \\
+    \addlinespace
+    Advisor Agent & Reflection + Routing & Synthesizes compliance and fraud findings into a risk assessment, then routes the claim to auto-approve, return, or escalate with policy citations. \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
 \subsection{Model and Tool Choices}
 \label{sec:model-tools}
 
-% [TODO] Justify selection of:
-% - Orchestration: LangGraph (deterministic graph + LLM-powered nodes)
-% - VLM for receipt extraction (model TBD — e.g., GPT-4o, Gemini, Qwen-VL)
-% - LLM for reasoning agents (model TBD)
-% - MCP servers: DBHub (Postgres), rag-mcp-server (policy RAG),
-%   Frankfurter (currency), Forensics-MCP-Server (receipt image forensics),
-%   mcp-email-server (notifications)
+\textbf{Orchestration: LangGraph.}
+The workflow requires conditional branching, parallel execution, iterative loops, and shared state passing between agents. LangGraph models these natively as a state machine with explicit graph nodes and edges, without requiring an additional agentic SDK.
 
-\subsection{User Interface}
-\label{sec:ui}
+\textbf{Vision-Language Model --- Candidate: GLM-4.6V}~\cite{glmv2025}\textbf{; Alternative: Qwen2.5-VL-7B-Instruct.}
+The VLM extracts structured fields from receipt images natively, without a separate OCR pipeline. GLM-4.6V is selected for its MoE architecture and document reasoning capability. Qwen2.5-VL-7B-Instruct is the self-hostable alternative with strong OCR performance.
 
-% [TODO] Describe the usable UI for demo:
-% - Chainlit chat interface
-% - Two personas: Claimant (submit claims via conversation) and Reviewer (review queue)
-% - Receipt upload via drag-and-drop
-% - Include a UI mockup or screenshot if available
+\textbf{LLM for Reasoning Agents --- Candidate: GLM-5}~\cite{glm5_2026}\textbf{; Alternative: Qwen2.5-7B-Instruct.}
+The LLM drives text-based reasoning across the Compliance, Fraud, and Advisor agents over policy documents and structured data. GLM-5 is selected for its agentic reasoning and 200K context window. Qwen2.5-7B-Instruct is the self-hostable alternative that eliminates API dependency.
+
+\begin{table}[h]
+  \centering
+  \caption{MCP server integrations~\cite{mcp2024}.}
+  \label{tab:mcp}
+  \small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{2.25cm} >{\raggedright\arraybackslash}p{2.55cm} X@{}}
+    \toprule
+    \textbf{MCP Server} & \textbf{Used By} & \textbf{Purpose} \\
+    \midrule
+    RAG MCP (rag-mcp-server) & Intake, Compliance, Advisor & Retrieves relevant policy clauses from institutional knowledge base \\
+    DBHub MCP & Intake, Fraud & Provides database access via Postgres to retrieve and store structured data \\
+    Frankfurter MCP & Intake & Converts foreign currency amounts to SGD using live exchange rates \\
+    Email MCP & Advisor & Sends notification emails to claimants and reviewers \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
 % ============================================================
 \section{Multimodal Grounding}
@@ -163,23 +139,25 @@ for Automated Expense Report Processing}
 \subsection{Modalities Used}
 \label{sec:modalities}
 
-% [TODO] At least two modalities. This system uses three:
-%
-% 1. Image: Receipt photos, scanned documents (processed by VLM)
-% 2. Text: Policy documents, claim descriptions, reviewer notes (LLM + RAG)
-% 3. Structured data: Database records, credit card feeds, budget tables (MCP/DB)
+The system processes three modalities across the agent pipeline:
+
+\begin{itemize}[leftmargin=*,itemsep=0pt]
+  \item \textbf{Image} --- Receipt images processed by a VLM to extract structured fields. Candidates: GLM-4.6V or Qwen2.5-VL-7B-Instruct.
+  \item \textbf{Text} --- Policy documents, claim descriptions, and reviewer notes validated via RAG~\cite{lewis2020rag}. Candidates: GLM-5 or Qwen2.5-7B-Instruct.
+  \item \textbf{Structured Data} --- Historical claims, budgets, and currency rates accessed via MCP~\cite{mcp2024} tool calls. Model-agnostic.
+\end{itemize}
 
 \subsection{Cross-Modal Interaction}
 \label{sec:cross-modal}
 
-% [TODO] Explain how modalities interact within the agent system:
-%
-% - VLM extracts structured fields from receipt images ->
-%   LLM validates extracted data against text policy via RAG
-% - Image forensics output (Fraud Agent) combined with
-%   structured DB history for composite risk scoring
-% - Compliance Agent cross-references VLM-extracted image data
-%   with database records and policy text simultaneously
+Each agent grounds outputs from the previous stage across modalities:
+
+\begin{itemize}[leftmargin=*,itemsep=0pt]
+  \item \textbf{Intake Agent} --- Grounds image-extracted fields against claimant text; flags inconsistencies and returns low-confidence extractions for clarification.
+  \item \textbf{Compliance Agent} --- Grounds retrieved policy text against structured claim output; produces a pass/fail finding with cited policy clauses.
+  \item \textbf{Fraud Agent} --- Cross-references claim against historical records for duplicates, anomalies, and vendor irregularities; preserves uncertainty rather than forcing a binary outcome.
+  \item \textbf{Advisor Agent} --- Synthesizes extraction confidence, compliance findings, and fraud signals into a unified risk assessment; escalates to human review on agent disagreement.
+\end{itemize}
 
 % ============================================================
 \section{Control and Failure Handling}
@@ -189,104 +167,68 @@ for Automated Expense Report Processing}
 \subsection{Error Detection Mechanisms}
 \label{sec:error-detection}
 
-% [TODO] Describe mechanisms for detecting errors/uncertainty at each stage:
-%
-% - VLM extraction confidence scores — low confidence triggers human verification
-% - Policy validation loops — Evaluator-Optimizer pattern catches compliance issues
-%   before submission (iterates until clean or user overrides with justification)
-% - Fraud Agent confidence thresholds — uncertain results escalate to human review
-% - Advisor Agent self-critique — Reflection pattern verifies recommendation
-%   is supported by evidence before presenting to reviewer
+The system detects uncertainty at each agent stage rather than treating claims as a single end-to-end prediction. The Intake Agent checks for unreadable receipts, missing fields, and low-confidence extractions before submission. Post-submission, the Compliance and Fraud Agents run in parallel, and the Advisor Agent routes the claim to auto-approve, return, or escalation.
 
 \subsection{Retry, Self-Critique, and Fallback Strategies}
 \label{sec:fallback}
 
-% [TODO] Describe:
-%
-% - Evaluator-Optimizer loop: pre-submission validation retries until
-%   report is policy-compliant or employee provides override justification
-% - Advisor Agent Reflection: generate recommendation -> self-critique
-%   against evidence -> revise if unsupported -> present to human
-% - Fallback to human review when any agent confidence < threshold
-% - Max iteration caps on all loops to prevent runaway agent cost
+Each agent applies bounded retry with conservative fallback. The Intake Agent retries extraction before returning to the claimant. The Compliance Agent iterates until the outcome is clear. The Fraud Agent forwards uncertainty rather than forcing a flag on weak evidence. The Advisor Agent reflects before routing, automating only when evidence is sufficient. On tool failure, the system degrades gracefully to conservative routing or human escalation.
 
 % ============================================================
-\section{Evaluation Strategy}
+\section{Evaluation Strategy (Preliminary)}
 \label{sec:evaluation}
 % ============================================================
 
 \subsection{Task-Specific Success Criteria}
 \label{sec:success-criteria}
 
-% [TODO] Define quantitative targets:
-%
-% \begin{table}[h]
-%   \centering
-%   \caption{Success criteria and measurement methods.}
-%   \label{tab:criteria}
-%   \begin{tabular}{@{}lll@{}}
-%     \toprule
-%     Metric & Target & Measurement \\
-%     \midrule
-%     Submission time       & $<$ 3 min (vs.\ 15--25 min) & [TODO] \\
-%     Pre-submission rejection rate & $<$ 5\% (vs.\ $\sim$30--40\%) & [TODO] \\
-%     VLM extraction accuracy & $>$ 95\% on structured fields & [TODO] \\
-%     Auto-approval rate    & 60--70\% of claims & [TODO] \\
-%     \bottomrule
-%   \end{tabular}
-% \end{table}
+We evaluate the system on task-specific success metrics summarized in Table~\ref{tab:criteria}.
+
+\begin{table}[!h]
+  \centering
+  \caption{Success criteria and measurement methods.}
+  \label{tab:criteria}
+  \small
+  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{1.5cm} >{\raggedright\arraybackslash}p{2.5cm} X@{}}
+    \toprule
+    \textbf{Metric} & \textbf{Target} & \textbf{Measurement Method} \\
+    \midrule
+    Submission time & $<$ 3 min (vs.\ 15--25 min) & Average time from receipt upload to completed claim submission during a controlled user study with students submitting sample claims. \\
+    \addlinespace
+    Accuracy & $>$ 95\% on structured fields & Field-level accuracy evaluation \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
 
 \subsection{Baselines}
 \label{sec:baselines}
 
-% [TODO] Compare against at least two baselines (rubric requirement):
-%
-% Baseline 1: Single-prompt / single-model pipeline
-%   — one LLM call processes the entire claim end-to-end
-%
-% Baseline 2: Hand-designed non-agentic workflow
-%   — rule-based system without LLM agents (traditional automation)
+The system is evaluated against two baselines: (1)~a single-prompt pipeline using a general-purpose model Gemini, and (2)~the current manual SAP Concur workflow. Comparison targets extraction accuracy, automation rate, and workflow efficiency.
 
 \subsection{Failure Analysis}
 \label{sec:failure-analysis}
 
-% [TODO] Plan for analyzing failure cases using (rubric requirement):
-%
-% - Self-consistency checks: does the agent produce consistent
-%   outputs across multiple runs on the same input?
-% - Cross-modal agreement checks: does VLM extraction agree
-%   with database/text data?
-% - Verifier models: independent model validates agent outputs
-% - Disagreement analysis: where do agents disagree and why?
-
-% ============================================================
-\section{Reflection}
-\label{sec:reflection}
-% ============================================================
-
-\subsection{When Agentic Behavior is Beneficial}
-\label{sec:when-beneficial}
-
-% [TODO] Discuss why agentic behavior adds value for this task:
-% - Multiple reasoning stages with different tools
-% - Human-in-the-loop at review stage
-% - Parallel independent assessments
-% - Iterative validation loops
-
-\subsection{Limitations}
-\label{sec:limitations}
-
-% [TODO] Acknowledge known limitations:
-% - LLM hallucination risk in policy interpretation
-% - VLM accuracy on degraded/handwritten receipts
-% - Latency of multi-agent pipeline vs.\ single-call approach
-% - Dependence on external MCP servers / tools
-% - Evaluation on synthetic vs.\ real expense data
+System limitations are identified using self-consistency checks, cross-modal agreement checks, verifier models, and inter-agent disagreement analysis across extraction, policy reasoning, and coordination failures.
 
 % ============================================================
 % References — NOT counted toward 3-page limit
 % ============================================================
-\bibliographystyle{plainnat}
+\bibliographystyle{unsrtnat}
 \bibliography{references}
+
+% ============================================================
+% Appendix — supplementary material, NOT counted toward 3-page limit
+% ============================================================
+\newpage
+\appendix
+\section{System Architecture Diagram}
+\label{app:architecture}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\textwidth]{figures/system-architecture.png}
+  \caption{System diagram illustrating the stages in agentic expense workflow process, along with the respective agents, patterns and integration types.}
+  \label{fig:architecture}
+\end{figure}
 
 \end{document}
