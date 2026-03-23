@@ -46,11 +46,11 @@ Plans:
   2. Alembic migrations create `claims` and `receipts` tables in Postgres (line items as JSON in receipts), with audit_log table for status change tracking, and a test record can be inserted and queried
   3. OpenRouter model client returns a response from a configured model when given a text prompt, with model name from .env and simple retry (3 retries, 2s delay)
   4. Synthetic SUTD expense policies (markdown files from `src/policy/`) are embedded in Qdrant and a semantic search query returns relevant policy clauses
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Database schema (claims, receipts with JSON line items, audit_log), Alembic migrations, OpenRouter model client
-- [ ] 02-02: MCP servers (off-the-shelf preferred for all 4: RAG, DBHub, Frankfurter, Email), Qdrant policy ingestion from src/policy/
+- [ ] 02-01-PLAN.md — Database schema (claims, receipts, audit_log) with Alembic async migrations, OpenRouter model client with retry, Qdrant Docker service
+- [ ] 02-02-PLAN.md — 4 MCP servers (RAG, DB, Currency, Email) as Docker services, synthetic policy documents, Qdrant policy ingestion
 
 ### Phase 2.1: Intake Agent + Receipt Processing (INSERTED)
 **Goal**: Claimant uploads a receipt image in Chainlit, sees extracted fields with confidence scores, gets policy violations flagged with cited clauses, confirms or corrects fields, and submits a validated claim -- all in a conversational loop under 3 minutes
@@ -123,7 +123,7 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 1. Foundation Infrastructure | 2/2 | Complete | 2026-03-23 |
-| 2. Supporting Infrastructure | 0/2 | Not started | - |
+| 2. Supporting Infrastructure | 0/2 | Planning complete | - |
 | 2.1. Intake Agent + Receipt Processing | 0/3 | Not started | - |
 | 3. Compliance + Fraud Agents | 0/2 | Not started | - |
 | 4. Advisor Agent + Reviewer Flow | 0/3 | Not started | - |
