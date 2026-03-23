@@ -131,13 +131,61 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated during roadmap creation) | | |
+| EXTR-01 | Phase 2 | Pending |
+| EXTR-02 | Phase 2 | Pending |
+| EXTR-03 | Phase 2 | Pending |
+| EXTR-04 | Phase 2 | Pending |
+| EXTR-05 | Phase 2 | Pending |
+| EXTR-06 | Phase 2 | Pending |
+| EXTR-07 | Phase 2 | Pending |
+| EXTR-08 | Phase 2 | Pending |
+| POLV-01 | Phase 1 | Pending |
+| POLV-02 | Phase 1 | Pending |
+| POLV-03 | Phase 2 | Pending |
+| POLV-04 | Phase 2 | Pending |
+| POLV-05 | Phase 2 | Pending |
+| POLV-06 | Phase 2 | Pending |
+| POLV-07 | Phase 2 | Pending |
+| FRAD-01 | Phase 3 | Pending |
+| FRAD-02 | Phase 3 | Pending |
+| FRAD-03 | Phase 3 | Pending |
+| ORCH-01 | Phase 1 | Pending |
+| ORCH-02 | Phase 2 | Pending |
+| ORCH-03 | Phase 3 | Pending |
+| ORCH-04 | Phase 3 | Pending |
+| ORCH-05 | Phase 4 | Pending |
+| ORCH-06 | Phase 3 | Pending |
+| ORCH-07 | Phase 4 | Pending |
+| ORCH-08 | Phase 1 | Pending |
+| APRV-01 | Phase 4 | Pending |
+| APRV-02 | Phase 4 | Pending |
+| APRV-03 | Phase 4 | Pending |
+| APRV-04 | Phase 4 | Pending |
+| REVW-01 | Phase 4 | Pending |
+| REVW-02 | Phase 4 | Pending |
+| REVW-03 | Phase 4 | Pending |
+| REVW-04 | Phase 4 | Pending |
+| NOTF-01 | Phase 4 | Pending |
+| NOTF-02 | Phase 4 | Pending |
+| NOTF-03 | Phase 4 | Pending |
+| DATA-01 | Phase 1 | Pending |
+| DATA-02 | Phase 3 | Pending |
+| DATA-03 | Phase 3 | Pending |
+| DATA-04 | Phase 1 | Pending |
+| INFR-01 | Phase 1 | Pending |
+| INFR-02 | Phase 1 | Pending |
+| INFR-03 | Phase 1 | Pending |
+| INFR-04 | Phase 1 | Pending |
+| CHAT-01 | Phase 2 | Pending |
+| CHAT-02 | Phase 4 | Pending |
+| CHAT-03 | Phase 2 | Pending |
+| CHAT-04 | Phase 2 | Pending |
 
 **Coverage:**
-- v1 requirements: 37 total
-- Mapped to phases: 0
-- Unmapped: 37
+- v1 requirements: 49 total
+- Mapped to phases: 49
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-23*
-*Last updated: 2026-03-23 after initial definition*
+*Last updated: 2026-03-23 after roadmap creation (corrected count from 37 to 49, full traceability added)*
