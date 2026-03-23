@@ -12,11 +12,11 @@ from agentic_claims.core.graph import getCompiledGraph
 async def onChatStart():
     """Initialize chat session with graph and checkpointer."""
     # Create compiled graph with Postgres checkpointer
-    graph, checkpointer = await getCompiledGraph()
+    graph, checkpointerCtx = await getCompiledGraph()
 
     # Store in session for use in message handler
     cl.user_session.set("graph", graph)
-    cl.user_session.set("checkpointer", checkpointer)
+    cl.user_session.set("checkpointer_ctx", checkpointerCtx)
 
     # Generate unique thread ID for this conversation
     threadId = str(uuid.uuid4())
@@ -60,8 +60,7 @@ async def onMessage(message: cl.Message):
 
 @cl.on_chat_end
 async def onChatEnd():
-    """Clean up checkpointer connection when chat ends."""
-    checkpointer = cl.user_session.get("checkpointer")
-    if checkpointer:
-        # Close the checkpointer connection pool
-        await checkpointer.conn.__aexit__(None, None, None)
+    """Clean up checkpointer connection pool when chat ends."""
+    checkpointerCtx = cl.user_session.get("checkpointer_ctx")
+    if checkpointerCtx:
+        await checkpointerCtx.__aexit__(None, None, None)

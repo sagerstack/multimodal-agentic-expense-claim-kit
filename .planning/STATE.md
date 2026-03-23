@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Phase 1: Foundation Infrastructure
+**Current focus:** Phase 2: Intake Agent + Receipt Processing
 
 ## Current Position
 
-Phase: 1 of 5 (Foundation Infrastructure)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-03-23 -- Completed 01-02-PLAN.md (LangGraph orchestration, parallel fan-out, Postgres checkpointer)
+Phase: 2 of 5 (Intake Agent + Receipt Processing)
+Plan: 0 of 5 in current phase
+Status: Not started
+Last activity: 2026-03-23 -- Phase 1 complete (verified 5/5 success criteria). Fixed AsyncPostgresSaver context manager bug.
 
 Progress: [██........] 14% (2/14 plans complete)
 
@@ -54,6 +54,7 @@ Recent decisions affecting current work:
 - 01-02: Parallel fan-out topology: Intake -> [Compliance || Fraud] -> Advisor
 - 01-02: Checkpointer lifecycle managed per Chainlit chat session
 - 01-02: Integration tests use graph.compile() without checkpointer for speed
+- 01-02: AsyncPostgresSaver.from_conn_string() is async context manager — enter manually for session-scoped lifecycle
 
 ### Pending Todos
 

@@ -12,7 +12,7 @@ This roadmap delivers a multi-agent expense claim processing system in 5 phases,
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation Infrastructure** - Project skeleton, LangGraph orchestration with 4 stub agents, Docker Compose (Chainlit + Postgres)
+- [x] **Phase 1: Foundation Infrastructure** - Project skeleton, LangGraph orchestration with 4 stub agents, Docker Compose (Chainlit + Postgres)
 - [ ] **Phase 2: Intake Agent + Receipt Processing** - Supporting infrastructure (DB schema, MCP servers, OpenRouter, Qdrant), VLM extraction, policy validation, claimant UI
 - [ ] **Phase 3: Compliance + Fraud Agents** - Post-submission parallel policy audit and duplicate detection
 - [ ] **Phase 4: Advisor Agent + Reviewer Flow** - Decision synthesis, approval routing, reviewer UI, email notifications
@@ -33,8 +33,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Project skeleton, Docker Compose (Chainlit + Postgres), configuration from .env
-- [ ] 01-02-PLAN.md — ClaimState definition, LangGraph stub graph with Postgres checkpointer and parallel fan-out
+- [x] 01-01-PLAN.md — Project skeleton, Docker Compose (Chainlit + Postgres), configuration from .env
+- [x] 01-02-PLAN.md — ClaimState definition, LangGraph stub graph with Postgres checkpointer and parallel fan-out
 
 ### Phase 2: Intake Agent + Receipt Processing
 **Goal**: Claimant uploads a receipt image in Chainlit, sees extracted fields with confidence scores, gets policy violations flagged with cited clauses, confirms or corrects fields, and submits a validated claim -- all in a conversational loop under 3 minutes. This phase also delivers the supporting infrastructure (DB schema, MCP servers, OpenRouter client, Qdrant policy ingestion) that was deferred from Phase 1.
@@ -112,7 +112,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 1. Foundation Infrastructure | 0/2 | Not started | - |
+| 1. Foundation Infrastructure | 2/2 | Complete | 2026-03-23 |
 | 2. Intake Agent + Receipt Processing | 0/5 | Not started | - |
 | 3. Compliance + Fraud Agents | 0/2 | Not started | - |
 | 4. Advisor Agent + Reviewer Flow | 0/3 | Not started | - |
