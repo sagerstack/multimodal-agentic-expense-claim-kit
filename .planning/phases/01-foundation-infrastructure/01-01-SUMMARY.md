@@ -27,7 +27,7 @@ key-files:
     - src/agentic_claims/app.py
     - docker-compose.yml
     - Dockerfile
-    - .chainlit/config.toml
+    - .chainlit/config.toml (removed - Chainlit 2.10 auto-generates)
   modified: []
 
 key-decisions:
@@ -106,23 +106,16 @@ Each task was committed atomically:
 
 ## Issues Encountered
 
-**Docker daemon not running:**
-- Discovered during verification after Task 2 commit
-- Cannot complete final verification (`docker compose up`) until Docker daemon is started manually
-- All artifacts created correctly and committed
-- This is a human-action checkpoint requiring manual Docker start before final verification
+**Docker build fixes (post-checkpoint):**
+- Hatchling required README.md — fixed by using inline empty readme in pyproject.toml
+- Editable install failed in Docker — fixed by using standard install with source copied first
+- Chainlit 2.10 rejected outdated config.toml — removed, Chainlit auto-generates on startup
+- All fixes committed as `bb4ff13`
 
-## User Setup Required
-
-**Manual steps before final verification:**
-1. Start Docker Desktop (or Docker daemon)
-2. Verify Docker is running: `docker info`
-3. Run verification: `docker compose up -d --build`
-
-Once Docker is running, the following verification steps will confirm success:
-- `docker compose ps` shows both services healthy
-- `curl http://localhost:8000` returns 200
-- `docker compose exec postgres pg_isready` confirms Postgres accepting connections
+**Verification passed:**
+- `docker compose ps` — both app and postgres healthy
+- `curl http://localhost:8000` — returns 200
+- `pg_isready` — Postgres accepting connections
 
 ## Next Phase Readiness
 
@@ -132,8 +125,7 @@ Once Docker is running, the following verification steps will confirm success:
 - Configuration pattern established (all settings from .env)
 - Chainlit app.py ready to integrate LangGraph graph in on_message handler
 
-**Blockers:**
-- Docker daemon must be running before proceeding with LangGraph integration (checkpoint required)
+**Blockers:** None — Docker verified working
 
 ---
 *Phase: 01-foundation-infrastructure*
