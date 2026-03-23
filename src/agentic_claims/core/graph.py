@@ -48,14 +48,19 @@ async def getCompiledGraph():
     The checkpointer persists state after each node execution,
     enabling resumption and debugging.
 
+    AsyncPostgresSaver.from_conn_string() returns an async context manager.
+    We enter it manually here — caller must store the context and call
+    __aexit__ on cleanup (see app.py onChatEnd).
+
     Returns:
-        Tuple of (compiled graph, checkpointer)
-        Caller must manage checkpointer lifecycle.
+        Tuple of (compiled graph, checkpointer context manager)
     """
     settings = getSettings()
 
-    # Create async Postgres checkpointer
-    checkpointer = AsyncPostgresSaver.from_conn_string(settings.postgres_dsn)
+    # from_conn_string returns an async context manager — enter it manually
+    # so the connection pool stays alive for the session lifetime
+    checkpointerCtx = AsyncPostgresSaver.from_conn_string(settings.postgres_dsn)
+    checkpointer = await checkpointerCtx.__aenter__()
 
     # Setup checkpointer tables in Postgres
     await checkpointer.setup()
@@ -64,4 +69,4 @@ async def getCompiledGraph():
     builder = buildGraph()
     graph = builder.compile(checkpointer=checkpointer)
 
-    return graph, checkpointer
+    return graph, checkpointerCtx
