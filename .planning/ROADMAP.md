@@ -2,7 +2,7 @@
 
 ## Overview
 
-This roadmap delivers a multi-agent expense claim processing system in 5 phases, moving from shared infrastructure through incremental agent delivery to a demo-ready evaluation. Phase 1 establishes the foundation that enables parallel team development (Docker Compose, DB schema, LangGraph state, MCP stubs). Phase 2 builds the core user-facing value: receipt upload, VLM extraction, policy validation, and the Intake Agent loop. Phase 3 adds post-submission Compliance and Fraud agents running in parallel. Phase 4 completes the pipeline with the Advisor Agent, reviewer interface, email notifications, and approval routing. Phase 5 produces evaluation results and demo polish for the course deliverable.
+This roadmap delivers a multi-agent expense claim processing system in 5 phases, moving from orchestration skeleton through incremental agent delivery to a demo-ready evaluation. Phase 1 establishes the minimal orchestration foundation (project skeleton, LangGraph stub graph with 4 agent nodes, Docker Compose with Chainlit + Postgres). Phase 2 builds the core user-facing value plus its supporting infrastructure: DB schema, MCP servers, OpenRouter client, Qdrant policy ingestion, receipt upload, VLM extraction, policy validation, and the Intake Agent loop. Phase 3 adds post-submission Compliance and Fraud agents running in parallel. Phase 4 completes the pipeline with the Advisor Agent, reviewer interface, email notifications, and approval routing. Phase 5 produces evaluation results and demo polish for the course deliverable.
 
 ## Phases
 
@@ -12,8 +12,8 @@ This roadmap delivers a multi-agent expense claim processing system in 5 phases,
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation Infrastructure** - Shared services, state schema, database, MCP stubs, policy ingestion
-- [ ] **Phase 2: Intake Agent + Receipt Processing** - VLM extraction, currency conversion, pre-submission policy validation, claimant UI
+- [ ] **Phase 1: Foundation Infrastructure** - Project skeleton, LangGraph orchestration with 4 stub agents, Docker Compose (Chainlit + Postgres)
+- [ ] **Phase 2: Intake Agent + Receipt Processing** - Supporting infrastructure (DB schema, MCP servers, OpenRouter, Qdrant), VLM extraction, policy validation, claimant UI
 - [ ] **Phase 3: Compliance + Fraud Agents** - Post-submission parallel policy audit and duplicate detection
 - [ ] **Phase 4: Advisor Agent + Reviewer Flow** - Decision synthesis, approval routing, reviewer UI, email notifications
 - [ ] **Phase 5: Evaluation + Demo** - Test dataset, evaluation framework, baseline comparisons, demo polish
@@ -21,38 +21,43 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Foundation Infrastructure
-**Goal**: Team can clone the repo, run `docker compose up`, and have all services running with a stub LangGraph graph that flows a test claim through 4 placeholder agent nodes with state persisted to PostgreSQL
+**Goal**: Team can clone the repo, run `docker compose up`, and have Chainlit + Postgres running with a stub LangGraph graph that flows a test claim through 4 placeholder agent nodes (with parallel fan-out for Compliance + Fraud) and state persisted to PostgreSQL checkpointer
 **Depends on**: Nothing (first phase)
-**Requirements**: INFR-01, INFR-02, INFR-03, INFR-04, ORCH-01, ORCH-08, DATA-01, DATA-04, POLV-01, POLV-02
+**Requirements**: ORCH-01, ORCH-08, INFR-03
 **Success Criteria** (what must be TRUE):
-  1. `docker compose up` starts all 7 services (Chainlit app, Postgres, Qdrant, 4 MCP server stubs) and all pass health checks
-  2. A test claim flows through the stub LangGraph graph (Intake -> Compliance+Fraud -> Advisor) with ClaimState passed correctly between nodes and persisted to PostgreSQL checkpointer
-  3. OpenRouter model client returns a response from a free model when given a text prompt, with model name configured via .env
-  4. Alembic migrations create claims, receipts, and line_items tables in Postgres, and a test record can be inserted and queried via DBHub MCP stub
-  5. Synthetic SUTD expense policies are embedded in Qdrant and a semantic search query returns relevant policy clauses
+  1. `docker compose up` starts Chainlit app and Postgres, both pass health checks
+  2. A test claim flows through the stub LangGraph graph (Intake -> [Compliance || Fraud] -> Advisor) with ClaimState passed correctly between nodes and persisted to PostgreSQL checkpointer
+  3. All 4 stub agent nodes execute and return "Hello world" messages appended to state
+  4. Parallel fan-out for Compliance + Fraud executes both nodes in the same LangGraph superstep
+  5. All configuration loaded from .env files (no hardcoded values)
 **Plans**: TBD
 
 Plans:
-- [ ] 01-01: Project skeleton, Docker Compose, database schema and migrations
-- [ ] 01-02: OpenRouter model client, ClaimState definition, LangGraph stub graph with checkpointer
-- [ ] 01-03: MCP server stubs (RAG, DBHub, Frankfurter, Email), Qdrant policy ingestion pipeline
+- [ ] 01-01: Project skeleton, Docker Compose (Chainlit + Postgres), configuration setup
+- [ ] 01-02: ClaimState definition, LangGraph stub graph with Postgres checkpointer and parallel fan-out
 
 ### Phase 2: Intake Agent + Receipt Processing
-**Goal**: Claimant uploads a receipt image in Chainlit, sees extracted fields with confidence scores, gets policy violations flagged with cited clauses, confirms or corrects fields, and submits a validated claim -- all in a conversational loop under 3 minutes
+**Goal**: Claimant uploads a receipt image in Chainlit, sees extracted fields with confidence scores, gets policy violations flagged with cited clauses, confirms or corrects fields, and submits a validated claim -- all in a conversational loop under 3 minutes. This phase also delivers the supporting infrastructure (DB schema, MCP servers, OpenRouter client, Qdrant policy ingestion) that was deferred from Phase 1.
 **Depends on**: Phase 1
-**Requirements**: EXTR-01, EXTR-02, EXTR-03, EXTR-04, EXTR-05, EXTR-06, EXTR-07, EXTR-08, POLV-03, POLV-04, POLV-05, POLV-06, POLV-07, ORCH-02, CHAT-01, CHAT-03, CHAT-04
+**Requirements**: INFR-01, INFR-02, INFR-04, DATA-01, DATA-04, POLV-01, POLV-02, EXTR-01, EXTR-02, EXTR-03, EXTR-04, EXTR-05, EXTR-06, EXTR-07, EXTR-08, POLV-03, POLV-04, POLV-05, POLV-06, POLV-07, ORCH-02, CHAT-01, CHAT-03, CHAT-04
 **Success Criteria** (what must be TRUE):
-  1. Claimant uploads a receipt image in Chainlit and sees structured extracted fields (merchant, date, amount, currency, line items, tax, payment method) with per-field confidence scores within seconds
-  2. Uploading a blurry or low-resolution image returns a rejection message with guidance to re-upload a clearer image
-  3. Foreign currency receipts are automatically detected, converted to SGD via Frankfurter API, and the claim stores both original and converted amounts
-  4. Policy violations (e.g., meal over cap, missing GL code) are flagged with the specific policy clause and section reference, and claimant can provide justification or correct the claim
-  5. Low-confidence VLM extractions trigger a clarification prompt, claimant can confirm or correct extracted fields, and the confirmed claim is submitted and persisted to Postgres
+  1. `docker compose up` starts all 7 services (Chainlit app, Postgres, Qdrant, 4 MCP servers) and all pass health checks
+  2. Alembic migrations create claims, receipts, and line_items tables in Postgres, and a test record can be inserted and queried
+  3. OpenRouter model client returns a response from a free model when given a text prompt, with model name configured via .env
+  4. Synthetic SUTD expense policies are embedded in Qdrant and a semantic search query returns relevant policy clauses
+  5. Claimant uploads a receipt image in Chainlit and sees structured extracted fields (merchant, date, amount, currency, line items, tax, payment method) with per-field confidence scores within seconds
+  6. Uploading a blurry or low-resolution image returns a rejection message with guidance to re-upload a clearer image
+  7. Foreign currency receipts are automatically detected, converted to SGD via Frankfurter API, and the claim stores both original and converted amounts
+  8. Policy violations (e.g., meal over cap, missing GL code) are flagged with the specific policy clause and section reference, and claimant can provide justification or correct the claim
+  9. Low-confidence VLM extractions trigger a clarification prompt, claimant can confirm or correct extracted fields, and the confirmed claim is submitted and persisted to Postgres
 **Plans**: TBD
 
 Plans:
-- [ ] 02-01: VLM receipt extraction pipeline (image upload, structured extraction, confidence scoring, image quality check)
-- [ ] 02-02: Currency conversion (Frankfurter MCP) and pre-submission policy validation (RAG MCP semantic retrieval + violation flagging)
-- [ ] 02-03: Intake Agent ReAct loop (clarification, correction, confirmation) with Chainlit streaming integration
+- [ ] 02-01: Database schema (claims, receipts, line_items), Alembic migrations, OpenRouter model client
+- [ ] 02-02: MCP server stubs (RAG, DBHub, Frankfurter, Email), Qdrant policy ingestion pipeline
+- [ ] 02-03: VLM receipt extraction pipeline (image upload, structured extraction, confidence scoring, image quality check)
+- [ ] 02-04: Currency conversion (Frankfurter MCP) and pre-submission policy validation (RAG MCP semantic retrieval + violation flagging)
+- [ ] 02-05: Intake Agent ReAct loop (clarification, correction, confirmation) with Chainlit streaming integration
 
 ### Phase 3: Compliance + Fraud Agents
 **Goal**: After a claim is submitted, Compliance and Fraud agents execute in parallel -- Compliance audits against org-level policies with cited clauses, Fraud detects duplicate receipts against historical data -- and their findings are stored in ClaimState for the Advisor
@@ -107,8 +112,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 1. Foundation Infrastructure | 0/3 | Not started | - |
-| 2. Intake Agent + Receipt Processing | 0/3 | Not started | - |
+| 1. Foundation Infrastructure | 0/2 | Not started | - |
+| 2. Intake Agent + Receipt Processing | 0/5 | Not started | - |
 | 3. Compliance + Fraud Agents | 0/2 | Not started | - |
 | 4. Advisor Agent + Reviewer Flow | 0/3 | Not started | - |
 | 5. Evaluation + Demo | 0/2 | Not started | - |
