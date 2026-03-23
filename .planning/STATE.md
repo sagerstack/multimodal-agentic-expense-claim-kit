@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Phase 2: Intake Agent + Receipt Processing
+**Current focus:** Phase 2: Supporting Infrastructure
 
 ## Current Position
 
-Phase: 2 of 5 (Intake Agent + Receipt Processing)
-Plan: 0 of 5 in current phase
+Phase: 2 of 6 (Supporting Infrastructure)
+Plan: 0 of 2 in current phase
 Status: Not started
-Last activity: 2026-03-23 -- Phase 1 complete (verified 5/5 success criteria). Fixed AsyncPostgresSaver context manager bug.
+Last activity: 2026-03-23 -- Phase 2 context gathered. Roadmap split: Phase 2 = infrastructure, Phase 2.1 = Intake Agent UX.
 
-Progress: [██........] 14% (2/14 plans complete)
+Progress: [██..............] 13% (2/14 plans complete)
 
 ## Performance Metrics
 
@@ -42,10 +42,10 @@ Progress: [██........] 14% (2/14 plans complete)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Roadmap: 5 phases derived from requirement dependencies -- Foundation, Intake, Compliance+Fraud, Advisor+Reviewer, Evaluation
+- Roadmap: 6 phases (split Phase 2 into infrastructure + Intake Agent) -- Foundation, Infrastructure, Intake, Compliance+Fraud, Advisor+Reviewer, Evaluation
 - Roadmap: Corrected v1 requirement count from 37 to 49 (original REQUIREMENTS.md had wrong count)
 - Phase 1 narrowed: Only LangGraph orchestration + 4 stub nodes + Docker Compose (Chainlit + Postgres). DB schema, MCP servers, OpenRouter, Qdrant moved to Phase 2
-- Phase 1 plan count reduced from 3 to 2; Phase 2 plan count increased from 3 to 5
+- Phase 1 plan count reduced from 3 to 2; Phase 2 split into Phase 2 (2 plans, infrastructure) and Phase 2.1 (3 plans, Intake Agent)
 - 01-01: Use pydantic-settings for all configuration with zero hardcoded defaults
 - 01-01: Vertical slice architecture - separate module per agent
 - 01-01: Postgres DSN computed as property (not stored in .env) to avoid duplication
