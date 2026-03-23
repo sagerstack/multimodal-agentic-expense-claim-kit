@@ -1,178 +1,266 @@
-# Agentic SDLC Framework
+# Agentic Expense Claims
 
-This repo contains a self-contained SDLC automation framework for Claude Code. It uses agent teams to plan and build software phase-by-phase with quality gates at every step.
+Multi-agent multimodal system that automates SUTD expense claim processing. Replaces the manual SAP Concur workflow (15-25 min per claim) with an AI-driven pipeline targeting <3 min submission time and >95% field extraction accuracy.
 
-## Pipeline Overview
+Four LangGraph agents process claims through a pipeline: **Intake** (receipt parsing, policy validation) -> **Compliance** + **Fraud** (parallel post-submission checks) -> **Advisor** (decision routing). Chainlit provides the chat UI, PostgreSQL persists state, Qdrant stores policy embeddings.
 
-The SDLC operates as a four-stage pipeline. Each stage must complete before the next begins.
+## Running the App
 
-```
-/sagerstack:code-planning  -->  /sagerstack:planner  -->  /sagerstack:builder  -->  /sagerstack:verify
-     (solo)                      (4-agent team)            (2-agent team)            (solo, interactive)
+### Prerequisites
 
-Produces:                   Produces:                           Produces:                    Produces:
-docs/project-context.md     docs/phases/epic-{NNN}-{desc}/      src/ + tests/ (code)         docs/phases/epic-{NNN}-{desc}/qa/
-                              epic.md                            docs/phases/epic-{NNN}-{desc}/qa/  uat-report.md
-                              stories/story-{NNN}-{desc}.md        story-{NNN}-{desc}-qa-report.md
-                              plans/story-{NNN}-{desc}-plan.md
-                              plans/story-{NNN}-{desc}-critical-analysis.md
-                              research/findings.md
-```
+- Docker and Docker Compose
+- Python 3.11+
+- Poetry (package manager)
 
-### Stage 1: Code Planning (`/sagerstack:code-planning`)
+### Setup
 
-Solo interactive session. Produces `docs/project-context.md` containing:
-- Objective and Key Results
-- Milestones broken into epics
-- Architecture decisions
-- All decisions made during planning
+```bash
+# Install dependencies
+poetry install
 
-**Invocation**: Run `/sagerstack:code-planning` in any project.
+# Create .env.local from the template
+cp .env.example .env.local
+# Edit .env.local with your actual values
 
-### Stage 2: Phase Planning (`/sagerstack:planner`)
+# Start all services (app + postgres)
+docker compose up -d --build
 
-Spawns a 4-agent team to plan ONE epic at a time from `docs/project-context.md`.
+# Verify both services are healthy
+docker compose ps
 
-**Team members**:
-| Role | Agent Type | Model | Purpose |
-|------|-----------|-------|---------|
-| Team Lead | main session | opus | Orchestrates workflow, user Q&A |
-| Researcher | `planner-researcher` | sonnet | Investigates requirements, APIs, codebase |
-| Business Analyst | `planner-ba` | opus | Creates epics and user stories with FR/TR/AC |
-| Solution Architect | `planner-architect` | opus | Generates implementation plans with 100% coverage |
-| Critical Analyst | `planner-critic` | opus | Reviews impl plans for alignment and best practices |
-
-**Workflow**: Research -> Proposals -> User confirms direction -> Stories with FR/TR/AC -> User confirms -> Technical Q&A -> Implementation plans -> Critical review (max 2 cycles)
-
-**User Q&A checkpoints**: 3 mandatory points where user confirms before proceeding.
-
-**Flags**: `--skip-research` skips Researcher agent and Architect web research for straightforward epics.
-
-**Invocation**: Run `/sagerstack:planner`, select an epic. Use `/sagerstack:hotfix` for bug-fix epics.
-
-### Stage 3: Building (`/sagerstack:builder`)
-
-Spawns a 2-agent team to implement ONE epic from its planning artifacts.
-
-**Team members**:
-| Role | Agent Type | Model | Purpose |
-|------|-----------|-------|---------|
-| Team Lead | main session | opus | Assigns tasks, manages remediation |
-| Software Developer | `builder-developer` | sonnet | Implements via TDD (red-green-refactor) |
-| Code QA | `builder-qa` | opus | Validates AC, runs 9-check quality pipeline, UAT |
-
-**Workflow**: Read impl plans -> Create tasks -> Developer implements via TDD -> QA validates per story -> Targeted remediation if failures (max 2 retries) -> Epic complete
-
-**QA pipeline (9 checks)**: test suite, coverage (>=90%), type checking (mypy strict), linting (ruff), formatting, security (bandit), Docker build, CHANGELOG, git status
-
-**Invocation**: Run `/sagerstack:builder`, select an epic to build.
-
-### Stage 4: Interactive UAT (`/sagerstack:verify`)
-
-Solo interactive session. Walks the user through acceptance criteria one at a time after the builder completes.
-
-- Presents each AC (Given/When/Then) individually, waits for pass/fail/skip
-- Infers severity from AC context (never asks user to rate)
-- Writes results incrementally to `uat-report.md` (supports resume)
-- Routes failures to `/sagerstack:builder` for remediation
-
-**Invocation**: Run `/sagerstack:verify`, select an epic or story to verify.
-
-## File Structure
-
-### Skills (`.claude/skills/`)
-
-| Skill | Slash Command | Purpose |
-|-------|--------------|---------|
-| `sagerstack-code-planning` | `/sagerstack:code-planning` | Pre-code planning, produces project-context.md |
-| `sagerstack-planner` | `/sagerstack:planner` | Phase planning with agent team |
-| `sagerstack-builder` | `/sagerstack:builder` | Phase building with agent team |
-| `sagerstack-code-qa` | (preloaded by builder-qa) | QA validation methodology |
-| `sagerstack-software-engineering` | (preloaded by builder-developer) | Python architecture standards (Vertical Slice + DDD) |
-| `sagerstack-local-testing` | (preloaded by builder-developer) | Testing infrastructure, Docker, pytest |
-| `sagerstack-verify` | `/sagerstack:verify` | Interactive UAT verification, AC-driven |
-| `sagerstack-deploy-aws` | `/sagerstack:deploy-aws` | AWS Terraform deployment |
-| `project-memory` | (preloaded by multiple agents) | Cross-session knowledge in docs/project_notes/ |
-
-### Agent Definitions (`.claude/agents/`)
-
-| Agent | Tools | Skills Preloaded |
-|-------|-------|-----------------|
-| `planner-researcher` | Read, Glob, Grep, WebSearch, WebFetch, SendMessage, TaskUpdate, TaskList, Write | (none) |
-| `planner-ba` | Read, Write, Edit, Glob, Grep, SendMessage, TaskUpdate, TaskList | sagerstack-code-planning, project-memory |
-| `planner-architect` | Read, Write, Edit, Glob, Grep, WebSearch, WebFetch, SendMessage, TaskUpdate, TaskList | project-memory |
-| `planner-critic` | Read, Glob, Grep, WebSearch, WebFetch, SendMessage, TaskUpdate, TaskList, Write | project-memory |
-| `builder-developer` | Read, Write, Edit, Glob, Grep, Bash, SendMessage, TaskUpdate, TaskList | sagerstack-software-engineering, sagerstack-local-testing, project-memory |
-| `builder-qa` | Read, Glob, Grep, Bash, SendMessage, TaskUpdate, TaskList, Write | sagerstack-code-qa, project-memory |
-
-### Slash Commands (`.claude/commands/sagerstack/`)
-
-| Command | Invokes Skill |
-|---------|--------------|
-| `code-planning.md` | `sagerstack-code-planning` |
-| `planner.md` | `sagerstack-planner` |
-| `builder.md` | `sagerstack-builder` |
-| `verify.md` | `sagerstack-verify` |
-| `hotfix.md` | `sagerstack-planner` (hotfix mode) |
-
-## Artifact Locations
-
-When the SDLC runs against a target project, it produces artifacts in that project's `docs/` directory:
-
-```
-docs/
-├── project-context.md              # From code-planning (Objective, Milestones, Key Results, Epics)
-├── phases/
-│   ├── epic-001-{desc}/
-│   │   ├── epic.md                 # Epic with story portfolio
-│   │   ├── research/
-│   │   │   ├── findings.md         # Researcher output
-│   │   │   └── story-001-{desc}-tech-research.md  # API/service research (if applicable)
-│   │   ├── stories/
-│   │   │   ├── story-001-{desc}.md          # User story with FR/TR/AC tables
-│   │   │   └── story-002-{desc}.md
-│   │   ├── plans/
-│   │   │   ├── story-001-{desc}-plan.md     # Task-based implementation plan
-│   │   │   ├── story-001-{desc}-critical-analysis.md  # Critical review
-│   │   │   ├── story-002-{desc}-plan.md
-│   │   │   └── story-002-{desc}-critical-analysis.md
-│   │   └── qa/
-│   │       ├── story-001-{desc}-qa-report.md  # QA validation report
-│   │       ├── story-002-{desc}-qa-report.md
-│   │       └── uat-report.md                  # Interactive UAT results (from /sagerstack:verify)
-│   └── epic-002-{desc}/
-│       └── ...
-└── project_notes/                  # Project memory (cross-session)
-    ├── bugs.md                     # Bug log with solutions
-    ├── decisions.md                # Architectural Decision Records
-    ├── key_facts.md                # Project configuration
-    └── issues.md                   # Work history
+# Open the UI
+open http://localhost:8000
 ```
 
-## Quality Standards Enforced
+### Common Commands
 
-These standards are embedded in the skills and automatically enforced by the agents:
+```bash
+# Run tests
+poetry run pytest
 
-- **Architecture**: Vertical Slice + DDD, strict domain purity (no infrastructure imports in domain)
-- **Naming**: CamelCase everywhere (classes, functions, variables, tests)
-- **Testing**: TDD mandatory (red-green-refactor), coverage >= 90%
-- **Configuration**: No hardcoded values, all config from .env files
-- **QA**: Zero-trust validation, 9-check pipeline, AC-driven testing
-- **Planning**: 100% FR/TR/AC coverage mapping, cost flagging, max 2 refinement cycles
-- **Git**: Feature branches per story, latest main merged before push
+# Run tests with coverage
+poetry run pytest --cov=agentic_claims --cov-report=term-missing
 
-## Required Settings
+# Lint
+poetry run ruff check src/ tests/
 
-The framework requires agent teams to be enabled in `.claude/settings.local.json`:
+# Format
+poetry run ruff format src/ tests/
 
-```json
-{
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  },
-  "teammateMode": "in-process"
-}
+# Stop services
+docker compose down
+
+# Stop and remove volumes (full reset)
+docker compose down -v
 ```
+
+## Configuration
+
+All configuration is loaded from environment files via pydantic-settings. No hardcoded values in source code.
+
+| File | Purpose | Git tracked? |
+|------|---------|-------------|
+| `.env.example` | Template with placeholder values | Yes |
+| `.env.local` | Local development values | No (gitignored) |
+| `tests/.env.test` | Test configuration values | Yes |
+
+The `Settings` class in `src/agentic_claims/core/config.py` loads from `.env.local` by default. Tests override this with `tests/.env.test` via the `testSettings` fixture in `conftest.py`.
+
+Docker Compose reads `.env.local` via `env_file:` directives for both the app and postgres services.
+
+## Project Structure
+
+```
+src/agentic_claims/
+├── app.py                          # Chainlit entry point (on_chat_start, on_message, on_chat_end)
+├── agents/                         # One package per agent (vertical slice)
+│   ├── intake/
+│   │   ├── __init__.py
+│   │   └── node.py                 # intakeNode() - receipt parsing, validation
+│   ├── compliance/
+│   │   ├── __init__.py
+│   │   └── node.py                 # complianceNode() - policy audit
+│   ├── fraud/
+│   │   ├── __init__.py
+│   │   └── node.py                 # fraudNode() - duplicate detection
+│   └── advisor/
+│       ├── __init__.py
+│       └── node.py                 # advisorNode() - decision routing
+└── core/                           # Shared infrastructure
+    ├── config.py                   # Settings (pydantic-settings, loads .env.local)
+    ├── state.py                    # ClaimState TypedDict (shared across all nodes)
+    └── graph.py                    # StateGraph definition, compilation, checkpointer
+
+tests/
+├── .env.test                       # Test environment values
+├── conftest.py                     # Shared fixtures (testSettings)
+└── test_graph.py                   # Graph orchestration tests
+```
+
+## Graph Topology
+
+The LangGraph StateGraph defines the claim processing pipeline:
+
+```
+START -> intake -> [compliance || fraud] -> advisor -> END
+```
+
+- **intake**: First node. Processes the incoming claim.
+- **compliance** and **fraud**: Run in parallel (same LangGraph superstep) via fan-out from intake.
+- **advisor**: Fan-in node. Waits for both compliance and fraud, then makes the final decision.
+
+The graph is defined in `core/graph.py`. `buildGraph()` returns an uncompiled `StateGraph`. `getCompiledGraph()` compiles it with an `AsyncPostgresSaver` checkpointer for state persistence.
+
+## Writing a New Agent Node
+
+Every agent lives in its own package under `src/agentic_claims/agents/`. Follow this pattern:
+
+### 1. Create the package
+
+```
+src/agentic_claims/agents/your_agent/
+├── __init__.py
+└── node.py
+```
+
+### 2. Write the node function
+
+The node function is an `async` function that takes `ClaimState` and returns a `dict` with partial state updates. Only return the keys you want to change.
+
+```python
+"""Your agent node - brief description of purpose."""
+
+from langchain_core.messages import AIMessage
+
+from agentic_claims.core.state import ClaimState
+
+
+async def yourAgentNode(state: ClaimState) -> dict:
+    """What this agent does.
+
+    Args:
+        state: Current claim state (read claimId, status, messages, etc.)
+
+    Returns:
+        Partial state update dict
+    """
+    # Read from state
+    claimId = state["claimId"]
+    currentMessages = state["messages"]
+
+    # Do your agent's work here
+    result = "Your agent's output"
+
+    # Return partial state update
+    # - messages uses an Annotated reducer (add_messages) so new messages
+    #   are APPENDED, not replaced
+    # - Other keys (status, claimId) are replaced on write
+    aiMessage = AIMessage(content=result)
+    return {"messages": [aiMessage]}
+```
+
+### 3. Wire the node into the graph
+
+In `src/agentic_claims/core/graph.py`, add the node and its edges:
+
+```python
+from agentic_claims.agents.your_agent.node import yourAgentNode
+
+# Inside buildGraph():
+builder.add_node("your_agent", yourAgentNode)
+builder.add_edge("some_previous_node", "your_agent")
+builder.add_edge("your_agent", "some_next_node")
+```
+
+### 4. Update ClaimState if needed
+
+If your agent needs new state fields, add them to `ClaimState` in `src/agentic_claims/core/state.py`:
+
+```python
+class ClaimState(TypedDict):
+    claimId: str
+    status: str
+    messages: Annotated[list[AnyMessage], add_messages]
+    # Add your fields here
+    yourField: str  # Simple replacement on write
+    yourList: Annotated[list[str], operator.add]  # Append reducer
+```
+
+Use `Annotated` with a reducer function when you want values to accumulate across nodes (like `messages`). Use plain types when you want the last writer to win.
+
+### Key patterns
+
+- **CamelCase naming** for all functions, variables, classes, and tests
+- **Async nodes** — all node functions must be `async def`
+- **Partial state updates** — only return the keys you want to change
+- **Messages accumulate** — the `add_messages` reducer appends new messages to the list
+- **Status transitions** — only set `status` if your node changes the claim lifecycle stage
+- **No infrastructure imports in agent nodes** — agents should not import config, database, or infrastructure directly. Use tools/MCP or pass data through state.
+
+## ClaimState
+
+The shared state passed between all nodes is defined in `src/agentic_claims/core/state.py`:
+
+```python
+class ClaimState(TypedDict):
+    claimId: str                                        # Unique claim identifier
+    status: str                                         # Lifecycle: draft -> submitted -> approved/returned/escalated
+    messages: Annotated[list[AnyMessage], add_messages]  # Conversation history (append-only)
+```
+
+This is intentionally minimal in Phase 1. Future phases will expand it with receipt data, compliance findings, fraud flags, etc.
+
+## AsyncPostgresSaver (Checkpointer)
+
+The checkpointer persists graph state to PostgreSQL after each node execution. Important implementation detail:
+
+`AsyncPostgresSaver.from_conn_string()` returns an **async context manager**, not the saver directly. The app enters it manually in `getCompiledGraph()` and stores the context for cleanup in `onChatEnd()`. See `core/graph.py:62-63` and `app.py:64-66`.
+
+## Infrastructure (Docker Compose)
+
+Current services (Phase 1):
+
+| Service | Image | Port | Purpose |
+|---------|-------|------|---------|
+| `app` | Built from Dockerfile | 8000 | Chainlit + LangGraph app |
+| `postgres` | postgres:16-alpine | 5432 | State persistence, checkpointer |
+
+Future phases will add: Qdrant (vector store), RAG MCP server, DBHub MCP server, Frankfurter MCP server, Email MCP server.
+
+The Dockerfile uses a two-step poetry install for layer caching: `poetry install --no-root` (deps only), then copy source, then `poetry install` (root project).
+
+## Project Phases and Milestones
+
+| Document | Location | Purpose |
+|----------|----------|---------|
+| Project context | `docs/project-context.md` | Objective, architecture, milestones, decisions |
+| Roadmap | `.planning/ROADMAP.md` | Phase breakdown with success criteria and plan status |
+| Current state | `.planning/STATE.md` | Which phase is active, overall progress |
+| Phase plans | `.planning/phases/{phase}/` | Detailed execution plans per phase |
+| Requirements | `.planning/REQUIREMENTS.md` | Full requirements list (49 requirements) |
+| Research | `.planning/research/` | Architecture, stack, features, pitfalls research |
+
+### Phase Status
+
+| Phase | Status |
+|-------|--------|
+| 1. Foundation Infrastructure | Complete |
+| 2. Intake Agent + Receipt Processing | Not started |
+| 3. Compliance + Fraud Agents | Not started |
+| 4. Advisor Agent + Reviewer Flow | Not started |
+| 5. Evaluation + Demo | Not started |
+
+## Code Standards
+
+- **Package manager**: Poetry. All commands via `poetry run`. Never use pip, hatchling, or setuptools.
+- **Architecture**: Vertical slice + DDD. Each agent is its own package.
+- **Naming**: CamelCase everywhere (functions, variables, classes, tests).
+- **Testing**: TDD (red-green-refactor). Coverage >= 90%. Tests in `tests/` with `pytest-asyncio`.
+- **Configuration**: No hardcoded values. All config from `.env.local` via pydantic-settings.
+- **Domain purity**: Agent nodes must not import infrastructure (config, database) directly.
+- **Git**: Feature branches per story, merge latest main before push.
+
+---
 
 ## Project Memory
 
