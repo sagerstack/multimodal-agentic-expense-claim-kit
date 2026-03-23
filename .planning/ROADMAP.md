@@ -30,11 +30,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. All 4 stub agent nodes execute and return "Hello world" messages appended to state
   4. Parallel fan-out for Compliance + Fraud executes both nodes in the same LangGraph superstep
   5. All configuration loaded from .env files (no hardcoded values)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: Project skeleton, Docker Compose (Chainlit + Postgres), configuration setup
-- [ ] 01-02: ClaimState definition, LangGraph stub graph with Postgres checkpointer and parallel fan-out
+- [ ] 01-01-PLAN.md — Project skeleton, Docker Compose (Chainlit + Postgres), configuration from .env
+- [ ] 01-02-PLAN.md — ClaimState definition, LangGraph stub graph with Postgres checkpointer and parallel fan-out
 
 ### Phase 2: Intake Agent + Receipt Processing
 **Goal**: Claimant uploads a receipt image in Chainlit, sees extracted fields with confidence scores, gets policy violations flagged with cited clauses, confirms or corrects fields, and submits a validated claim -- all in a conversational loop under 3 minutes. This phase also delivers the supporting infrastructure (DB schema, MCP servers, OpenRouter client, Qdrant policy ingestion) that was deferred from Phase 1.
