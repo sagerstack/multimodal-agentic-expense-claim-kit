@@ -5,13 +5,12 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy and install dependencies
+# Copy source code and project definition
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir -e .
-
-# Copy source code and chainlit config
 COPY src/ ./src/
-COPY .chainlit/ ./.chainlit/
+
+# Install dependencies
+RUN pip install --no-cache-dir .
 
 # Expose port (configured via .env, defaults to 8000)
 EXPOSE 8000
