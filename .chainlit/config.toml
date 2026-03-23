@@ -1,0 +1,40 @@
+[project]
+# Name of the app and chatbot.
+name = "Agentic Expense Claims"
+
+# Show the readme while the conversation is starting
+enable_telemetry = false
+
+# Enables Cloud authentication. If true, the app will require authentication to access.
+enable_authentication = false
+
+[UI]
+# Name of the app and chatbot.
+name = "Agentic Expense Claims"
+
+# Description of the app and chatbot. This is used for HTML tags.
+description = "Multi-agent expense claims processing system"
+
+# The default value for the expand messages settings.
+default_expand_messages = false
+
+# Hide the chain of thought details from the user in the UI.
+hide_cot = false
+
+[features]
+# Process and display HTML in messages. This can be a security risk (see https://stackoverflow.com/questions/19603097/why-is-it-dangerous-to-render-user-generated-html-or-javascript)
+unsafe_allow_html = false
+
+# Process and display mathematical expressions. This can clash with LaTeX formatting.
+latex = false
+
+# Authorize users to upload files with messages
+[features.multi_modal]
+enabled = true
+accept = ["image/jpeg", "image/png", "image/jpg", "image/webp"]
+max_files = 1
+max_size_mb = 5
+
+[session]
+# Timeout in seconds for the session. Default is 3600 (1 hour).
+timeout = 3600
