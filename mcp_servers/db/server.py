@@ -185,10 +185,10 @@ def getClaimWithReceipts(claimId: int) -> dict[str, Any]:
             # Get receipts
             cur.execute(
                 """
-                SELECT id, claim_id, file_path, amount, category, merchant_name, expense_date, ocr_text, vision_analysis, created_at
+                SELECT id, claim_id, receipt_number, merchant, date, total_amount, currency, image_path, line_items, created_at, updated_at
                 FROM receipts
                 WHERE claim_id = %s
-                ORDER BY expense_date
+                ORDER BY date
                 """,
                 (claimId,),
             )
