@@ -1,3 +1,6 @@
 fastmcp>=0.2.0
 qdrant-client>=1.7.0
 sentence-transformers>=2.2.0
+# Use CPU-only torch to avoid massive CUDA downloads
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.11.0+cpu
