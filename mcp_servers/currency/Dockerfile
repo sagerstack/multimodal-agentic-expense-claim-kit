@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy server code
 COPY server.py .
 
-# Expose SSE transport port
+# Expose Streamable HTTP transport port
 EXPOSE 8000
 
 # Run FastMCP server

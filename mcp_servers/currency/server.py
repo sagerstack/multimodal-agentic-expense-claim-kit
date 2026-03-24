@@ -92,5 +92,5 @@ def getFrankfurterHealth() -> str:
 
 
 if __name__ == "__main__":
-    # Start FastMCP server with SSE transport
-    mcp.run(transport="sse")
+    # Start FastMCP server with Streamable HTTP transport
+    mcp.run(transport="streamable-http")
