@@ -61,10 +61,10 @@ Recent decisions affecting current work:
 - 02-01: OpenRouter via OpenAI SDK with base_url override (proven pattern, maintains compatibility)
 - 02-01: Retry config from Settings with no defaults (consistent with fail-fast configuration principle)
 - 02-01: Qdrant service added in infrastructure plan (enables parallel development, available when needed)
-- 02-02: FastMCP for all MCP servers with SSE transport (standardized MCP protocol for agent tool calls)
+- 02-02: FastMCP for all MCP servers with Streamable HTTP transport (MCP spec 2025-03-26 standard, replaces deprecated SSE)
 - 02-02: Section-aware markdown chunking preserves ## Section headers as metadata (agents can cite specific policy sections)
 - 02-02: CPU-only PyTorch for RAG embeddings (avoid 10GB+ CUDA dependencies when CPU inference is sufficient)
-- 02-02: Remove health checks from MCP servers (SSE endpoints are long-lived connections that hang curl health checks)
+- 02-02: MCP server health checks use curl against /mcp endpoint (Streamable HTTP returns immediate 406, unlike SSE which hung)
 
 ### Pending Todos
 

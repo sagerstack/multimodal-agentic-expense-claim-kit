@@ -5,19 +5,22 @@ services:
       - "8000:8000"
     env_file:
       - .env.local
+    environment:
+      POSTGRES_HOST: postgres
+      QDRANT_HOST: qdrant
     depends_on:
       postgres:
         condition: service_healthy
       qdrant:
         condition: service_healthy
       mcp-rag:
-        condition: service_started
+        condition: service_healthy
       mcp-db:
-        condition: service_started
+        condition: service_healthy
       mcp-currency:
-        condition: service_started
+        condition: service_healthy
       mcp-email:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./src:/app/src
     healthcheck:
@@ -58,6 +61,7 @@ services:
     build: ./mcp_servers/rag
     platform: linux/amd64
     environment:
+      FASTMCP_HOST: 0.0.0.0
       QDRANT_URL: http://qdrant:6333
       COLLECTION_NAME: expense_policies
       EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
@@ -66,31 +70,59 @@ services:
         condition: service_healthy
     ports:
       - "8001:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -so /dev/null -w '%{http_code}' http://127.0.0.1:8000/mcp | grep -qE '^[0-9]+$'"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
 
   mcp-db:
     build: ./mcp_servers/db
     environment:
+      FASTMCP_HOST: 0.0.0.0
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     depends_on:
       postgres:
         condition: service_healthy
     ports:
       - "8002:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -so /dev/null -w '%{http_code}' http://127.0.0.1:8000/mcp | grep -qE '^[0-9]+$'"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   mcp-currency:
     build: ./mcp_servers/currency
+    environment:
+      FASTMCP_HOST: 0.0.0.0
     ports:
       - "8003:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -so /dev/null -w '%{http_code}' http://127.0.0.1:8000/mcp | grep -qE '^[0-9]+$'"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   mcp-email:
     build: ./mcp_servers/email
     environment:
+      FASTMCP_HOST: 0.0.0.0
       SMTP_HOST: ${SMTP_HOST:-mailhog}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     ports:
       - "8004:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -so /dev/null -w '%{http_code}' http://127.0.0.1:8000/mcp | grep -qE '^[0-9]+$'"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
 volumes:
   postgres_data:

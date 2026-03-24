@@ -13,8 +13,10 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi --without dev --no-root
 
-# Copy source code
+# Copy source code and Alembic migrations
 COPY src/ ./src/
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
 
 # Install root project
 RUN poetry install --no-interaction --no-ansi --without dev
