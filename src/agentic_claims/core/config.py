@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     qdrant_host: str = Field(..., description="Qdrant host")
     qdrant_port: int = Field(..., description="Qdrant port")
 
+    # SMTP configuration (for email MCP server)
+    smtp_host: str = Field(default="mailhog", description="SMTP host")
+    smtp_port: int = Field(default=1025, description="SMTP port")
+    smtp_user: str = Field(default="", description="SMTP username (optional)")
+    smtp_password: str = Field(default="", description="SMTP password (optional)")
+
     @property
     def postgres_dsn(self) -> str:
         """Build PostgreSQL connection string from individual fields."""
