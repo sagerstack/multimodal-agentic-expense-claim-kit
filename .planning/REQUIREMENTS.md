@@ -20,8 +20,8 @@ Requirements for the course project deliverable. Each maps to roadmap phases.
 
 ### Policy Validation
 
-- [ ] **POLV-01**: Synthetic SUTD expense policies created covering meal caps, transport allowances, overseas travel, GL codes, approval thresholds
-- [ ] **POLV-02**: Policy documents embedded and stored in Qdrant via RAG MCP server
+- [x] **POLV-01**: Synthetic SUTD expense policies created covering meal caps, transport allowances, overseas travel, GL codes, approval thresholds
+- [x] **POLV-02**: Policy documents embedded and stored in Qdrant via RAG MCP server
 - [ ] **POLV-03**: System retrieves relevant policy clauses given claim context (semantic search)
 - [ ] **POLV-04**: Intake Agent validates claim against retrieved policies BEFORE submission
 - [ ] **POLV-05**: Policy violations flagged with cited policy clause and section reference
@@ -67,17 +67,17 @@ Requirements for the course project deliverable. Each maps to roadmap phases.
 
 ### Data Persistence
 
-- [ ] **DATA-01**: Claims, receipts, and line items persisted to PostgreSQL via DBHub MCP server
+- [x] **DATA-01**: Claims, receipts, and line items persisted to PostgreSQL via DBHub MCP server
 - [ ] **DATA-02**: Historical claims queryable for fraud detection
 - [ ] **DATA-03**: Audit trail logs all agent decisions, state changes, and routing outcomes
-- [ ] **DATA-04**: Receipt images stored externally (filesystem), path references in database
+- [x] **DATA-04**: Receipt images stored externally (filesystem), path references in database
 
 ### Infrastructure
 
-- [ ] **INFR-01**: Docker Compose orchestrates all services (Chainlit app, Postgres, Qdrant, 4 MCP servers)
-- [ ] **INFR-02**: OpenRouter model client abstracts VLM and LLM calls with configurable model names via .env
+- [x] **INFR-01**: Docker Compose orchestrates all services (Chainlit app, Postgres, Qdrant, 4 MCP servers)
+- [x] **INFR-02**: OpenRouter model client abstracts VLM and LLM calls with configurable model names via .env
 - [ ] **INFR-03**: All configuration loaded from .env files (no hardcoded values)
-- [ ] **INFR-04**: MCP servers implemented as separate Docker services using FastMCP
+- [x] **INFR-04**: MCP servers implemented as separate Docker services using FastMCP
 
 ### Conversational UI
 
@@ -139,8 +139,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXTR-06 | Phase 2 | Pending |
 | EXTR-07 | Phase 2 | Pending |
 | EXTR-08 | Phase 2 | Pending |
-| POLV-01 | Phase 2 | Pending |
-| POLV-02 | Phase 2 | Pending |
+| POLV-01 | Phase 2 | Complete |
+| POLV-02 | Phase 2 | Complete |
 | POLV-03 | Phase 2 | Pending |
 | POLV-04 | Phase 2 | Pending |
 | POLV-05 | Phase 2 | Pending |
@@ -168,14 +168,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NOTF-01 | Phase 4 | Pending |
 | NOTF-02 | Phase 4 | Pending |
 | NOTF-03 | Phase 4 | Pending |
-| DATA-01 | Phase 2 | Pending |
+| DATA-01 | Phase 2 | Complete |
 | DATA-02 | Phase 3 | Pending |
 | DATA-03 | Phase 3 | Pending |
-| DATA-04 | Phase 2 | Pending |
-| INFR-01 | Phase 2 | Pending |
-| INFR-02 | Phase 2 | Pending |
+| DATA-04 | Phase 2 | Complete |
+| INFR-01 | Phase 2 | Complete |
+| INFR-02 | Phase 2 | Complete |
 | INFR-03 | Phase 1 | Pending |
-| INFR-04 | Phase 2 | Pending |
+| INFR-04 | Phase 2 | Complete |
 | CHAT-01 | Phase 2 | Pending |
 | CHAT-02 | Phase 4 | Pending |
 | CHAT-03 | Phase 2 | Pending |
