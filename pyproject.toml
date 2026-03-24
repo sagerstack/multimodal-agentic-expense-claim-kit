@@ -16,6 +16,8 @@ python-dotenv = ">=1.0"
 alembic = ">=1.18"
 sqlalchemy = {version = ">=2.0", extras = ["asyncio"]}
 openai = ">=1.0"
+sentence-transformers = ">=2.2"
+qdrant-client = ">=1.7"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0"
