@@ -10,28 +10,29 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2 of 6 (Supporting Infrastructure)
-Plan: 0 of 2 in current phase
-Status: Not started
-Last activity: 2026-03-23 -- Phase 2 context gathered. Roadmap split: Phase 2 = infrastructure, Phase 2.1 = Intake Agent UX.
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-03-24 -- Completed 02-01-PLAN.md (database schema, OpenRouter client, Qdrant service)
 
-Progress: [██..............] 13% (2/14 plans complete)
+Progress: [███.............] 20% (3/14 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 4 min
-- Total execution time: 0.12 hours
+- Total plans completed: 3
+- Average duration: 5 min
+- Total execution time: 0.25 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Foundation Infrastructure | 2 | 7 min | 4 min |
+| 2. Supporting Infrastructure | 1 | 8 min | 8 min |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 5min
-- Trend: Increasing (orchestration more complex than skeleton)
+- Last 5 plans: 2min, 5min, 8min
+- Trend: Increasing (infrastructure setup more involved than orchestration)
 
 *Updated after each plan completion*
 
@@ -55,6 +56,11 @@ Recent decisions affecting current work:
 - 01-02: Checkpointer lifecycle managed per Chainlit chat session
 - 01-02: Integration tests use graph.compile() without checkpointer for speed
 - 01-02: AsyncPostgresSaver.from_conn_string() is async context manager — enter manually for session-scoped lifecycle
+- 02-01: CamelCase Python attributes with explicit name= for snake_case DB columns (maintains project convention while respecting SQL standards)
+- 02-01: Alembic async template from start to match psycopg3 async driver (avoids engine lifecycle mismatches)
+- 02-01: OpenRouter via OpenAI SDK with base_url override (proven pattern, maintains compatibility)
+- 02-01: Retry config from Settings with no defaults (consistent with fail-fast configuration principle)
+- 02-01: Qdrant service added in infrastructure plan (enables parallel development, available when needed)
 
 ### Pending Todos
 
@@ -69,6 +75,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-23T14:19:09Z
-Stopped at: Completed 01-02-PLAN.md - Phase 1 complete, ready for Phase 2
+Last session: 2026-03-24T00:06:29Z
+Stopped at: Completed 02-01-PLAN.md - Database schema, OpenRouter client, Qdrant service established
 Resume file: None
