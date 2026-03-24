@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Phase 2: Supporting Infrastructure
+**Current focus:** Phase 2.1: Intake Agent + Receipt Processing
 
 ## Current Position
 
-Phase: 2 of 6 (Supporting Infrastructure)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-03-24 -- Completed 02-02-PLAN.md (4 MCP servers, policy RAG, Qdrant ingestion)
+Phase: 2.1 of 6 (Intake Agent + Receipt Processing)
+Plan: 0 of 3 in current phase
+Status: Not started
+Last activity: 2026-03-24 -- Phase 2 complete (verified). DB, MCP servers, OpenRouter, Qdrant RAG all operational.
 
 Progress: [████............] 29% (4/14 plans complete)
 
@@ -79,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24T00:47:58Z
-Stopped at: Completed 02-02-PLAN.md - 4 MCP servers running, 35 policy chunks embedded in Qdrant, semantic search verified
+Last session: 2026-03-24T01:00:00Z
+Stopped at: Phase 2 complete and verified. Ready for Phase 2.1 (Intake Agent).
 Resume file: None
