@@ -56,6 +56,7 @@ services:
 
   mcp-rag:
     build: ./mcp_servers/rag
+    platform: linux/amd64
     environment:
       QDRANT_URL: http://qdrant:6333
       COLLECTION_NAME: expense_policies
