@@ -23,6 +23,18 @@ class Settings(BaseSettings):
     # Application environment
     app_env: str = Field(..., description="Application environment (local, prod)")
 
+    # OpenRouter configuration
+    openrouter_api_key: str = Field(..., description="OpenRouter API key")
+    openrouter_model_llm: str = Field(..., description="OpenRouter LLM model name")
+    openrouter_model_vlm: str = Field(..., description="OpenRouter VLM model name")
+    openrouter_base_url: str = Field(..., description="OpenRouter base URL")
+    openrouter_max_retries: int = Field(..., description="OpenRouter max retry count")
+    openrouter_retry_delay: float = Field(..., description="OpenRouter retry delay in seconds")
+
+    # Qdrant configuration
+    qdrant_host: str = Field(..., description="Qdrant host")
+    qdrant_port: int = Field(..., description="Qdrant port")
+
     @property
     def postgres_dsn(self) -> str:
         """Build PostgreSQL connection string from individual fields."""
@@ -30,6 +42,19 @@ class Settings(BaseSettings):
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    @property
+    def postgres_dsn_async(self) -> str:
+        """Build async PostgreSQL connection string for SQLAlchemy async engine."""
+        return (
+            f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @property
+    def qdrant_url(self) -> str:
+        """Build Qdrant URL from host and port."""
+        return f"http://{self.qdrant_host}:{self.qdrant_port}"
 
 
 def getSettings() -> Settings:
