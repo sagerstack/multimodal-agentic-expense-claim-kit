@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2 of 6 (Supporting Infrastructure)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-24 -- Completed 02-01-PLAN.md (database schema, OpenRouter client, Qdrant service)
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-03-24 -- Completed 02-02-PLAN.md (4 MCP servers, policy RAG, Qdrant ingestion)
 
-Progress: [███.............] 20% (3/14 plans complete)
+Progress: [████............] 29% (4/14 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 5 min
-- Total execution time: 0.25 hours
+- Total plans completed: 4
+- Average duration: 13 min
+- Total execution time: 0.83 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1. Foundation Infrastructure | 2 | 7 min | 4 min |
-| 2. Supporting Infrastructure | 1 | 8 min | 8 min |
+| 2. Supporting Infrastructure | 2 | 42 min | 21 min |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 5min, 8min
-- Trend: Increasing (infrastructure setup more involved than orchestration)
+- Last 5 plans: 2min, 5min, 8min, 34min
+- Trend: Highly variable (infrastructure with ML dependencies significantly slower than orchestration)
 
 *Updated after each plan completion*
 
@@ -61,6 +61,10 @@ Recent decisions affecting current work:
 - 02-01: OpenRouter via OpenAI SDK with base_url override (proven pattern, maintains compatibility)
 - 02-01: Retry config from Settings with no defaults (consistent with fail-fast configuration principle)
 - 02-01: Qdrant service added in infrastructure plan (enables parallel development, available when needed)
+- 02-02: FastMCP for all MCP servers with SSE transport (standardized MCP protocol for agent tool calls)
+- 02-02: Section-aware markdown chunking preserves ## Section headers as metadata (agents can cite specific policy sections)
+- 02-02: CPU-only PyTorch for RAG embeddings (avoid 10GB+ CUDA dependencies when CPU inference is sufficient)
+- 02-02: Remove health checks from MCP servers (SSE endpoints are long-lived connections that hang curl health checks)
 
 ### Pending Todos
 
@@ -75,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24T00:06:29Z
-Stopped at: Completed 02-01-PLAN.md - Database schema, OpenRouter client, Qdrant service established
+Last session: 2026-03-24T00:47:58Z
+Stopped at: Completed 02-02-PLAN.md - 4 MCP servers running, 35 policy chunks embedded in Qdrant, semantic search verified
 Resume file: None
