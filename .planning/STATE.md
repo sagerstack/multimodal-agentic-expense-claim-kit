@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.1 of 6 (Intake Agent + Receipt Processing)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-25 -- Completed 02.1-01-PLAN.md (VLM extraction foundation)
+Last activity: 2026-03-25 -- Completed 02.1-02-PLAN.md (Intake tools + dual currency)
 
-Progress: [█████...........] 36% (5/14 plans complete)
+Progress: [█████▌..........] 43% (6/14 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 11 min
-- Total execution time: 0.93 hours
+- Total plans completed: 6
+- Average duration: 9 min
+- Total execution time: 0.98 hours
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [█████...........] 36% (5/14 plans complete)
 |-------|-------|-------|----------|
 | 1. Foundation Infrastructure | 2 | 7 min | 4 min |
 | 2. Supporting Infrastructure | 2 | 42 min | 21 min |
-| 2.1. Intake Agent | 1 | 6 min | 6 min |
+| 2.1. Intake Agent | 2 | 9 min | 4.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 5min, 8min, 34min, 6min
-- Trend: Stabilizing (pure implementation plans consistently faster than infrastructure setup)
+- Last 5 plans: 8min, 34min, 6min, 3min
+- Trend: TDD-based implementation plans very fast (3-6min), infrastructure setup slower (34min)
 
 *Updated after each plan completion*
 
@@ -70,6 +70,9 @@ Recent decisions affecting current work:
 - 02.1-01: Laplacian variance for blur detection (standard OpenCV technique, fast, configurable threshold)
 - 02.1-01: Per-field confidence scores from VLM (enables selective human-in-loop for low-confidence fields)
 - 02.1-01: MCP client returns content list or error dict (no exceptions for connection failures, graceful error handling)
+- 02.1-02: submitClaim dual-call pattern (insertClaim → insertReceipt with FK link ensures no orphaned receipts)
+- 02.1-02: Dual currency columns nullable (existing claims without conversion data preserved during migration)
+- 02.1-02: askHuman uses LangGraph interrupt() synchronously (blocks agent until user responds, standard HITL primitive)
 
 ### Pending Todos
 
@@ -84,6 +87,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-25T07:08:45Z
-Stopped at: Completed 02.1-01-PLAN.md (VLM extraction foundation)
+Last session: 2026-03-25T15:15:44Z
+Stopped at: Completed 02.1-02-PLAN.md (Intake tools + dual currency)
 Resume file: None
