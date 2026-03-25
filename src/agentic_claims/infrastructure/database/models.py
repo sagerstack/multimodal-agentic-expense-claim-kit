@@ -43,6 +43,16 @@ class Claim(Base):
     currency: Mapped[str] = mapped_column(
         String(3), nullable=False, server_default="SGD"
     )
+    # Dual currency support (original currency + converted SGD)
+    originalCurrency: Mapped[Optional[str]] = mapped_column(
+        String(3), nullable=True, name="original_currency"
+    )
+    originalAmount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True, name="original_amount"
+    )
+    convertedAmountSgd: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True, name="converted_amount_sgd"
+    )
     submissionDate: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, name="submission_date"
     )
@@ -84,6 +94,16 @@ class Receipt(Base):
         Numeric(10, 2), nullable=False, name="total_amount"
     )
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    # Dual currency support (original currency + converted SGD)
+    originalCurrency: Mapped[Optional[str]] = mapped_column(
+        String(3), nullable=True, name="original_currency"
+    )
+    originalAmount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True, name="original_amount"
+    )
+    convertedAmountSgd: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True, name="converted_amount_sgd"
+    )
     imagePath: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, name="image_path")
     lineItems: Mapped[dict] = mapped_column(JSONB, nullable=False, name="line_items")
     createdAt: Mapped[datetime] = mapped_column(
