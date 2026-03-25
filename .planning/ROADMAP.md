@@ -15,6 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation Infrastructure** - Project skeleton, LangGraph orchestration with 4 stub agents, Docker Compose (Chainlit + Postgres)
 - [x] **Phase 2: Supporting Infrastructure** - DB schema, MCP servers, OpenRouter client, Qdrant policy ingestion
 - [x] **Phase 2.1: Intake Agent + Receipt Processing** - VLM extraction, policy validation, conversational claim submission loop, claimant UI
+- [ ] **Phase 2.2: Intake Agent Gap Closure** - Fix submitClaim blocker, structured agent output, prompt improvements, startup script, re-test blocked UAT cases
 - [ ] **Phase 3: Compliance + Fraud Agents** - Post-submission parallel policy audit and duplicate detection
 - [ ] **Phase 4: Advisor Agent + Reviewer Flow** - Decision synthesis, approval routing, reviewer UI, email notifications
 - [ ] **Phase 5: Evaluation + Demo** - Test dataset, evaluation framework, baseline comparisons, demo polish
@@ -68,6 +69,24 @@ Plans:
 - [x] 02.1-01-PLAN.md — Foundation: ClaimState/Settings expansion, image quality gate, MCP client utility, VLM receipt extraction tool (TDD)
 - [x] 02.1-02-PLAN.md — MCP tools: policy search, currency conversion, claim submission, askHuman interrupt, dual currency Alembic migration (TDD)
 - [x] 02.1-03-PLAN.md — Agent wiring: intakeNode with create_react_agent, Chainlit image/interrupt handling, Evaluator Gate
+
+### Phase 2.2: Intake Agent Gap Closure (INSERTED)
+**Goal**: All Phase 2.1 UAT gaps are resolved -- submitClaim tool works end-to-end in Chainlit runtime, agent output is structured step-by-step (not chain-of-thought), prompt catches description-receipt mismatches and numeric policy errors, and a single startup script brings the system to ready state
+**Depends on**: Phase 2.1
+**Requirements**: EXTR-01, EXTR-06, POLV-03, POLV-05, CHAT-01, CHAT-03, ORCH-02, INFR-03
+**Success Criteria** (what must be TRUE):
+  1. submitClaim tool successfully creates both claim and receipt records in the database when invoked through the full Chainlit -> LangGraph -> MCP pipeline (not just in direct test)
+  2. Agent output to the user is structured step-by-step (perform action -> report result -> state next step -> proceed), with no raw chain-of-thought or intermediate tool reasoning visible
+  3. Agent cross-references user's text description against VLM-extracted receipt data and flags contradictions (e.g., "hotel" description but restaurant receipt) before proceeding
+  4. Agent correctly evaluates numeric conditions in retrieved policy clauses (e.g., SGD 98.56 does NOT exceed SGD 100 threshold)
+  5. `scripts/startup.sh` runs docker compose, waits for health checks, runs Alembic migrations, and runs RAG policy ingestion in a single command
+  6. Previously blocked UAT tests (human clarification, evaluator gate routing, end-to-end intake flow) pass after fixes
+**Plans**: TBD
+
+Plans:
+- [ ] 02.2-01: Fix submitClaim pipeline (debug MCP response parsing in Chainlit runtime, add insertReceipt to DB MCP server)
+- [ ] 02.2-02: Prompt engineering (structured output, description-receipt cross-referencing, numeric policy evaluation)
+- [ ] 02.2-03: Startup script and blocked UAT re-test
 
 ### Phase 3: Compliance + Fraud Agents
 **Goal**: After a claim is submitted, Compliance and Fraud agents execute in parallel -- Compliance audits against org-level policies with cited clauses, Fraud detects duplicate receipts against historical data -- and their findings are stored in ClaimState for the Advisor
@@ -125,6 +144,7 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 3 -> 4 -> 5
 | 1. Foundation Infrastructure | 2/2 | Complete | 2026-03-23 |
 | 2. Supporting Infrastructure | 2/2 | Complete | 2026-03-24 |
 | 2.1. Intake Agent + Receipt Processing | 3/3 | Complete | 2026-03-25 |
+| 2.2. Intake Agent Gap Closure | 0/3 | Not started | - |
 | 3. Compliance + Fraud Agents | 0/2 | Not started | - |
 | 4. Advisor Agent + Reviewer Flow | 0/3 | Not started | - |
 | 5. Evaluation + Demo | 0/2 | Not started | - |

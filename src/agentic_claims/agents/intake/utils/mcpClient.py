@@ -1,5 +1,7 @@
 """MCP client utility for Streamable HTTP tool calls."""
 
+import json
+
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
@@ -13,7 +15,8 @@ async def mcpCallTool(serverUrl: str, toolName: str, arguments: dict) -> list | 
         arguments: Tool arguments as dict
 
     Returns:
-        Result content list on success, error dict on failure
+        Parsed result (dict or list) on success, error dict on failure.
+        MCP TextContent is automatically parsed from JSON.
     """
     try:
         # Connect to MCP server via Streamable HTTP
@@ -26,7 +29,13 @@ async def mcpCallTool(serverUrl: str, toolName: str, arguments: dict) -> list | 
                 # Call tool
                 result = await session.call_tool(name=toolName, arguments=arguments)
 
-                # Return content list
+                # Parse MCP content: extract text from first TextContent and parse as JSON
+                if result.content and hasattr(result.content[0], "text"):
+                    try:
+                        return json.loads(result.content[0].text)
+                    except (json.JSONDecodeError, TypeError):
+                        return result.content[0].text
+
                 return result.content
 
     except ConnectionError as e:

@@ -25,14 +25,22 @@ async def submitClaim(claimData: dict, receiptData: dict) -> dict:
         serverUrl=settings.db_mcp_url, toolName="insertClaim", arguments=claimData
     )
 
+    # Handle MCP response: may be dict, string (JSON), or string (error)
+    if isinstance(claimResult, str):
+        import json as _json
+        try:
+            claimResult = _json.loads(claimResult)
+        except (ValueError, TypeError):
+            return {"error": f"insertClaim returned unparseable response: {claimResult[:200]}"}
+
     # If claim insertion failed, return error without attempting receipt insertion
     if isinstance(claimResult, dict) and "error" in claimResult:
         return claimResult
 
-    # Extract claim_id for foreign key link
-    claimId = claimResult.get("claim_id")
+    # Extract id for foreign key link (DB RETURNING clause returns "id", not "claim_id")
+    claimId = claimResult.get("id")
     if not claimId:
-        return {"error": "insertClaim did not return claim_id"}
+        return {"error": f"insertClaim did not return id. Response: {claimResult}"}
 
     # Step 2: Insert receipt with FK link to claim
     receiptDataWithFk = {**receiptData, "claimId": claimId}

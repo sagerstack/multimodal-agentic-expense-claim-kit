@@ -1,6 +1,8 @@
 """Database MCP Server for Postgres CRUD operations."""
 
 import os
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 import psycopg
@@ -22,6 +24,16 @@ def getConnection() -> psycopg.Connection:
     if dbConnection is None or dbConnection.closed:
         dbConnection = psycopg.connect(DATABASE_URL)
     return dbConnection
+
+
+def serializeRow(row: dict) -> dict:
+    """Convert non-JSON-serializable values (datetime, Decimal) to strings."""
+    return {
+        k: (v.isoformat() if isinstance(v, (datetime, date))
+             else float(v) if isinstance(v, Decimal)
+             else v)
+        for k, v in row.items()
+    }
 
 
 @mcp.tool()
@@ -88,7 +100,7 @@ def insertClaim(
 
             columns = [desc[0] for desc in cur.description]
             row = cur.fetchone()
-            return dict(zip(columns, row)) if row else {"error": "Insert failed"}
+            return serializeRow(dict(zip(columns, row))) if row else {"error": "Insert failed"}
     except Exception as e:
         if conn:
             conn.rollback()
@@ -132,7 +144,7 @@ def updateClaimStatus(claimId: int, newStatus: str, actor: str) -> dict[str, Any
 
             columns = [desc[0] for desc in cur.description]
             row = cur.fetchone()
-            updatedClaim = dict(zip(columns, row)) if row else {}
+            updatedClaim = serializeRow(dict(zip(columns, row))) if row else {}
 
             # Insert audit log
             cur.execute(
@@ -180,7 +192,7 @@ def getClaimWithReceipts(claimId: int) -> dict[str, Any]:
             if not claimRow:
                 return {"error": f"Claim {claimId} not found"}
 
-            claim = dict(zip(claimColumns, claimRow))
+            claim = serializeRow(dict(zip(claimColumns, claimRow)))
 
             # Get receipts
             cur.execute(
@@ -195,7 +207,7 @@ def getClaimWithReceipts(claimId: int) -> dict[str, Any]:
             receiptColumns = [desc[0] for desc in cur.description]
             receiptRows = cur.fetchall()
 
-            claim["receipts"] = [dict(zip(receiptColumns, row)) for row in receiptRows]
+            claim["receipts"] = [serializeRow(dict(zip(receiptColumns, row))) for row in receiptRows]
 
             return claim
     except Exception as e:

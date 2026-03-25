@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Phase 3: Compliance + Fraud Agents
+**Current focus:** Phase 2.2: Intake Agent Gap Closure
 
 ## Current Position
 
-Phase: 3 of 6 (Compliance + Fraud Agents)
-Plan: 0 of 2 in current phase
+Phase: 2.2 of 7 (Intake Agent Gap Closure)
+Plan: 0 of 3 in current phase
 Status: Not started (planning needed)
-Last activity: 2026-03-25 -- Completed Phase 2.1 (Intake Agent + Receipt Processing)
+Last activity: 2026-03-25 -- Completed Phase 2.1 UAT, identified 6 gaps
 
-Progress: [████████.........] 57% (7/14 plans complete, Phase 2.1 verified)
+Progress: [████████.........] 41% (7/17 plans complete, Phase 2.2 gap closure next)
 
 ## Performance Metrics
 
