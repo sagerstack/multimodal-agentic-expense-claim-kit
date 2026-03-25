@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Phase 2.1: Intake Agent + Receipt Processing
+**Current focus:** Phase 3: Compliance + Fraud Agents
 
 ## Current Position
 
-Phase: 2.1 of 6 (Intake Agent + Receipt Processing)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-03-25 -- Completed 02.1-03-PLAN.md (Wire Intake Agent ReAct loop)
+Phase: 3 of 6 (Compliance + Fraud Agents)
+Plan: 0 of 2 in current phase
+Status: Not started (planning needed)
+Last activity: 2026-03-25 -- Completed Phase 2.1 (Intake Agent + Receipt Processing)
 
-Progress: [██████...........] 50% (7/14 plans complete)
+Progress: [████████.........] 57% (7/14 plans complete, Phase 2.1 verified)
 
 ## Performance Metrics
 
@@ -70,12 +70,13 @@ Recent decisions affecting current work:
 - 02.1-01: Laplacian variance for blur detection (standard OpenCV technique, fast, configurable threshold)
 - 02.1-01: Per-field confidence scores from VLM (enables selective human-in-loop for low-confidence fields)
 - 02.1-01: MCP client returns content list or error dict (no exceptions for connection failures, graceful error handling)
-- 02.1-02: submitClaim dual-call pattern (insertClaim → insertReceipt with FK link ensures no orphaned receipts)
+- 02.1-02: submitClaim dual-call pattern (insertClaim -> insertReceipt with FK link ensures no orphaned receipts)
 - 02.1-02: Dual currency columns nullable (existing claims without conversion data preserved during migration)
 - 02.1-02: askHuman uses LangGraph interrupt() synchronously (blocks agent until user responds, standard HITL primitive)
 - 02.1-03: ChatOpenAI replaces OpenRouterClient (langchain_openai.ChatOpenAI with base_url override provides better LangChain integration)
 - 02.1-03: Intermediate postSubmission node for evaluator gate fan-out (LangGraph conditional edges don't support list values in routing dict)
 - 02.1-03: Base64 encoding in HumanMessage content (Chainlit provides binary image data, agent tools expect base64 strings)
+- 02.1-03: intakeNode detects submitClaim success by scanning ToolMessages in result (tools don't mutate state directly in LangGraph)
 
 ### Pending Todos
 
@@ -87,9 +88,10 @@ None yet.
 - Phase 1 CONTEXT.md gathered -- scope narrowed from full infra to orchestration-only foundation
 - 01-01 BLOCKER RESOLVED: Docker daemon started, all services verified healthy
 - 01-02 CONCERN: Python 3.14 + langchain-core Pydantic V1 compatibility warning (tests pass, monitor for issues)
+- 02.1-03 CONCERN: LangGraph deprecation warning for create_react_agent (moved to langchain.agents, will migrate when stable)
 
 ## Session Continuity
 
-Last session: 2026-03-25T07:19:06Z
-Stopped at: Completed 02.1-03-PLAN.md (Wire Intake Agent ReAct loop)
+Last session: 2026-03-25
+Stopped at: Completed Phase 2.1 execution and verification
 Resume file: None
