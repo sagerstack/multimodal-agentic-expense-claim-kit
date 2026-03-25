@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.2 of 7 (Intake Agent Gap Closure)
-Plan: 2 of 3 in current phase
+Plan: 1 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-25 -- Completed 02.2-02-PLAN.md (Intake Agent Prompt & Output Restructuring)
+Last activity: 2026-03-25 -- Completed 02.2-01-PLAN.md (Atomic submitClaim + Structured Logging + intakeFindings)
 
-Progress: [█████████........] 47% (8/17 plans complete, Phase 2.2 gap closure in progress)
+Progress: [█████████........] 53% (9/17 plans complete, Phase 2.2 gap closure in progress)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 9 min
-- Total execution time: 1.25 hours
+- Total plans completed: 9
+- Average duration: 15 min
+- Total execution time: 2.33 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [█████████........] 47% (8/17 plans complete, Phase 
 | 1. Foundation Infrastructure | 2 | 7 min | 4 min |
 | 2. Supporting Infrastructure | 2 | 42 min | 21 min |
 | 2.1. Intake Agent | 3 | 21 min | 7 min |
-| 2.2. Intake Agent Gap Closure | 1 | 4 min | 4 min |
+| 2.2. Intake Agent Gap Closure | 2 | 69 min | 35 min |
 
 **Recent Trend:**
-- Last 5 plans: 6min, 3min, 12min, 4min
-- Trend: TDD-based implementation plans fast (3-12min), prompt/config changes very fast (4min)
+- Last 5 plans: 3min, 12min, 4min, 65min
+- Trend: Infrastructure changes (atomic transactions, logging) take longer (65min), prompt/config changes very fast (4min)
 
 *Updated after each plan completion*
 
@@ -78,6 +78,10 @@ Recent decisions affecting current work:
 - 02.1-03: Intermediate postSubmission node for evaluator gate fan-out (LangGraph conditional edges don't support list values in routing dict)
 - 02.1-03: Base64 encoding in HumanMessage content (Chainlit provides binary image data, agent tools expect base64 strings)
 - 02.1-03: intakeNode detects submitClaim success by scanning ToolMessages in result (tools don't mutate state directly in LangGraph)
+- 02.2-01: Atomic claim+receipt submission via merged insertClaim MCP tool (single transaction prevents partial state, eliminates FK race conditions)
+- 02.2-01: Structured JSON logging with python-json-logger (standardized fields enable log aggregation and correlation)
+- 02.2-01: Seq dashboard for local log viewing (zero-config Docker image, excellent UI for structured logs)
+- 02.2-01: intakeFindings JSONB column with GIN index (schema-free agent observations, queryable for audit trail)
 - 02.2-02: System prompt structure SUCCESS CRITERIA first (LLM focuses on first content, makes criteria higher priority)
 - 02.2-02: Few-shot examples only for complex steps (keeps prompt under token limit while providing clear format guidance)
 - 02.2-02: Chainlit Step wrapping for collapsible CoT (cot="tool_call" shows Steps collapsed, user sees clean output)
@@ -98,5 +102,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-25
-Stopped at: Completed 02.2-02-PLAN.md (Intake Agent Prompt & Output Restructuring)
+Stopped at: Completed 02.2-01-PLAN.md (Atomic submitClaim + Structured Logging + intakeFindings)
 Resume file: None
