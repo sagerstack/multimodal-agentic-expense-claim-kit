@@ -1,5 +1,7 @@
 """Intake agent node - ReAct agent with all domain tools."""
 
+import json
+
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
@@ -76,8 +78,21 @@ async def intakeNode(state: ClaimState) -> dict:
     # Build state update
     stateUpdate = {"messages": result["messages"]}
 
-    # Check if claim was submitted (claimSubmitted flag set by submitClaim tool)
-    if state.get("claimSubmitted", False):
-        stateUpdate["claimSubmitted"] = True
+    # Detect if submitClaim tool was called successfully by scanning result messages
+    # ToolMessages from LangGraph ReAct agent contain tool name and response content
+    for msg in result["messages"]:
+        if (
+            hasattr(msg, "name")
+            and msg.name == "submitClaim"
+            and hasattr(msg, "content")
+        ):
+            # Parse tool response to check for success (no error key)
+            try:
+                content = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+                if isinstance(content, dict) and "error" not in content:
+                    stateUpdate["claimSubmitted"] = True
+                    break
+            except (json.JSONDecodeError, TypeError):
+                pass
 
     return stateUpdate
