@@ -62,12 +62,12 @@ Plans:
   3. Foreign currency receipts are automatically detected, converted to SGD via Frankfurter API, and the claim stores both original and converted amounts
   4. Policy violations (e.g., meal over cap, missing GL code) are flagged with the specific policy clause and section reference, and claimant can provide justification or correct the claim
   5. Low-confidence VLM extractions trigger a clarification prompt, claimant can confirm or correct extracted fields, and the confirmed claim is submitted and persisted to Postgres
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 02.1-01: VLM receipt extraction pipeline (image upload, structured extraction, confidence scoring, image quality check)
-- [ ] 02.1-02: Currency conversion (Frankfurter MCP) and pre-submission policy validation (RAG MCP semantic retrieval + violation flagging)
-- [ ] 02.1-03: Intake Agent ReAct loop (clarification, correction, confirmation) with Chainlit streaming integration
+- [ ] 02.1-01-PLAN.md — Foundation: ClaimState/Settings expansion, image quality gate, MCP client utility, VLM receipt extraction tool (TDD)
+- [ ] 02.1-02-PLAN.md — MCP tools: policy search, currency conversion, claim submission, askHuman interrupt, dual currency Alembic migration (TDD)
+- [ ] 02.1-03-PLAN.md — Agent wiring: intakeNode with create_react_agent, Chainlit image/interrupt handling, Evaluator Gate
 
 ### Phase 3: Compliance + Fraud Agents
 **Goal**: After a claim is submitted, Compliance and Fraud agents execute in parallel -- Compliance audits against org-level policies with cited clauses, Fraud detects duplicate receipts against historical data -- and their findings are stored in ClaimState for the Advisor
@@ -124,7 +124,7 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 3 -> 4 -> 5
 |-------|---------------|--------|-----------|
 | 1. Foundation Infrastructure | 2/2 | Complete | 2026-03-23 |
 | 2. Supporting Infrastructure | 2/2 | Complete | 2026-03-24 |
-| 2.1. Intake Agent + Receipt Processing | 0/3 | Not started | - |
+| 2.1. Intake Agent + Receipt Processing | 0/3 | Planned | - |
 | 3. Compliance + Fraud Agents | 0/2 | Not started | - |
 | 4. Advisor Agent + Reviewer Flow | 0/3 | Not started | - |
 | 5. Evaluation + Demo | 0/2 | Not started | - |
