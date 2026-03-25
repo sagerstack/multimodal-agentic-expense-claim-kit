@@ -1,9 +1,10 @@
 """Tests for Intake Agent ReAct loop."""
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from agentic_claims.agents.intake.node import getIntakeAgent, intakeNode
 from agentic_claims.core.state import ClaimState
@@ -111,3 +112,91 @@ async def test_intakeNodeReturnsMessagesUpdate():
 
         # Verify agent was invoked
         mockAgent.ainvoke.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_intakeNodeSetsClaimSubmittedOnSuccessfulSubmitClaim():
+    """Verify intakeNode sets claimSubmitted=True when submitClaim tool succeeds."""
+    submitResult = json.dumps({"claim": {"id": 1}, "receipt": {"id": 2}})
+    mockAgent = AsyncMock()
+    mockAgent.ainvoke = AsyncMock(
+        return_value={
+            "messages": [
+                HumanMessage(content="Submit my claim"),
+                AIMessage(content="Submitting..."),
+                ToolMessage(
+                    content=submitResult,
+                    name="submitClaim",
+                    tool_call_id="call_123",
+                ),
+                AIMessage(content="Your claim has been submitted."),
+            ]
+        }
+    )
+
+    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+        state: ClaimState = {
+            "claimId": "test-002",
+            "status": "draft",
+            "messages": [HumanMessage(content="Submit my claim")],
+        }
+
+        result = await intakeNode(state)
+
+        assert result.get("claimSubmitted") is True, "claimSubmitted should be True after successful submitClaim"
+
+
+@pytest.mark.asyncio
+async def test_intakeNodeDoesNotSetClaimSubmittedOnError():
+    """Verify intakeNode does NOT set claimSubmitted when submitClaim returns error."""
+    errorResult = json.dumps({"error": "Connection failed"})
+    mockAgent = AsyncMock()
+    mockAgent.ainvoke = AsyncMock(
+        return_value={
+            "messages": [
+                HumanMessage(content="Submit my claim"),
+                ToolMessage(
+                    content=errorResult,
+                    name="submitClaim",
+                    tool_call_id="call_456",
+                ),
+                AIMessage(content="Submission failed."),
+            ]
+        }
+    )
+
+    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+        state: ClaimState = {
+            "claimId": "test-003",
+            "status": "draft",
+            "messages": [HumanMessage(content="Submit my claim")],
+        }
+
+        result = await intakeNode(state)
+
+        assert "claimSubmitted" not in result, "claimSubmitted should NOT be set when submitClaim returns error"
+
+
+@pytest.mark.asyncio
+async def test_intakeNodeClaimSubmittedNotSetWithoutSubmitClaim():
+    """Verify claimSubmitted is not set when no submitClaim tool call in messages."""
+    mockAgent = AsyncMock()
+    mockAgent.ainvoke = AsyncMock(
+        return_value={
+            "messages": [
+                HumanMessage(content="What is the meal limit?"),
+                AIMessage(content="The meal limit is $50 per day."),
+            ]
+        }
+    )
+
+    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+        state: ClaimState = {
+            "claimId": "test-004",
+            "status": "draft",
+            "messages": [HumanMessage(content="What is the meal limit?")],
+        }
+
+        result = await intakeNode(state)
+
+        assert "claimSubmitted" not in result, "claimSubmitted should NOT be set without submitClaim call"
