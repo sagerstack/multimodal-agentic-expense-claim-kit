@@ -39,9 +39,9 @@ def searchPolicies(query: str, limit: int = 5) -> list[dict[str, Any]]:
     # Encode query to vector
     queryVector = encoder.encode(query).tolist()
 
-    # Search Qdrant
-    results = qdrantClient.search(
-        collection_name=COLLECTION_NAME, query_vector=queryVector, limit=limit
+    # Search Qdrant (query_points replaces deprecated search in qdrant-client >= 1.12)
+    response = qdrantClient.query_points(
+        collection_name=COLLECTION_NAME, query=queryVector, limit=limit
     )
 
     # Format results
@@ -53,7 +53,7 @@ def searchPolicies(query: str, limit: int = 5) -> list[dict[str, Any]]:
             "section": r.payload.get("section", ""),
             "score": round(r.score, 4),
         }
-        for r in results
+        for r in response.points
     ]
 
 
