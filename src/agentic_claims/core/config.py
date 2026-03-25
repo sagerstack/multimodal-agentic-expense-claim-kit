@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     # VLM Confidence Threshold
     vlm_confidence_threshold: float = Field(..., description="Minimum VLM confidence before asking human")
 
+    # Logging configuration
+    log_level: str = Field(..., description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)")
+    log_file_path: str = Field(..., description="File path for log output (empty string means no file handler)")
+    seq_url: str = Field(..., description="Seq dashboard URL for documentation/reference")
+    seq_password: str = Field(..., description="Seq admin password")
+
     @property
     def postgres_dsn(self) -> str:
         """Build PostgreSQL connection string from individual fields."""
