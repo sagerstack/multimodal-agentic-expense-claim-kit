@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.1 of 6 (Intake Agent + Receipt Processing)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-03-25 -- Completed 02.1-02-PLAN.md (Intake tools + dual currency)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-03-25 -- Completed 02.1-03-PLAN.md (Wire Intake Agent ReAct loop)
 
-Progress: [█████▌..........] 43% (6/14 plans complete)
+Progress: [██████...........] 50% (7/14 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
+- Total plans completed: 7
 - Average duration: 9 min
-- Total execution time: 0.98 hours
+- Total execution time: 1.18 hours
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [█████▌..........] 43% (6/14 plans complete)
 |-------|-------|-------|----------|
 | 1. Foundation Infrastructure | 2 | 7 min | 4 min |
 | 2. Supporting Infrastructure | 2 | 42 min | 21 min |
-| 2.1. Intake Agent | 2 | 9 min | 4.5 min |
+| 2.1. Intake Agent | 3 | 21 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 8min, 34min, 6min, 3min
-- Trend: TDD-based implementation plans very fast (3-6min), infrastructure setup slower (34min)
+- Last 5 plans: 34min, 6min, 3min, 12min
+- Trend: TDD-based implementation plans fast (3-12min), infrastructure setup slower (34min)
 
 *Updated after each plan completion*
 
@@ -73,6 +73,9 @@ Recent decisions affecting current work:
 - 02.1-02: submitClaim dual-call pattern (insertClaim → insertReceipt with FK link ensures no orphaned receipts)
 - 02.1-02: Dual currency columns nullable (existing claims without conversion data preserved during migration)
 - 02.1-02: askHuman uses LangGraph interrupt() synchronously (blocks agent until user responds, standard HITL primitive)
+- 02.1-03: ChatOpenAI replaces OpenRouterClient (langchain_openai.ChatOpenAI with base_url override provides better LangChain integration)
+- 02.1-03: Intermediate postSubmission node for evaluator gate fan-out (LangGraph conditional edges don't support list values in routing dict)
+- 02.1-03: Base64 encoding in HumanMessage content (Chainlit provides binary image data, agent tools expect base64 strings)
 
 ### Pending Todos
 
@@ -87,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-25T15:15:44Z
-Stopped at: Completed 02.1-02-PLAN.md (Intake tools + dual currency)
+Last session: 2026-03-25T07:19:06Z
+Stopped at: Completed 02.1-03-PLAN.md (Wire Intake Agent ReAct loop)
 Resume file: None
