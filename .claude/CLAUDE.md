@@ -93,8 +93,8 @@ All configuration is loaded from environment files via pydantic-settings (`src/a
 | `CHAINLIT_PORT` | `8000` | Chainlit port |
 | `APP_ENV` | `local` | Environment (local/prod) |
 | `OPENROUTER_API_KEY` | `sk-or-...` | OpenRouter API key |
-| `OPENROUTER_MODEL_LLM` | `meta-llama/llama-3.1-8b-instruct:free` | Text LLM model |
-| `OPENROUTER_MODEL_VLM` | `meta-llama/llama-3.2-11b-vision-instruct:free` | Vision LLM model |
+| `OPENROUTER_MODEL_LLM` | `qwen/qwen-2.5-72b-instruct` | Text LLM model (agent reasoning) |
+| `OPENROUTER_MODEL_VLM` | `qwen/qwen-2.5-vl-72b-instruct` | Vision LLM model (receipt extraction) |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API base |
 | `OPENROUTER_MAX_RETRIES` | `3` | LLM retry count |
 | `OPENROUTER_RETRY_DELAY` | `2.0` | Seconds between retries |
@@ -165,9 +165,11 @@ Defined in `src/agentic_claims/infrastructure/database/models.py`:
 | Table | Role | Key Columns |
 |-------|------|-------------|
 | `claims` | Aggregate root | claim_number, employee_id, status, total_amount, currency (default SGD) |
-| `receipts` | Child of claim | merchant, date, total_amount, currency, image_path, line_items (JSONB) |
+| `receipts` | Child of claim | merchant, date, total_amount, currency, image_path, line_items (JSONB), original_amount, original_currency, exchange_rate, converted_amount |
 | `audit_log` | Event log | action, old_value, new_value, actor, timestamp |
 | `alembic_version` | Migration tracking | version_num |
+
+**Dual currency columns** on `receipts`: `original_amount`, `original_currency`, `exchange_rate`, `converted_amount` (all nullable — existing claims without conversion data preserved).
 
 ### Alembic Migrations
 
@@ -191,7 +193,7 @@ poetry run alembic downgrade -1
 poetry run alembic stamp head
 ```
 
-**File locations**: `alembic.ini` (config), `alembic/env.py` (runtime config, loads Settings), `alembic/versions/` (migration scripts). Current: `001_initial_schema.py`.
+**File locations**: `alembic.ini` (config), `alembic/env.py` (runtime config, loads Settings), `alembic/versions/` (migration scripts). Current head: `002_add_dual_currency_columns.py`.
 
 The `alembic/env.py` imports `Settings` from the app and uses `postgres_dsn_async` (psycopg driver) for async migrations.
 
@@ -368,12 +370,15 @@ response = await client.callVlm("Extract fields from this receipt", "https://exa
 Defined in `src/agentic_claims/core/graph.py`. State in `src/agentic_claims/core/state.py`.
 
 ```
-START -> intake -> [compliance || fraud] -> advisor -> END
+START -> intake -> evaluatorGate -> (submitted) -> postSubmission -> [compliance || fraud] -> advisor -> END
+                                 -> (pending) -> END
 ```
 
-- **intake** (`agents/intake/node.py`): First node, processes incoming claim. Status: draft -> submitted.
-- **compliance** + **fraud** (`agents/compliance/node.py`, `agents/fraud/node.py`): Parallel fan-out from intake (same LangGraph superstep).
-- **advisor** (`agents/advisor/node.py`): Fan-in node, waits for both, makes final decision. Status -> approved/returned/escalated.
+- **intake** (`agents/intake/node.py`): ReAct agent with 5 tools. Processes receipt, validates against policy, handles clarifications.
+- **evaluatorGate** (`graph.py`): Conditional router. Checks `claimSubmitted` flag — routes to post-submission pipeline or END (if still in conversation).
+- **postSubmission**: Pass-through node enabling fan-out to parallel agents.
+- **compliance** + **fraud** (`agents/compliance/node.py`, `agents/fraud/node.py`): Parallel fan-out from postSubmission (same LangGraph superstep). Status: stubs.
+- **advisor** (`agents/advisor/node.py`): Fan-in node, waits for both, makes final decision. Status: stub.
 
 ### ClaimState
 
@@ -382,6 +387,10 @@ class ClaimState(TypedDict):
     claimId: str                                        # Unique claim identifier
     status: str                                         # Lifecycle: draft -> submitted -> approved/returned/escalated
     messages: Annotated[list[AnyMessage], add_messages]  # Conversation history (append-only via reducer)
+    extractedReceipt: Optional[dict]                    # VLM extraction output with fields + confidence
+    violations: Optional[list[dict]]                    # Policy violations with cited clauses
+    currencyConversion: Optional[dict]                  # Original and converted amounts
+    claimSubmitted: Optional[bool]                      # Gate flag for routing to compliance/fraud
 ```
 
 ### Checkpointer
@@ -394,16 +403,20 @@ class ClaimState(TypedDict):
 
 | Handler | What it does |
 |---------|-------------|
-| `@cl.on_chat_start` | Creates compiled graph + checkpointer, stores in session, sends welcome message |
-| `@cl.on_message` | Invokes graph with user message, streams agent responses back to chat |
+| `@cl.on_chat_start` | Creates compiled graph + checkpointer, generates claimId + threadId, stores in session |
+| `@cl.on_message` | Handles image upload (base64 -> imageStore), interrupt resume, graph invocation, response streaming |
 | `@cl.on_chat_end` | Closes checkpointer DB connection |
 
-Each session gets a unique `thread_id` for checkpointer isolation (enables multi-turn conversations).
+Each session gets a unique `thread_id` for checkpointer isolation and a unique `claim_id` for image store lookups.
+
+**Image handling**: Receipt images are extracted from Chainlit `message.elements`, base64-encoded, and stored in the in-memory `imageStore` (keyed by claimId). The LLM only sees a text message referencing the claimId — the VLM tool retrieves the image directly from the store. This avoids embedding ~58K tokens of base64 data into the LLM's context window.
+
+**Interrupt support**: The `askHuman` tool triggers a LangGraph interrupt. The app detects `__interrupt__` in the result, sends the clarification question to the user, and sets `awaiting_clarification = True`. On the next message, it resumes the graph with `Command(resume=...)` containing the user's response.
 
 ## Tests
 
 ```bash
-# Run all 22 tests
+# Run all 54 tests
 poetry run pytest tests/ -v
 
 # Run specific test module
@@ -411,6 +424,8 @@ poetry run pytest tests/test_database.py -v
 poetry run pytest tests/test_graph.py -v
 poetry run pytest tests/test_openrouter.py -v
 poetry run pytest tests/test_policy_ingestion.py -v
+poetry run pytest tests/test_intake_agent.py -v
+poetry run pytest tests/test_intake_tools.py -v
 
 # With coverage
 poetry run pytest --cov=agentic_claims --cov-report=term-missing
@@ -418,10 +433,15 @@ poetry run pytest --cov=agentic_claims --cov-report=term-missing
 
 | Module | Tests | What it covers |
 |--------|-------|---------------|
-| `test_database.py` | 7 | ORM model structure, relationships, JSONB column types |
-| `test_graph.py` | 3 | Graph execution, parallel fan-out, state preservation |
+| `test_database.py` | 7 | ORM model structure, relationships, JSONB column types, dual currency columns |
+| `test_graph.py` | 6 | Graph execution, parallel fan-out, state preservation, evaluator gate routing |
 | `test_openrouter.py` | 7 | Client instantiation, LLM/VLM call construction, retry logic |
 | `test_policy_ingestion.py` | 5 | Chunking logic, metadata, long section splitting, all files parseable |
+| `test_intake_agent.py` | 7 | ReAct agent creation, tool binding, system prompt, intakeNode state updates |
+| `test_intake_tools.py` | 10 | searchPolicies, convertCurrency, submitClaim, askHuman MCP/tool invocations |
+| `test_extract_receipt_fields.py` | 5 | VLM extraction, image quality gate, blurry rejection, error handling |
+| `test_image_quality.py` | 4 | Laplacian blur detection, resolution checks, threshold validation |
+| `test_mcp_client.py` | 3 | MCP HTTP client, tool call serialization, error handling |
 
 Test config: `tests/.env.test` (separate DB name, fast retry delay). Fixture: `testSettings` in `conftest.py` loads from `.env.test`.
 
@@ -429,13 +449,27 @@ Test config: `tests/.env.test` (separate DB name, fast retry delay). Fixture: `t
 
 ```
 src/agentic_claims/
-├── app.py                                  # Chainlit entry point
+├── app.py                                  # Chainlit entry point (image upload, interrupt support)
 ├── core/
 │   ├── config.py                           # Settings (pydantic-settings, loads .env.local)
-│   ├── state.py                            # ClaimState TypedDict
-│   └── graph.py                            # StateGraph definition + checkpointer
+│   ├── state.py                            # ClaimState TypedDict (with Phase 2.1 fields)
+│   ├── graph.py                            # StateGraph + evaluatorGate + checkpointer
+│   └── imageStore.py                       # In-memory image store (claimId -> base64)
 ├── agents/                                 # One package per agent (vertical slice)
-│   ├── intake/node.py                      # intakeNode() — stub
+│   ├── intake/
+│   │   ├── node.py                         # intakeNode() — ReAct agent with 5 tools
+│   │   ├── prompts/
+│   │   │   ├── agentSystemPrompt.py        # Intake agent system prompt
+│   │   │   └── vlmExtractionPrompt.py      # VLM receipt extraction prompt
+│   │   ├── tools/
+│   │   │   ├── extractReceiptFields.py     # VLM receipt extraction with quality gate
+│   │   │   ├── searchPolicies.py           # Policy search via RAG MCP server
+│   │   │   ├── convertCurrency.py          # Currency conversion via MCP server
+│   │   │   ├── submitClaim.py              # Claim submission via DB MCP server
+│   │   │   └── askHuman.py                 # Human-in-the-loop via LangGraph interrupt
+│   │   └── utils/
+│   │       ├── imageQuality.py             # Laplacian blur + resolution checks
+│   │       └── mcpClient.py               # HTTP client for MCP Streamable HTTP calls
 │   ├── compliance/node.py                  # complianceNode() — stub
 │   ├── fraud/node.py                       # fraudNode() — stub
 │   └── advisor/node.py                     # advisorNode() — stub
@@ -460,16 +494,53 @@ scripts/
 
 alembic/
 ├── env.py                                  # Migration runtime (loads Settings, async psycopg)
-└── versions/001_initial_schema.py          # Initial tables: claims, receipts, audit_log
+└── versions/
+    ├── 001_initial_schema.py               # Initial tables: claims, receipts, audit_log
+    └── 002_add_dual_currency_columns.py    # Add original_amount, original_currency, exchange_rate, converted_amount to receipts
 
 tests/
 ├── .env.test                               # Test environment config
 ├── conftest.py                             # testSettings fixture
 ├── test_database.py                        # ORM model tests (7)
-├── test_graph.py                           # Graph orchestration tests (3)
+├── test_graph.py                           # Graph + evaluator gate tests (6)
 ├── test_openrouter.py                      # LLM client tests (7)
-└── test_policy_ingestion.py                # Chunking/ingestion tests (5)
+├── test_policy_ingestion.py                # Chunking/ingestion tests (5)
+├── test_intake_agent.py                    # ReAct agent + intakeNode tests (7)
+├── test_intake_tools.py                    # MCP tool invocation tests (10)
+├── test_extract_receipt_fields.py          # VLM extraction + quality gate tests (5)
+├── test_image_quality.py                   # Blur detection + resolution tests (4)
+└── test_mcp_client.py                      # MCP HTTP client tests (3)
 ```
+
+## Intake Agent (Phase 2.1)
+
+**Package**: `src/agentic_claims/agents/intake/`
+
+Fully implemented ReAct agent using `langgraph.prebuilt.create_react_agent`. The LLM (`OPENROUTER_MODEL_LLM`) handles agent reasoning and tool selection. The VLM (`OPENROUTER_MODEL_VLM`) is called only by the `extractReceiptFields` tool — the receipt image never enters the LLM's context window.
+
+### Tools
+
+| Tool | File | MCP Server | Purpose |
+|------|------|-----------|---------|
+| `extractReceiptFields` | `tools/extractReceiptFields.py` | — (direct VLM call) | Image quality gate + VLM receipt extraction |
+| `searchPolicies` | `tools/searchPolicies.py` | `mcp-rag:8001` | Semantic policy search via Qdrant |
+| `convertCurrency` | `tools/convertCurrency.py` | `mcp-currency:8003` | Currency conversion via Frankfurter API |
+| `submitClaim` | `tools/submitClaim.py` | `mcp-db:8002` | Persist claim + receipt to PostgreSQL |
+| `askHuman` | `tools/askHuman.py` | — (LangGraph interrupt) | Human-in-the-loop for field confirmation |
+
+### Image Quality Gate
+
+`utils/imageQuality.py` — OpenCV-based pre-check before VLM call:
+- **Blur detection**: Laplacian variance < threshold → reject as blurry
+- **Resolution check**: Width < `IMAGE_MIN_WIDTH` or height < `IMAGE_MIN_HEIGHT` → reject
+
+### MCP Client
+
+`utils/mcpClient.py` — HTTP client for calling MCP Streamable HTTP servers. Used by `searchPolicies`, `convertCurrency`, and `submitClaim` tools to call their respective MCP servers.
+
+### Image Store
+
+`core/imageStore.py` — Module-level dict (`claimId -> base64`). The Chainlit app stores the receipt image here; the `extractReceiptFields` tool retrieves it by claimId. This decouples image data from the LLM context window (avoids ~58K token overflow).
 
 ## Writing a New Agent Node
 
@@ -544,7 +615,7 @@ builder.add_edge("your_agent", "some_next_node")
 |-------|--------|
 | 1. Foundation Infrastructure | Complete |
 | 2. Supporting Infrastructure | Complete (UAT passed) |
-| 3. Intake Agent + Receipt Processing | Not started |
+| 2.1. Intake Agent + Receipt Processing | Complete (UAT passed) |
 | 4. Compliance + Fraud Agents | Not started |
 | 5. Advisor Agent + Reviewer Flow | Not started |
 | 6. Evaluation + Demo | Not started |
