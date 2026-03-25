@@ -18,6 +18,11 @@ sqlalchemy = {version = ">=2.0", extras = ["asyncio"]}
 openai = ">=1.0"
 sentence-transformers = ">=2.2"
 qdrant-client = ">=1.7"
+langchain-openai = ">=0.3"
+opencv-python = ">=4.0"
+mcp = ">=1.8"
+httpx = ">=0.27"
+numpy = ">=1.26"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0"

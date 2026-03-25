@@ -41,6 +41,20 @@ class Settings(BaseSettings):
     smtp_user: str = Field(default="", description="SMTP username (optional)")
     smtp_password: str = Field(default="", description="SMTP password (optional)")
 
+    # MCP Server URLs
+    rag_mcp_url: str = Field(..., description="RAG MCP server URL")
+    db_mcp_url: str = Field(..., description="Database MCP server URL")
+    currency_mcp_url: str = Field(..., description="Currency conversion MCP server URL")
+    email_mcp_url: str = Field(..., description="Email MCP server URL")
+
+    # Image Quality Settings
+    image_quality_threshold: float = Field(..., description="Laplacian variance threshold for blur detection")
+    image_min_width: int = Field(..., description="Minimum image width in pixels")
+    image_min_height: int = Field(..., description="Minimum image height in pixels")
+
+    # VLM Confidence Threshold
+    vlm_confidence_threshold: float = Field(..., description="Minimum VLM confidence before asking human")
+
     @property
     def postgres_dsn(self) -> str:
         """Build PostgreSQL connection string from individual fields."""
