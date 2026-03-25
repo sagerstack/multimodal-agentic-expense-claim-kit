@@ -9,6 +9,9 @@ import numpy as np
 import pytest
 
 from agentic_claims.agents.intake.tools.extractReceiptFields import extractReceiptFields
+from agentic_claims.core.imageStore import clearImage, storeImage
+
+TEST_CLAIM_ID = "test-claim-001"
 
 
 @pytest.fixture
@@ -55,25 +58,43 @@ def mockVlmResponse() -> dict:
     }
 
 
+@pytest.fixture(autouse=True)
+def cleanupImageStore():
+    """Clean up image store after each test."""
+    yield
+    clearImage(TEST_CLAIM_ID)
+
+
 @pytest.mark.asyncio
 async def testBlurryImageReturnsError(blurryImageB64):
     """Verify blurry image returns error dict without calling VLM."""
-    result = await extractReceiptFields.ainvoke({"imageB64": blurryImageB64})
+    storeImage(TEST_CLAIM_ID, blurryImageB64)
+    result = await extractReceiptFields.ainvoke({"claimId": TEST_CLAIM_ID})
 
     assert "error" in result, "Should return error dict for blurry image"
     assert "blurry" in result["error"].lower() or "quality" in result["error"].lower()
 
 
 @pytest.mark.asyncio
+async def testNoImageReturnsError():
+    """Verify missing image returns error dict."""
+    result = await extractReceiptFields.ainvoke({"claimId": "nonexistent-claim"})
+
+    assert "error" in result, "Should return error dict when no image stored"
+    assert "no receipt image" in result["error"].lower()
+
+
+@pytest.mark.asyncio
 async def testVlmCalledWithCorrectPrompt(sharpImageB64, mockVlmResponse):
     """Verify VLM receives multimodal message with base64 image and extraction prompt."""
+    storeImage(TEST_CLAIM_ID, sharpImageB64)
     mockVlm = AsyncMock()
     mockVlm.ainvoke.return_value.content = json.dumps(mockVlmResponse)
 
     with patch("agentic_claims.agents.intake.tools.extractReceiptFields.ChatOpenAI") as MockChatOpenAI:
         MockChatOpenAI.return_value = mockVlm
 
-        result = await extractReceiptFields.ainvoke({"imageB64": sharpImageB64})
+        result = await extractReceiptFields.ainvoke({"claimId": TEST_CLAIM_ID})
 
         # Verify VLM was called
         assert mockVlm.ainvoke.called, "VLM should be called for sharp image"
@@ -93,13 +114,14 @@ async def testVlmCalledWithCorrectPrompt(sharpImageB64, mockVlmResponse):
 @pytest.mark.asyncio
 async def testExtractedFieldsStructure(sharpImageB64, mockVlmResponse):
     """Verify returned dict has correct structure with fields and confidence."""
+    storeImage(TEST_CLAIM_ID, sharpImageB64)
     mockVlm = AsyncMock()
     mockVlm.ainvoke.return_value.content = json.dumps(mockVlmResponse)
 
     with patch("agentic_claims.agents.intake.tools.extractReceiptFields.ChatOpenAI") as MockChatOpenAI:
         MockChatOpenAI.return_value = mockVlm
 
-        result = await extractReceiptFields.ainvoke({"imageB64": sharpImageB64})
+        result = await extractReceiptFields.ainvoke({"claimId": TEST_CLAIM_ID})
 
         # Verify top-level structure
         assert "fields" in result, "Result should contain 'fields'"
@@ -123,13 +145,14 @@ async def testExtractedFieldsStructure(sharpImageB64, mockVlmResponse):
 @pytest.mark.asyncio
 async def testInvalidVlmResponseHandled(sharpImageB64):
     """Verify non-JSON VLM response returns error dict without raising exception."""
+    storeImage(TEST_CLAIM_ID, sharpImageB64)
     mockVlm = AsyncMock()
     mockVlm.ainvoke.return_value.content = "Invalid JSON response"
 
     with patch("agentic_claims.agents.intake.tools.extractReceiptFields.ChatOpenAI") as MockChatOpenAI:
         MockChatOpenAI.return_value = mockVlm
 
-        result = await extractReceiptFields.ainvoke({"imageB64": sharpImageB64})
+        result = await extractReceiptFields.ainvoke({"claimId": TEST_CLAIM_ID})
 
         assert "error" in result, "Should return error dict for invalid JSON"
         assert "parse" in result["error"].lower() or "json" in result["error"].lower()

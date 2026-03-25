@@ -10,14 +10,15 @@ from langchain_openai import ChatOpenAI
 from agentic_claims.agents.intake.prompts.vlmExtractionPrompt import VLM_EXTRACTION_PROMPT
 from agentic_claims.agents.intake.utils.imageQuality import checkImageQuality
 from agentic_claims.core.config import getSettings
+from agentic_claims.core.imageStore import getImage
 
 
 @tool
-async def extractReceiptFields(imageB64: str) -> dict:
-    """Extract structured receipt fields from image using VLM with quality gate.
+async def extractReceiptFields(claimId: str) -> dict:
+    """Extract structured receipt fields from the uploaded receipt image using VLM with quality gate.
 
     Args:
-        imageB64: Base64-encoded image string
+        claimId: The claim ID whose receipt image should be processed
 
     Returns:
         Dict with either:
@@ -26,6 +27,11 @@ async def extractReceiptFields(imageB64: str) -> dict:
     """
     # Get settings
     settings = getSettings()
+
+    # Retrieve image from store
+    imageB64 = getImage(claimId)
+    if not imageB64:
+        return {"error": "No receipt image found. Please upload an image first."}
 
     try:
         # Decode base64 to bytes
@@ -53,7 +59,7 @@ async def extractReceiptFields(imageB64: str) -> dict:
             temperature=0.0,
         )
 
-        # Step 4: Build multimodal message with prompt + image
+        # Step 4: Build multimodal message with prompt + image (sent directly to VLM, not through LLM)
         message = HumanMessage(
             content=[
                 {"type": "text", "text": VLM_EXTRACTION_PROMPT},

@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 
 from agentic_claims.core.graph import getCompiledGraph
+from agentic_claims.core.imageStore import storeImage
 
 
 @cl.on_chat_start
@@ -86,10 +87,11 @@ async def onMessage(message: cl.Message):
         )
         cl.user_session.set("awaiting_clarification", False)
     else:
-        # Step 3: Build human message (text-only or text+image)
+        # Step 3: Build human message (text-only; image stored separately to avoid context overflow)
         if imageB64:
+            storeImage(claimId, imageB64)
             humanMsg = HumanMessage(
-                content=f"I've uploaded a receipt image. Here is the base64 data: {imageB64}"
+                content=f"I've uploaded a receipt image for claim {claimId}. Please process it using extractReceiptFields."
             )
         else:
             humanMsg = HumanMessage(content=message.content)
