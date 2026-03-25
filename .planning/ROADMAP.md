@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation Infrastructure** - Project skeleton, LangGraph orchestration with 4 stub agents, Docker Compose (Chainlit + Postgres)
 - [x] **Phase 2: Supporting Infrastructure** - DB schema, MCP servers, OpenRouter client, Qdrant policy ingestion
-- [ ] **Phase 2.1: Intake Agent + Receipt Processing** - VLM extraction, policy validation, conversational claim submission loop, claimant UI
+- [x] **Phase 2.1: Intake Agent + Receipt Processing** - VLM extraction, policy validation, conversational claim submission loop, claimant UI
 - [ ] **Phase 3: Compliance + Fraud Agents** - Post-submission parallel policy audit and duplicate detection
 - [ ] **Phase 4: Advisor Agent + Reviewer Flow** - Decision synthesis, approval routing, reviewer UI, email notifications
 - [ ] **Phase 5: Evaluation + Demo** - Test dataset, evaluation framework, baseline comparisons, demo polish
@@ -65,9 +65,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02.1-01-PLAN.md — Foundation: ClaimState/Settings expansion, image quality gate, MCP client utility, VLM receipt extraction tool (TDD)
-- [ ] 02.1-02-PLAN.md — MCP tools: policy search, currency conversion, claim submission, askHuman interrupt, dual currency Alembic migration (TDD)
-- [ ] 02.1-03-PLAN.md — Agent wiring: intakeNode with create_react_agent, Chainlit image/interrupt handling, Evaluator Gate
+- [x] 02.1-01-PLAN.md — Foundation: ClaimState/Settings expansion, image quality gate, MCP client utility, VLM receipt extraction tool (TDD)
+- [x] 02.1-02-PLAN.md — MCP tools: policy search, currency conversion, claim submission, askHuman interrupt, dual currency Alembic migration (TDD)
+- [x] 02.1-03-PLAN.md — Agent wiring: intakeNode with create_react_agent, Chainlit image/interrupt handling, Evaluator Gate
 
 ### Phase 3: Compliance + Fraud Agents
 **Goal**: After a claim is submitted, Compliance and Fraud agents execute in parallel -- Compliance audits against org-level policies with cited clauses, Fraud detects duplicate receipts against historical data -- and their findings are stored in ClaimState for the Advisor
@@ -124,7 +124,7 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 3 -> 4 -> 5
 |-------|---------------|--------|-----------|
 | 1. Foundation Infrastructure | 2/2 | Complete | 2026-03-23 |
 | 2. Supporting Infrastructure | 2/2 | Complete | 2026-03-24 |
-| 2.1. Intake Agent + Receipt Processing | 0/3 | Planned | - |
+| 2.1. Intake Agent + Receipt Processing | 3/3 | Complete | 2026-03-25 |
 | 3. Compliance + Fraud Agents | 0/2 | Not started | - |
 | 4. Advisor Agent + Reviewer Flow | 0/3 | Not started | - |
 | 5. Evaluation + Demo | 0/2 | Not started | - |

@@ -9,24 +9,24 @@ Requirements for the course project deliverable. Each maps to roadmap phases.
 
 ### Receipt Extraction
 
-- [ ] **EXTR-01**: Claimant uploads receipt image via Chainlit chat interface
-- [ ] **EXTR-02**: VLM extracts structured fields from receipt image (merchant, date, amount, currency, line items, tax, payment method)
-- [ ] **EXTR-03**: System provides per-field confidence scores for VLM extractions
-- [ ] **EXTR-04**: Low-confidence fields trigger clarification request to claimant in conversational loop
-- [ ] **EXTR-05**: Claimant can confirm or correct extracted fields before submission
-- [ ] **EXTR-06**: System detects foreign currency from receipt and converts to SGD via Frankfurter API
-- [ ] **EXTR-07**: Claim stores both original currency amount and converted SGD amount
-- [ ] **EXTR-08**: System rejects blurry or low-resolution images with guidance to re-upload
+- [x] **EXTR-01**: Claimant uploads receipt image via Chainlit chat interface
+- [x] **EXTR-02**: VLM extracts structured fields from receipt image (merchant, date, amount, currency, line items, tax, payment method)
+- [x] **EXTR-03**: System provides per-field confidence scores for VLM extractions
+- [x] **EXTR-04**: Low-confidence fields trigger clarification request to claimant in conversational loop
+- [x] **EXTR-05**: Claimant can confirm or correct extracted fields before submission
+- [x] **EXTR-06**: System detects foreign currency from receipt and converts to SGD via Frankfurter API
+- [x] **EXTR-07**: Claim stores both original currency amount and converted SGD amount
+- [x] **EXTR-08**: System rejects blurry or low-resolution images with guidance to re-upload
 
 ### Policy Validation
 
 - [x] **POLV-01**: Synthetic SUTD expense policies created covering meal caps, transport allowances, overseas travel, GL codes, approval thresholds
 - [x] **POLV-02**: Policy documents embedded and stored in Qdrant via RAG MCP server
-- [ ] **POLV-03**: System retrieves relevant policy clauses given claim context (semantic search)
-- [ ] **POLV-04**: Intake Agent validates claim against retrieved policies BEFORE submission
-- [ ] **POLV-05**: Policy violations flagged with cited policy clause and section reference
-- [ ] **POLV-06**: System checks claim against spending limits, meal caps, and category restrictions
-- [ ] **POLV-07**: Claimant can provide justification for flagged violations or correct the claim
+- [x] **POLV-03**: System retrieves relevant policy clauses given claim context (semantic search)
+- [x] **POLV-04**: Intake Agent validates claim against retrieved policies BEFORE submission
+- [x] **POLV-05**: Policy violations flagged with cited policy clause and section reference
+- [x] **POLV-06**: System checks claim against spending limits, meal caps, and category restrictions
+- [x] **POLV-07**: Claimant can provide justification for flagged violations or correct the claim
 
 ### Fraud Detection
 
@@ -36,14 +36,14 @@ Requirements for the course project deliverable. Each maps to roadmap phases.
 
 ### Multi-Agent Orchestration
 
-- [ ] **ORCH-01**: LangGraph state machine with shared ClaimState TypedDict orchestrates 4 agent nodes
-- [ ] **ORCH-02**: Intake Agent implements ReAct pattern with Evaluator Gate for pre-submission validation
+- [x] **ORCH-01**: LangGraph state machine with shared ClaimState TypedDict orchestrates 4 agent nodes
+- [x] **ORCH-02**: Intake Agent implements ReAct pattern with Evaluator Gate for pre-submission validation
 - [ ] **ORCH-03**: Compliance Agent implements Evaluator pattern for post-submission policy audit
 - [ ] **ORCH-04**: Fraud Agent implements Tool Call pattern for post-submission duplicate detection
 - [ ] **ORCH-05**: Advisor Agent implements Reflection + Routing pattern for decision synthesis
 - [ ] **ORCH-06**: Compliance and Fraud agents execute in parallel (LangGraph fan-out)
 - [ ] **ORCH-07**: Advisor Agent waits for both Compliance and Fraud before synthesizing
-- [ ] **ORCH-08**: PostgreSQL checkpointer persists state after each node execution (crash recovery)
+- [x] **ORCH-08**: PostgreSQL checkpointer persists state after each node execution (crash recovery)
 
 ### Approval Routing
 
@@ -76,15 +76,15 @@ Requirements for the course project deliverable. Each maps to roadmap phases.
 
 - [x] **INFR-01**: Docker Compose orchestrates all services (Chainlit app, Postgres, Qdrant, 4 MCP servers)
 - [x] **INFR-02**: OpenRouter model client abstracts VLM and LLM calls with configurable model names via .env
-- [ ] **INFR-03**: All configuration loaded from .env files (no hardcoded values)
+- [x] **INFR-03**: All configuration loaded from .env files (no hardcoded values)
 - [x] **INFR-04**: MCP servers implemented as separate Docker services using FastMCP
 
 ### Conversational UI
 
-- [ ] **CHAT-01**: Chainlit app supports claimant persona (receipt upload, claim submission, status)
+- [x] **CHAT-01**: Chainlit app supports claimant persona (receipt upload, claim submission, status)
 - [ ] **CHAT-02**: Chainlit app supports reviewer persona (escalated claim review, decision)
-- [ ] **CHAT-03**: Claimant receives real-time streaming responses during claim processing
-- [ ] **CHAT-04**: Chainlit handles image uploads and passes to LangGraph for VLM processing
+- [x] **CHAT-03**: Claimant receives real-time streaming responses during claim processing
+- [x] **CHAT-04**: Chainlit handles image uploads and passes to LangGraph for VLM processing
 
 ## v2 Requirements
 
@@ -131,32 +131,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EXTR-01 | Phase 2 | Pending |
-| EXTR-02 | Phase 2 | Pending |
-| EXTR-03 | Phase 2 | Pending |
-| EXTR-04 | Phase 2 | Pending |
-| EXTR-05 | Phase 2 | Pending |
-| EXTR-06 | Phase 2 | Pending |
-| EXTR-07 | Phase 2 | Pending |
-| EXTR-08 | Phase 2 | Pending |
+| EXTR-01 | Phase 2.1 | Complete |
+| EXTR-02 | Phase 2.1 | Complete |
+| EXTR-03 | Phase 2.1 | Complete |
+| EXTR-04 | Phase 2.1 | Complete |
+| EXTR-05 | Phase 2.1 | Complete |
+| EXTR-06 | Phase 2.1 | Complete |
+| EXTR-07 | Phase 2.1 | Complete |
+| EXTR-08 | Phase 2.1 | Complete |
 | POLV-01 | Phase 2 | Complete |
 | POLV-02 | Phase 2 | Complete |
-| POLV-03 | Phase 2 | Pending |
-| POLV-04 | Phase 2 | Pending |
-| POLV-05 | Phase 2 | Pending |
-| POLV-06 | Phase 2 | Pending |
-| POLV-07 | Phase 2 | Pending |
+| POLV-03 | Phase 2.1 | Complete |
+| POLV-04 | Phase 2.1 | Complete |
+| POLV-05 | Phase 2.1 | Complete |
+| POLV-06 | Phase 2.1 | Complete |
+| POLV-07 | Phase 2.1 | Complete |
 | FRAD-01 | Phase 3 | Pending |
 | FRAD-02 | Phase 3 | Pending |
 | FRAD-03 | Phase 3 | Pending |
-| ORCH-01 | Phase 1 | Pending |
-| ORCH-02 | Phase 2 | Pending |
+| ORCH-01 | Phase 1 | Complete |
+| ORCH-02 | Phase 2.1 | Complete |
 | ORCH-03 | Phase 3 | Pending |
 | ORCH-04 | Phase 3 | Pending |
 | ORCH-05 | Phase 4 | Pending |
 | ORCH-06 | Phase 3 | Pending |
 | ORCH-07 | Phase 4 | Pending |
-| ORCH-08 | Phase 1 | Pending |
+| ORCH-08 | Phase 1 | Complete |
 | APRV-01 | Phase 4 | Pending |
 | APRV-02 | Phase 4 | Pending |
 | APRV-03 | Phase 4 | Pending |
@@ -174,12 +174,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-04 | Phase 2 | Complete |
 | INFR-01 | Phase 2 | Complete |
 | INFR-02 | Phase 2 | Complete |
-| INFR-03 | Phase 1 | Pending |
+| INFR-03 | Phase 1 | Complete |
 | INFR-04 | Phase 2 | Complete |
-| CHAT-01 | Phase 2 | Pending |
+| CHAT-01 | Phase 2.1 | Complete |
 | CHAT-02 | Phase 4 | Pending |
-| CHAT-03 | Phase 2 | Pending |
-| CHAT-04 | Phase 2 | Pending |
+| CHAT-03 | Phase 2.1 | Complete |
+| CHAT-04 | Phase 2.1 | Complete |
 
 **Coverage:**
 - v1 requirements: 49 total
