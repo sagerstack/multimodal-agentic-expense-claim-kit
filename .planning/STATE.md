@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.1 of 6 (Intake Agent + Receipt Processing)
-Plan: 0 of 3 in current phase
-Status: Not started
-Last activity: 2026-03-24 -- Phase 2 complete (verified). DB, MCP servers, OpenRouter, Qdrant RAG all operational.
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-25 -- Completed 02.1-01-PLAN.md (VLM extraction foundation)
 
-Progress: [████............] 29% (4/14 plans complete)
+Progress: [█████...........] 36% (5/14 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 13 min
-- Total execution time: 0.83 hours
+- Total plans completed: 5
+- Average duration: 11 min
+- Total execution time: 0.93 hours
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [████............] 29% (4/14 plans complete)
 |-------|-------|-------|----------|
 | 1. Foundation Infrastructure | 2 | 7 min | 4 min |
 | 2. Supporting Infrastructure | 2 | 42 min | 21 min |
+| 2.1. Intake Agent | 1 | 6 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 5min, 8min, 34min
-- Trend: Highly variable (infrastructure with ML dependencies significantly slower than orchestration)
+- Last 5 plans: 5min, 8min, 34min, 6min
+- Trend: Stabilizing (pure implementation plans consistently faster than infrastructure setup)
 
 *Updated after each plan completion*
 
@@ -65,6 +66,10 @@ Recent decisions affecting current work:
 - 02-02: Section-aware markdown chunking preserves ## Section headers as metadata (agents can cite specific policy sections)
 - 02-02: CPU-only PyTorch for RAG embeddings (avoid 10GB+ CUDA dependencies when CPU inference is sufficient)
 - 02-02: MCP server health checks use curl against /mcp endpoint (Streamable HTTP returns immediate 406, unlike SSE which hung)
+- 02.1-01: Image quality gate before VLM call (reject blurry/low-res early to save API costs and provide clear feedback)
+- 02.1-01: Laplacian variance for blur detection (standard OpenCV technique, fast, configurable threshold)
+- 02.1-01: Per-field confidence scores from VLM (enables selective human-in-loop for low-confidence fields)
+- 02.1-01: MCP client returns content list or error dict (no exceptions for connection failures, graceful error handling)
 
 ### Pending Todos
 
@@ -79,6 +84,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-24T01:00:00Z
-Stopped at: Phase 2 complete and verified. Ready for Phase 2.1 (Intake Agent).
+Last session: 2026-03-25T07:08:45Z
+Stopped at: Completed 02.1-01-PLAN.md (VLM extraction foundation)
 Resume file: None
