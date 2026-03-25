@@ -71,9 +71,25 @@ def insertClaim(
     status: str,
     totalAmount: float,
     currency: str = "SGD",
+    intakeFindings: dict | None = None,
+    receiptNumber: str | None = None,
+    merchant: str | None = None,
+    receiptDate: str | None = None,
+    receiptTotalAmount: float | None = None,
+    receiptCurrency: str | None = None,
+    lineItems: list | None = None,
+    imagePath: str | None = None,
+    paymentMethod: str | None = None,
+    taxAmount: float | None = None,
+    originalAmount: float | None = None,
+    originalCurrency: str | None = None,
+    convertedAmount: float | None = None,
+    convertedCurrency: str | None = None,
+    exchangeRate: float | None = None,
+    conversionDate: str | None = None,
 ) -> dict[str, Any]:
     """
-    Insert a new claim into the database.
+    Insert a new claim and optionally its receipt atomically.
 
     Args:
         claimNumber: Unique claim identifier
@@ -81,29 +97,104 @@ def insertClaim(
         status: Claim status (draft, pending, approved, rejected, paid)
         totalAmount: Total claim amount
         currency: Currency code (default SGD)
+        intakeFindings: Agent observations (mismatches, overrides, red flags)
+        receiptNumber: Unique receipt identifier (optional)
+        merchant: Merchant name (optional)
+        receiptDate: Receipt date (optional)
+        receiptTotalAmount: Receipt total amount (optional)
+        receiptCurrency: Receipt currency (optional)
+        lineItems: Line items as list of dicts (optional)
+        imagePath: Path to receipt image (optional)
+        paymentMethod: Payment method (optional)
+        taxAmount: Tax amount (optional)
+        originalAmount: Original amount before conversion (optional)
+        originalCurrency: Original currency code (optional)
+        convertedAmount: Converted amount in SGD (optional)
+        convertedCurrency: Converted currency code (optional)
+        exchangeRate: Exchange rate used (optional)
+        conversionDate: Date of conversion (optional)
 
     Returns:
-        Newly created claim record
+        Dict with "claim" and "receipt" keys containing the inserted records
     """
+    conn = getConnection()
     try:
-        conn = getConnection()
         with conn.cursor() as cur:
+            # Insert claim with intake_findings
             cur.execute(
                 """
-                INSERT INTO claims (claim_number, employee_id, status, total_amount, currency)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING id, claim_number, employee_id, status, total_amount, currency, created_at, updated_at
+                INSERT INTO claims (
+                    claim_number, employee_id, status, total_amount, currency,
+                    intake_findings, original_amount, original_currency, converted_amount_sgd
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, claim_number, employee_id, status, total_amount, currency,
+                          intake_findings, original_amount, original_currency, converted_amount_sgd,
+                          created_at, updated_at
                 """,
-                (claimNumber, employeeId, status, totalAmount, currency),
+                (
+                    claimNumber,
+                    employeeId,
+                    status,
+                    totalAmount,
+                    currency,
+                    intakeFindings or {},
+                    originalAmount,
+                    originalCurrency,
+                    convertedAmount,
+                ),
             )
+            claimColumns = [desc[0] for desc in cur.description]
+            claimRow = cur.fetchone()
+            if not claimRow:
+                conn.rollback()
+                return {"error": "Claim insert failed"}
+
+            claimRecord = serializeRow(dict(zip(claimColumns, claimRow)))
+            claimId = claimRecord["id"]
+
+            # Insert receipt if receipt data provided
+            receiptRecord = None
+            if receiptNumber and merchant and receiptDate:
+                cur.execute(
+                    """
+                    INSERT INTO receipts (
+                        claim_id, receipt_number, merchant, date, total_amount, currency,
+                        line_items, image_path, original_amount, original_currency, converted_amount_sgd
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id, claim_id, receipt_number, merchant, date, total_amount, currency,
+                              line_items, image_path, original_amount, original_currency, converted_amount_sgd,
+                              created_at, updated_at
+                    """,
+                    (
+                        claimId,
+                        receiptNumber,
+                        merchant,
+                        receiptDate,
+                        receiptTotalAmount or 0.0,
+                        receiptCurrency or currency,
+                        lineItems or [],
+                        imagePath,
+                        originalAmount,
+                        originalCurrency,
+                        convertedAmount,
+                    ),
+                )
+                receiptColumns = [desc[0] for desc in cur.description]
+                receiptRow = cur.fetchone()
+                if receiptRow:
+                    receiptRecord = serializeRow(dict(zip(receiptColumns, receiptRow)))
+
             conn.commit()
 
-            columns = [desc[0] for desc in cur.description]
-            row = cur.fetchone()
-            return serializeRow(dict(zip(columns, row))) if row else {"error": "Insert failed"}
+            return {
+                "claim": claimRecord,
+                "receipt": receiptRecord if receiptRecord else None,
+            }
+
     except Exception as e:
-        if conn:
-            conn.rollback()
+        conn.rollback()
         return {"error": f"Insert claim failed: {e}"}
 
 

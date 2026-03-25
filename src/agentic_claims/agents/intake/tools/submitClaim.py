@@ -1,18 +1,24 @@
 """Claim submission tool using DB MCP server."""
 
+import json
+import logging
+
 from langchain_core.tools import tool
 
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
 
+logger = logging.getLogger(__name__)
+
 
 @tool
-async def submitClaim(claimData: dict, receiptData: dict) -> dict:
-    """Submit a claim and its receipt to the database.
+async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict | None = None) -> dict:
+    """Submit a claim and its receipt to the database atomically.
 
     Args:
         claimData: Claim fields (employeeId, totalAmount, currency, etc.)
         receiptData: Receipt fields (merchant, date, totalAmount, currency, lineItems, etc.)
+        intakeFindings: Agent observations (mismatches, overrides, red flags) for audit trail
 
     Returns:
         Dict with "claim" and "receipt" keys containing the inserted records,
@@ -20,37 +26,73 @@ async def submitClaim(claimData: dict, receiptData: dict) -> dict:
     """
     settings = getSettings()
 
-    # Step 1: Insert claim
-    claimResult = await mcpCallTool(
-        serverUrl=settings.db_mcp_url, toolName="insertClaim", arguments=claimData
+    # Log tool entry
+    logger.info(
+        "submitClaim tool called",
+        extra={
+            "claimDataKeys": list(claimData.keys()),
+            "receiptDataKeys": list(receiptData.keys()),
+            "hasFindingsData": intakeFindings is not None,
+        }
     )
 
-    # Handle MCP response: may be dict, string (JSON), or string (error)
-    if isinstance(claimResult, str):
-        import json as _json
+    # Merge all data into single MCP call arguments
+    mergedArgs = {
+        **claimData,
+        **{f"receipt{k[0].upper()}{k[1:]}": v for k, v in receiptData.items()},
+        "intakeFindings": intakeFindings or {},
+    }
+
+    # Log before MCP call
+    logger.info(
+        "Calling MCP insertClaim tool",
+        extra={
+            "serverUrl": settings.db_mcp_url,
+            "toolName": "insertClaim",
+            "argumentKeys": list(mergedArgs.keys()),
+        }
+    )
+
+    # Single atomic MCP call to insert both claim and receipt
+    result = await mcpCallTool(
+        serverUrl=settings.db_mcp_url,
+        toolName="insertClaim",
+        arguments=mergedArgs
+    )
+
+    # Log result type
+    logger.info(
+        "MCP call completed",
+        extra={
+            "resultType": type(result).__name__,
+            "resultPreview": str(result)[:200] if not isinstance(result, dict) else None,
+        }
+    )
+
+    # Handle string response: try parsing as JSON
+    if isinstance(result, str):
+        logger.info("Parsing string response as JSON", extra={"rawText": result[:200]})
         try:
-            claimResult = _json.loads(claimResult)
-        except (ValueError, TypeError):
-            return {"error": f"insertClaim returned unparseable response: {claimResult[:200]}"}
+            result = json.loads(result)
+            logger.info("JSON parse successful", extra={"parsedType": type(result).__name__})
+        except (ValueError, TypeError) as e:
+            logger.error("JSON parse failed", extra={"error": str(e)}, exc_info=True)
+            return {"error": f"insertClaim returned unparseable response: {result[:200]}"}
 
-    # If claim insertion failed, return error without attempting receipt insertion
-    if isinstance(claimResult, dict) and "error" in claimResult:
-        return claimResult
+    # Log tool exit
+    if isinstance(result, dict):
+        logger.info(
+            "submitClaim tool completed",
+            extra={
+                "success": "error" not in result,
+                "hasClaimData": "claim" in result,
+                "hasReceiptData": "receipt" in result,
+            }
+        )
+    else:
+        logger.warning(
+            "submitClaim tool returned unexpected type",
+            extra={"resultType": type(result).__name__}
+        )
 
-    # Extract id for foreign key link (DB RETURNING clause returns "id", not "claim_id")
-    claimId = claimResult.get("id")
-    if not claimId:
-        return {"error": f"insertClaim did not return id. Response: {claimResult}"}
-
-    # Step 2: Insert receipt with FK link to claim
-    receiptDataWithFk = {**receiptData, "claimId": claimId}
-    receiptResult = await mcpCallTool(
-        serverUrl=settings.db_mcp_url, toolName="insertReceipt", arguments=receiptDataWithFk
-    )
-
-    # If receipt insertion failed, return error
-    if isinstance(receiptResult, dict) and "error" in receiptResult:
-        return receiptResult
-
-    # Return both records
-    return {"claim": claimResult, "receipt": receiptResult}
+    return result

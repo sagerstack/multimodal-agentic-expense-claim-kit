@@ -138,58 +138,76 @@ async def testConvertCurrencyReturnsConversionResult():
 
 @pytest.mark.asyncio
 async def testSubmitClaimCallsInsertClaimAndInsertReceipt():
-    """Verify submitClaim calls insertClaim and insertReceipt with FK link."""
-    mockClaimResult = {"claim_id": 123, "claim_number": "CLM-001"}
-    mockReceiptResult = {"receipt_id": 456, "claim_id": 123}
+    """Verify submitClaim makes single atomic MCP call with merged data."""
+    mockResult = {
+        "claim": {"id": 123, "claim_number": "CLM-001"},
+        "receipt": {"id": 456, "claim_id": 123}
+    }
 
     with patch("agentic_claims.agents.intake.tools.submitClaim.mcpCallTool") as mockMcpCall:
-        # First call returns claim, second call returns receipt
-        mockMcpCall.side_effect = [mockClaimResult, mockReceiptResult]
+        mockMcpCall.return_value = mockResult
 
         claimData = {
+            "claimNumber": "CLM-001",
             "employeeId": "EMP-001",
+            "status": "pending",
             "totalAmount": 100.0,
             "currency": "SGD",
         }
         receiptData = {
+            "number": "REC-001",
             "merchant": "Test Merchant",
             "date": "2026-03-25",
             "totalAmount": 100.0,
             "currency": "SGD",
             "lineItems": [],
         }
+        intakeFindings = {"mismatches": [], "overrides": [], "redFlags": []}
 
-        await submitClaim.ainvoke({"claimData": claimData, "receiptData": receiptData})
+        await submitClaim.ainvoke({
+            "claimData": claimData,
+            "receiptData": receiptData,
+            "intakeFindings": intakeFindings
+        })
 
-        # Verify mcpCallTool called twice
-        assert mockMcpCall.call_count == 2
+        # Verify mcpCallTool called once (not twice)
+        assert mockMcpCall.call_count == 1
 
-        # First call: insertClaim
-        firstCall = mockMcpCall.call_args_list[0]
-        firstArgs = firstCall[0]
-        toolName1 = firstArgs[1] if len(firstArgs) > 1 else firstCall[1].get("toolName")
-        assert toolName1 == "insertClaim"
+        # Verify single call to insertClaim with merged arguments
+        callArgs = mockMcpCall.call_args[0]
+        callKwargs = mockMcpCall.call_args[1] if mockMcpCall.call_args[1] else {}
+        toolName = callArgs[1] if len(callArgs) > 1 else callKwargs.get("toolName")
+        assert toolName == "insertClaim"
 
-        # Second call: insertReceipt with claim_id
-        secondCall = mockMcpCall.call_args_list[1]
-        secondArgs = secondCall[0]
-        toolName2 = secondArgs[1] if len(secondArgs) > 1 else secondCall[1].get("toolName")
-        arguments2 = secondArgs[2] if len(secondArgs) > 2 else secondCall[1].get("arguments")
-        assert toolName2 == "insertReceipt"
-        assert arguments2["claimId"] == 123  # FK from first call
+        # Verify merged arguments include claim data, receipt data (prefixed), and intake findings
+        arguments = callArgs[2] if len(callArgs) > 2 else callKwargs.get("arguments")
+        assert arguments["claimNumber"] == "CLM-001"
+        assert arguments["employeeId"] == "EMP-001"
+        assert arguments["receiptNumber"] == "REC-001"
+        assert arguments["receiptMerchant"] == "Test Merchant"
+        assert arguments["intakeFindings"] == intakeFindings
 
 
 @pytest.mark.asyncio
 async def testSubmitClaimReturnsClaimAndReceiptRecords():
-    """Verify submitClaim returns both claim and receipt records."""
-    mockClaimResult = {"claim_id": 123, "claim_number": "CLM-001"}
-    mockReceiptResult = {"receipt_id": 456, "claim_id": 123}
+    """Verify submitClaim returns both claim and receipt records from single MCP call."""
+    mockResult = {
+        "claim": {"id": 123, "claim_number": "CLM-001"},
+        "receipt": {"id": 456, "claim_id": 123}
+    }
 
     with patch("agentic_claims.agents.intake.tools.submitClaim.mcpCallTool") as mockMcpCall:
-        mockMcpCall.side_effect = [mockClaimResult, mockReceiptResult]
+        mockMcpCall.return_value = mockResult
 
-        claimData = {"employeeId": "EMP-001", "totalAmount": 100.0, "currency": "SGD"}
+        claimData = {
+            "claimNumber": "CLM-001",
+            "employeeId": "EMP-001",
+            "status": "pending",
+            "totalAmount": 100.0,
+            "currency": "SGD"
+        }
         receiptData = {
+            "number": "REC-001",
             "merchant": "Test Merchant",
             "date": "2026-03-25",
             "totalAmount": 100.0,
@@ -201,18 +219,25 @@ async def testSubmitClaimReturnsClaimAndReceiptRecords():
 
         assert "claim" in result
         assert "receipt" in result
-        assert result["claim"]["claim_id"] == 123
-        assert result["receipt"]["receipt_id"] == 456
+        assert result["claim"]["id"] == 123
+        assert result["receipt"]["id"] == 456
 
 
 @pytest.mark.asyncio
 async def testSubmitClaimHandlesError():
-    """Verify submitClaim surfaces errors without calling insertReceipt."""
+    """Verify submitClaim surfaces MCP errors."""
     with patch("agentic_claims.agents.intake.tools.submitClaim.mcpCallTool") as mockMcpCall:
         mockMcpCall.return_value = {"error": "Database connection failed"}
 
-        claimData = {"employeeId": "EMP-001", "totalAmount": 100.0, "currency": "SGD"}
+        claimData = {
+            "claimNumber": "CLM-001",
+            "employeeId": "EMP-001",
+            "status": "pending",
+            "totalAmount": 100.0,
+            "currency": "SGD"
+        }
         receiptData = {
+            "number": "REC-001",
             "merchant": "Test",
             "date": "2026-03-25",
             "totalAmount": 100.0,
@@ -222,9 +247,86 @@ async def testSubmitClaimHandlesError():
 
         result = await submitClaim.ainvoke({"claimData": claimData, "receiptData": receiptData})
 
-        # Should only be called once (insertClaim), not twice
+        # Should only be called once
         assert mockMcpCall.call_count == 1
         assert "error" in result
+
+
+@pytest.mark.asyncio
+async def testSubmitClaimHandlesStringResponse():
+    """Verify submitClaim parses string JSON response."""
+    mockJsonString = '{"claim": {"id": 123}, "receipt": {"id": 456}}'
+
+    with patch("agentic_claims.agents.intake.tools.submitClaim.mcpCallTool") as mockMcpCall:
+        mockMcpCall.return_value = mockJsonString
+
+        claimData = {
+            "claimNumber": "CLM-001",
+            "employeeId": "EMP-001",
+            "status": "pending",
+            "totalAmount": 100.0,
+            "currency": "SGD"
+        }
+        receiptData = {
+            "number": "REC-001",
+            "merchant": "Test",
+            "date": "2026-03-25",
+            "totalAmount": 100.0,
+            "currency": "SGD",
+            "lineItems": [],
+        }
+
+        result = await submitClaim.ainvoke({"claimData": claimData, "receiptData": receiptData})
+
+        # Should parse string to dict
+        assert isinstance(result, dict)
+        assert "claim" in result
+        assert result["claim"]["id"] == 123
+
+
+@pytest.mark.asyncio
+async def testSubmitClaimPassesIntakeFindings():
+    """Verify submitClaim includes intakeFindings in MCP call."""
+    mockResult = {
+        "claim": {"id": 123, "intake_findings": {"mismatches": ["test"]}},
+        "receipt": {"id": 456}
+    }
+
+    with patch("agentic_claims.agents.intake.tools.submitClaim.mcpCallTool") as mockMcpCall:
+        mockMcpCall.return_value = mockResult
+
+        claimData = {
+            "claimNumber": "CLM-001",
+            "employeeId": "EMP-001",
+            "status": "pending",
+            "totalAmount": 100.0,
+            "currency": "SGD"
+        }
+        receiptData = {
+            "number": "REC-001",
+            "merchant": "Test",
+            "date": "2026-03-25",
+            "totalAmount": 100.0,
+            "currency": "SGD",
+            "lineItems": [],
+        }
+        intakeFindings = {
+            "mismatches": ["Receipt amount differs from extracted total"],
+            "overrides": [],
+            "redFlags": []
+        }
+
+        result = await submitClaim.ainvoke({
+            "claimData": claimData,
+            "receiptData": receiptData,
+            "intakeFindings": intakeFindings
+        })
+
+        # Verify intakeFindings passed to MCP call
+        callArgs = mockMcpCall.call_args[0]
+        callKwargs = mockMcpCall.call_args[1] if mockMcpCall.call_args[1] else {}
+        arguments = callArgs[2] if len(callArgs) > 2 else callKwargs.get("arguments")
+        assert arguments["intakeFindings"] == intakeFindings
 
 
 # ==================== askHuman Tests ====================
