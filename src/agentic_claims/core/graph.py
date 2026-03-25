@@ -11,6 +11,21 @@ from agentic_claims.core.config import getSettings
 from agentic_claims.core.state import ClaimState
 
 
+def evaluatorGate(state: ClaimState) -> str:
+    """Route based on whether claim has been submitted.
+
+    Args:
+        state: Current claim state
+
+    Returns:
+        "submitted" if claim was submitted (route to compliance+fraud),
+        "pending" if still in intake conversation (route to END)
+    """
+    if state.get("claimSubmitted", False):
+        return "submitted"
+    return "pending"
+
+
 def buildGraph() -> StateGraph:
     """Build the StateGraph with 4 nodes and parallel fan-out topology.
 
@@ -31,10 +46,22 @@ def buildGraph() -> StateGraph:
     builder.add_node("fraud", fraudNode)
     builder.add_node("advisor", advisorNode)
 
-    # Wire the graph: Intake -> [Compliance || Fraud] -> Advisor
+    # Wire the graph with Evaluator Gate
+    # START -> intake
     builder.add_edge(START, "intake")
-    builder.add_edge("intake", "compliance")
-    builder.add_edge("intake", "fraud")
+
+    # Evaluator Gate: intake -> (submitted) -> postSubmission OR (pending) -> END
+    # Use intermediate postSubmission node for fan-out to compliance and fraud
+    builder.add_node("postSubmission", lambda state: state)  # Pass-through node
+    builder.add_conditional_edges(
+        "intake", evaluatorGate, {"submitted": "postSubmission", "pending": END}
+    )
+
+    # Fan-out from postSubmission to compliance and fraud (parallel)
+    builder.add_edge("postSubmission", "compliance")
+    builder.add_edge("postSubmission", "fraud")
+
+    # Fan-in to advisor
     builder.add_edge("compliance", "advisor")
     builder.add_edge("fraud", "advisor")
     builder.add_edge("advisor", END)

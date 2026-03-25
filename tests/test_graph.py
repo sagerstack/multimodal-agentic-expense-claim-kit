@@ -1,107 +1,235 @@
 """Integration tests for LangGraph StateGraph orchestration."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from agentic_claims.core.graph import buildGraph
 from agentic_claims.core.state import ClaimState
 
 
 @pytest.mark.asyncio
-async def test_graphFlowsThrough4Nodes():
-    """Verify graph executes all 4 nodes and produces expected output."""
-    # Build graph without checkpointer for unit testing
-    graph = buildGraph().compile()
+async def test_pendingClaimEndsAfterIntake():
+    """Verify pending claim (not submitted) ends after intake without routing to compliance/fraud."""
+    # Mock intakeNode to avoid API calls
+    async def mockIntakeNode(state: ClaimState) -> dict:
+        return {
+            "messages": [AIMessage(content="Intake processing, not submitted yet")],
+            "claimSubmitted": False,  # Key: claim NOT submitted
+        }
 
-    # Create initial state
-    initialState: ClaimState = {
-        "claimId": "test-001",
-        "status": "draft",
-        "messages": [HumanMessage(content="Test claim")],
-    }
+    with patch("agentic_claims.core.graph.intakeNode", mockIntakeNode):
+        # Build graph without checkpointer
+        graph = buildGraph().compile()
 
-    # Invoke graph
-    result = await graph.ainvoke(initialState)
+        # Create initial state
+        initialState: ClaimState = {
+            "claimId": "test-pending",
+            "status": "draft",
+            "messages": [HumanMessage(content="Test pending claim")],
+            "claimSubmitted": False,
+        }
 
-    # Verify final status set by Advisor
-    assert result["status"] == "approved", "Advisor should set status to 'approved'"
+        # Invoke graph
+        result = await graph.ainvoke(initialState)
 
-    # Verify all agent messages present (1 human + 4 agent messages)
-    assert len(result["messages"]) >= 5, "Should have at least 5 messages"
+        # Verify claimSubmitted is still False
+        assert result.get("claimSubmitted", False) is False, "Claim should not be submitted"
 
-    # Extract message contents
-    messageContents = [msg.content for msg in result["messages"]]
-    allContent = " ".join(messageContents)
+        # Verify graph ended after intake (no compliance/fraud/advisor messages)
+        messageContents = [msg.content for msg in result["messages"]]
+        allContent = " ".join(messageContents)
 
-    # Verify each agent produced output
-    assert "Intake Agent" in allContent, "Intake agent message missing"
-    assert "Compliance Agent" in allContent, "Compliance agent message missing"
-    assert "Fraud Agent" in allContent, "Fraud agent message missing"
-    assert "Advisor Agent" in allContent, "Advisor agent message missing"
+        assert "Intake processing" in allContent, "Intake message should be present"
+        assert "Compliance Agent" not in allContent, "Compliance should NOT run"
+        assert "Fraud Agent" not in allContent, "Fraud should NOT run"
+        assert "Advisor Agent" not in allContent, "Advisor should NOT run"
+
+
+@pytest.mark.asyncio
+async def test_submittedClaimRoutesToComplianceAndFraud():
+    """Verify submitted claim routes to compliance and fraud nodes."""
+    # Mock intakeNode to simulate claim submission
+    async def mockIntakeNode(state: ClaimState) -> dict:
+        return {
+            "messages": [AIMessage(content="Claim submitted successfully")],
+            "claimSubmitted": True,  # Key: claim IS submitted
+        }
+
+    with patch("agentic_claims.core.graph.intakeNode", mockIntakeNode):
+        # Build graph without checkpointer
+        graph = buildGraph().compile()
+
+        # Create initial state
+        initialState: ClaimState = {
+            "claimId": "test-submitted",
+            "status": "draft",
+            "messages": [HumanMessage(content="Submit this claim")],
+            "claimSubmitted": False,  # Will be set to True by intake
+        }
+
+        # Invoke graph
+        result = await graph.ainvoke(initialState)
+
+        # Verify claimSubmitted is True
+        assert result.get("claimSubmitted", False) is True, "Claim should be submitted"
+
+        # Verify all 4 agents ran (intake + compliance + fraud + advisor)
+        messageContents = [msg.content for msg in result["messages"]]
+        allContent = " ".join(messageContents)
+
+        assert "Claim submitted" in allContent, "Intake message should be present"
+        assert "Compliance Agent" in allContent, "Compliance should run"
+        assert "Fraud Agent" in allContent, "Fraud should run"
+        assert "Advisor Agent" in allContent, "Advisor should run"
 
 
 @pytest.mark.asyncio
 async def test_complianceAndFraudRunInParallel():
     """Verify compliance and fraud nodes execute in the same superstep."""
-    # Build graph without checkpointer
-    graph = buildGraph().compile()
+    # Mock intakeNode to simulate claim submission
+    async def mockIntakeNode(state: ClaimState) -> dict:
+        return {
+            "messages": [AIMessage(content="Claim submitted for parallel processing")],
+            "claimSubmitted": True,
+        }
 
-    # Create initial state
-    initialState: ClaimState = {
-        "claimId": "test-002",
-        "status": "draft",
-        "messages": [HumanMessage(content="Test parallel execution")],
-    }
+    with patch("agentic_claims.core.graph.intakeNode", mockIntakeNode):
+        # Build graph without checkpointer
+        graph = buildGraph().compile()
 
-    # Stream graph execution to capture node execution order
-    updates = []
-    async for update in graph.astream(initialState, stream_mode="updates"):
-        # Each update is a dict with node names as keys
-        updates.append(list(update.keys()))
+        # Create initial state
+        initialState: ClaimState = {
+            "claimId": "test-parallel",
+            "status": "draft",
+            "messages": [HumanMessage(content="Test parallel execution")],
+            "claimSubmitted": False,
+        }
 
-    # Flatten to get all node names in execution order
-    allNodes = [node for nodeList in updates for node in nodeList]
+        # Stream graph execution to capture node execution order
+        updates = []
+        async for update in graph.astream(initialState, stream_mode="updates"):
+            # Each update is a dict with node names as keys
+            updates.append(list(update.keys()))
 
-    # Verify intake runs first
-    assert allNodes[0] == "intake", "Intake should run first"
+        # Flatten to get all node names in execution order
+        allNodes = [node for nodeList in updates for node in nodeList]
 
-    # Find positions of compliance and fraud
-    complianceIdx = allNodes.index("compliance")
-    fraudIdx = allNodes.index("fraud")
-    advisorIdx = allNodes.index("advisor")
+        # Verify intake runs first
+        assert allNodes[0] == "intake", "Intake should run first"
 
-    # Verify compliance and fraud run before advisor
-    assert (
-        complianceIdx < advisorIdx and fraudIdx < advisorIdx
-    ), "Compliance and Fraud must run before Advisor"
+        # Find positions of compliance and fraud
+        complianceIdx = allNodes.index("compliance")
+        fraudIdx = allNodes.index("fraud")
+        advisorIdx = allNodes.index("advisor")
 
-    # Verify compliance and fraud are in adjacent positions (same superstep)
-    assert (
-        abs(complianceIdx - fraudIdx) <= 1
-    ), "Compliance and Fraud should run in parallel (same superstep)"
+        # Verify compliance and fraud run before advisor
+        assert (
+            complianceIdx < advisorIdx and fraudIdx < advisorIdx
+        ), "Compliance and Fraud must run before Advisor"
+
+        # Verify compliance and fraud are in adjacent positions (same superstep)
+        # After the evaluator gate and postSubmission node, they fan out in parallel
+        assert (
+            abs(complianceIdx - fraudIdx) <= 1
+        ), "Compliance and Fraud should run in parallel (same superstep)"
 
 
 @pytest.mark.asyncio
 async def test_claimStatePassedBetweenNodes():
     """Verify ClaimState preserves claimId and status transitions correctly."""
-    # Build graph without checkpointer
-    graph = buildGraph().compile()
+    # Mock intakeNode
+    async def mockIntakeNode(state: ClaimState) -> dict:
+        return {
+            "messages": [AIMessage(content="Intake complete")],
+            "claimSubmitted": True,
+        }
 
-    # Create initial state with specific claimId
-    initialState: ClaimState = {
-        "claimId": "test-003",
-        "status": "draft",
-        "messages": [HumanMessage(content="Test state preservation")],
-    }
+    with patch("agentic_claims.core.graph.intakeNode", mockIntakeNode):
+        # Build graph without checkpointer
+        graph = buildGraph().compile()
 
-    # Invoke graph
-    result = await graph.ainvoke(initialState)
+        # Create initial state with specific claimId
+        initialState: ClaimState = {
+            "claimId": "test-003",
+            "status": "draft",
+            "messages": [HumanMessage(content="Test state preservation")],
+            "claimSubmitted": False,
+        }
 
-    # Verify claimId preserved throughout execution
-    assert result["claimId"] == "test-003", "ClaimId should be preserved"
+        # Invoke graph
+        result = await graph.ainvoke(initialState)
 
-    # Verify status transitions: draft -> submitted (by Intake) -> approved (by Advisor)
-    assert result["status"] == "approved", "Final status should be 'approved'"
+        # Verify claimId preserved throughout execution
+        assert result["claimId"] == "test-003", "ClaimId should be preserved"
 
-    # Note: We can't directly verify intermediate "submitted" status without
-    # streaming or checkpointer, but we verify the final state is correct
+        # Verify status transitions: draft -> approved (by Advisor)
+        assert result["status"] == "approved", "Final status should be 'approved'"
+
+
+@pytest.mark.asyncio
+async def test_evaluatorGateWithPendingClaim():
+    """Verify evaluator gate correctly routes pending claim to END."""
+    # Mock intakeNode to NOT submit claim
+    async def mockIntakeNode(state: ClaimState) -> dict:
+        return {
+            "messages": [AIMessage(content="Need more information")],
+            # Explicitly do NOT set claimSubmitted to True
+        }
+
+    with patch("agentic_claims.core.graph.intakeNode", mockIntakeNode):
+        # Build graph
+        graph = buildGraph().compile()
+
+        # Create initial state
+        initialState: ClaimState = {
+            "claimId": "test-gate-pending",
+            "status": "draft",
+            "messages": [HumanMessage(content="Unclear receipt")],
+        }
+
+        # Stream to see node execution
+        nodesSeen = []
+        async for update in graph.astream(initialState, stream_mode="updates"):
+            nodesSeen.extend(list(update.keys()))
+
+        # Should only see intake node (and postSubmission should NOT execute)
+        assert "intake" in nodesSeen, "Intake should execute"
+        assert "compliance" not in nodesSeen, "Compliance should NOT execute"
+        assert "fraud" not in nodesSeen, "Fraud should NOT execute"
+        assert "advisor" not in nodesSeen, "Advisor should NOT execute"
+
+
+@pytest.mark.asyncio
+async def test_evaluatorGateWithSubmittedClaim():
+    """Verify evaluator gate correctly routes submitted claim to compliance+fraud."""
+    # Mock intakeNode to submit claim
+    async def mockIntakeNode(state: ClaimState) -> dict:
+        return {
+            "messages": [AIMessage(content="Claim submitted")],
+            "claimSubmitted": True,  # Key flag
+        }
+
+    with patch("agentic_claims.core.graph.intakeNode", mockIntakeNode):
+        # Build graph
+        graph = buildGraph().compile()
+
+        # Create initial state
+        initialState: ClaimState = {
+            "claimId": "test-gate-submitted",
+            "status": "draft",
+            "messages": [HumanMessage(content="Complete claim")],
+        }
+
+        # Stream to see node execution
+        nodesSeen = []
+        async for update in graph.astream(initialState, stream_mode="updates"):
+            nodesSeen.extend(list(update.keys()))
+
+        # Should see intake, postSubmission, compliance, fraud, advisor
+        assert "intake" in nodesSeen, "Intake should execute"
+        assert "postSubmission" in nodesSeen, "PostSubmission should execute"
+        assert "compliance" in nodesSeen, "Compliance should execute"
+        assert "fraud" in nodesSeen, "Fraud should execute"
+        assert "advisor" in nodesSeen, "Advisor should execute"
