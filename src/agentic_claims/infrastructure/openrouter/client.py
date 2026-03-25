@@ -1,4 +1,8 @@
-"""OpenRouter model client for LLM and VLM calls with retry logic."""
+"""OpenRouter model client for LLM and VLM calls with retry logic.
+
+DEPRECATED: Replaced by langchain_openai.ChatOpenAI with OpenRouter base_url.
+Kept for backward compatibility. Will be removed in a future phase.
+"""
 
 import asyncio
 from typing import Optional
