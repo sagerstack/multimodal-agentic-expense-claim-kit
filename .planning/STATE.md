@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.2 of 7 (Intake Agent Gap Closure)
-Plan: 0 of 3 in current phase
-Status: Not started (planning needed)
-Last activity: 2026-03-25 -- Completed Phase 2.1 UAT, identified 6 gaps
+Plan: 2 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-25 -- Completed 02.2-02-PLAN.md (Intake Agent Prompt & Output Restructuring)
 
-Progress: [████████.........] 41% (7/17 plans complete, Phase 2.2 gap closure next)
+Progress: [█████████........] 47% (8/17 plans complete, Phase 2.2 gap closure in progress)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
+- Total plans completed: 8
 - Average duration: 9 min
-- Total execution time: 1.18 hours
+- Total execution time: 1.25 hours
 
 **By Phase:**
 
@@ -30,10 +30,11 @@ Progress: [████████.........] 41% (7/17 plans complete, Phase 2.
 | 1. Foundation Infrastructure | 2 | 7 min | 4 min |
 | 2. Supporting Infrastructure | 2 | 42 min | 21 min |
 | 2.1. Intake Agent | 3 | 21 min | 7 min |
+| 2.2. Intake Agent Gap Closure | 1 | 4 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 34min, 6min, 3min, 12min
-- Trend: TDD-based implementation plans fast (3-12min), infrastructure setup slower (34min)
+- Last 5 plans: 6min, 3min, 12min, 4min
+- Trend: TDD-based implementation plans fast (3-12min), prompt/config changes very fast (4min)
 
 *Updated after each plan completion*
 
@@ -77,6 +78,10 @@ Recent decisions affecting current work:
 - 02.1-03: Intermediate postSubmission node for evaluator gate fan-out (LangGraph conditional edges don't support list values in routing dict)
 - 02.1-03: Base64 encoding in HumanMessage content (Chainlit provides binary image data, agent tools expect base64 strings)
 - 02.1-03: intakeNode detects submitClaim success by scanning ToolMessages in result (tools don't mutate state directly in LangGraph)
+- 02.2-02: System prompt structure SUCCESS CRITERIA first (LLM focuses on first content, makes criteria higher priority)
+- 02.2-02: Few-shot examples only for complex steps (keeps prompt under token limit while providing clear format guidance)
+- 02.2-02: Chainlit Step wrapping for collapsible CoT (cot="tool_call" shows Steps collapsed, user sees clean output)
+- 02.2-02: Message filtering in Chainlit app (only send AI messages with content, skip ToolMessages and empty messages)
 
 ### Pending Todos
 
@@ -93,5 +98,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-25
-Stopped at: Completed Phase 2.1 execution and verification
+Stopped at: Completed 02.2-02-PLAN.md (Intake Agent Prompt & Output Restructuring)
 Resume file: None
