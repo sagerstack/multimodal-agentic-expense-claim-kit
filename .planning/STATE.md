@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.2 of 7 (Intake Agent Gap Closure)
-Plan: 2 of 3 in current phase
+Plan: 5 of 6 in current phase
 Status: In progress
-Last activity: 2026-03-26 -- Completed 02.2-04-PLAN.md (Fix Seq Log Ingestion + Centralize Logging Setup)
+Last activity: 2026-03-26 -- Completed 02.2-05-PLAN.md (Intake Agent UX Redesign)
 
-Progress: [██████████.......] 59% (10/17 plans complete, Phase 2.2 gap closure in progress)
+Progress: [███████████......] 65% (11/17 plans complete, Phase 2.2 gap closure in progress)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
-- Average duration: 14 min
-- Total execution time: 2.40 hours
+- Total plans completed: 11
+- Average duration: 13 min
+- Total execution time: 2.47 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [██████████.......] 59% (10/17 plans complete, Pha
 | 1. Foundation Infrastructure | 2 | 7 min | 4 min |
 | 2. Supporting Infrastructure | 2 | 42 min | 21 min |
 | 2.1. Intake Agent | 3 | 21 min | 7 min |
-| 2.2. Intake Agent Gap Closure | 3 | 73 min | 24 min |
+| 2.2. Intake Agent Gap Closure | 4 | 77 min | 19 min |
 
 **Recent Trend:**
-- Last 5 plans: 12min, 4min, 65min, 4min
-- Trend: Infrastructure changes take longer (24min avg), config/prompt changes very fast (4min)
+- Last 5 plans: 4min, 65min, 4min, 4min
+- Trend: Infrastructure changes take longer (19min avg Phase 2.2), UX/prompt changes very fast (4min)
 
 *Updated after each plan completion*
 
@@ -89,6 +89,12 @@ Recent decisions affecting current work:
 - 02.2-04: Separate seq_ingestion_url for Docker-internal Seq access (seq_url is for browser, app needs http://seq/api/events/raw)
 - 02.2-04: SeqHandler formats CLEF directly without JsonFormatter (Seq requires specific @t, @l, @mt keys)
 - 02.2-04: Centralized logging setup in core/logging.py (app.py imports setupLogging, no inline duplicate)
+- 02.2-05: Two-layer conversational model (USER-FACING OUTPUT + INTERNAL REASONING sections in system prompt)
+- 02.2-05: Conditional step execution (cross-reference only runs if user provided description)
+- 02.2-05: Message count tracking before graph invoke (slice result['messages'] by pre-invoke count for deduplication)
+- 02.2-05: CoT separation (cotEntries captured in Step.output, userFacingMessages sent to main chat)
+- 02.2-05: Confidence bucketing (High/Medium/Low instead of raw 0.95 scores for user-facing output)
+- 02.2-05: Chainlit config.ui.cot="full" (show all Step elements by default, user can collapse)
 
 ### Pending Todos
 
@@ -105,5 +111,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-26
-Stopped at: Completed 02.2-04-PLAN.md (Fix Seq Log Ingestion + Centralize Logging Setup)
+Stopped at: Completed 02.2-05-PLAN.md (Intake Agent UX Redesign)
 Resume file: None
