@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.3 of 8 (Intake Agent UAT Fix)
-Plan: 4 of 5 in current phase
-Status: In progress
-Last activity: 2026-03-26 -- Completed 02.3-04-PLAN.md (streaming architecture)
+Plan: 5 of 5 in current phase
+Status: Phase complete
+Last activity: 2026-03-26 -- Completed 02.3-05-PLAN.md (CLI testing infrastructure)
 
-Progress: [██████████████...] 74% (14/19 plans complete)
+Progress: [███████████████.] 79% (15/19 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
-- Average duration: 11 min
-- Total execution time: 2.57 hours
+- Total plans completed: 15
+- Average duration: 10 min
+- Total execution time: 2.61 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [██████████████...] 74% (14/19 plans compl
 | 2. Supporting Infrastructure | 2 | 42 min | 21 min |
 | 2.1. Intake Agent | 3 | 21 min | 7 min |
 | 2.2. Intake Agent Gap Closure | 5 | 85 min | 17 min |
-| 2.3. Intake Agent UAT Fix | 4 | 6 min | 2 min |
+| 2.3. Intake Agent UAT Fix | 5 | 10 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 4min, 2min, 2min, 2min
-- Trend: UAT fixes consistently fast (2min avg), infrastructure enhancements take longer
+- Last 5 plans: 4min, 2min, 2min, 2min, 4min
+- Trend: UAT fixes consistently fast (2min avg), testing infrastructure moderate (4min avg)
 
 *Updated after each plan completion*
 
@@ -113,6 +113,11 @@ Recent decisions affecting current work:
 - 02.3-04: Real-time token streaming via cl.Message.stream_token() (no batch delay)
 - 02.3-04: Interrupt detection via aget_state() after streaming (astream_events doesn't expose __interrupt__)
 - 02.3-04: Fallback for nested graph (extract last AI message from state if eventCount == 0)
+- 02.3-05: ConversationRunner uses ainvoke() not astream_events() for testing reliability (synchronous execution, simpler state management)
+- 02.3-05: TurnResult dataclass captures messages, tool steps (StepRecords), and interrupt state for test assertions
+- 02.3-05: Structural E2E assertions (tool ordering, CLAIM-NNN pattern, concept keywords) handle LLM non-determinism
+- 02.3-05: .env.e2e uses localhost:8001-8004 MCP URLs matching Docker Compose port mappings for host-based CLI execution
+- 02.3-05: E2E test handles both interrupt (askHuman) and non-interrupt agent behavior for robustness
 
 ### Pending Todos
 
@@ -138,8 +143,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-26 12:16:58Z
-Stopped at: Completed 02.3-04-PLAN.md
+Last session: 2026-03-26 12:30:38Z
+Stopped at: Completed 02.3-05-PLAN.md (Phase 2.3 complete)
 Resume file: None
 
 ### Roadmap Evolution
