@@ -1,11 +1,96 @@
 """Structured JSON logging setup with python-json-logger."""
 
+import json
 import logging
 import sys
+import urllib.request
+from datetime import datetime, timezone
 
 from pythonjsonlogger import jsonlogger
 
 from agentic_claims.core.config import getSettings
+
+
+class SeqHandler(logging.Handler):
+    """HTTP handler that POSTs log events to Seq in CLEF format.
+
+    CLEF (Compact Log Event Format) is JSON with:
+    - @t: ISO 8601 timestamp
+    - @l: level (Debug, Information, Warning, Error, Fatal)
+    - @mt: message template
+    - @x: exception (optional)
+    - Additional properties are indexed by Seq
+
+    Errors during HTTP POST are handled silently (Seq may not be running).
+    """
+
+    LEVEL_MAP = {
+        logging.DEBUG: "Debug",
+        logging.INFO: "Information",
+        logging.WARNING: "Warning",
+        logging.ERROR: "Error",
+        logging.CRITICAL: "Fatal",
+    }
+
+    def __init__(self, seqUrl: str, apiKey: str = ""):
+        """Initialize Seq HTTP handler.
+
+        Args:
+            seqUrl: Seq CLEF ingestion endpoint (e.g. http://seq/api/events/raw)
+            apiKey: Optional Seq API key for authentication
+        """
+        super().__init__()
+        self.seqUrl = seqUrl
+        self.apiKey = apiKey
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Format log record as CLEF and POST to Seq.
+
+        Args:
+            record: Log record to send
+        """
+        try:
+            # Build CLEF JSON
+            settings = getSettings()
+            clefEvent = {
+                "@t": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+                "@l": self.LEVEL_MAP.get(record.levelno, "Information"),
+                "@mt": record.getMessage(),
+                "logger": record.name,
+                "function": record.funcName,
+                "line": record.lineno,
+                "service": "agentic-claims",
+                "environment": settings.app_env,
+            }
+
+            # Add exception info if present
+            if record.exc_info:
+                clefEvent["@x"] = self.format(record)
+
+            # Add any extra fields from record
+            for key, value in record.__dict__.items():
+                if key not in ["name", "msg", "args", "created", "filename", "funcName",
+                              "levelname", "levelno", "lineno", "module", "msecs",
+                              "message", "pathname", "process", "processName", "relativeCreated",
+                              "thread", "threadName", "exc_info", "exc_text", "stack_info"]:
+                    clefEvent[key] = value
+
+            # POST to Seq
+            clefJson = json.dumps(clefEvent).encode("utf-8")
+            req = urllib.request.Request(
+                self.seqUrl,
+                data=clefJson,
+                headers={
+                    "Content-Type": "application/vnd.serilog.clef",
+                    "X-Seq-ApiKey": self.apiKey,
+                },
+            )
+            urllib.request.urlopen(req, timeout=5)
+
+        except Exception:
+            # Silently handle errors (Seq may not be running)
+            # Use standard logging error handling
+            self.handleError(record)
 
 
 def setupLogging() -> None:
@@ -56,3 +141,11 @@ def setupLogging() -> None:
         fileHandler = logging.FileHandler(settings.log_file_path)
         fileHandler.setFormatter(formatter)
         rootLogger.addHandler(fileHandler)
+
+    # Seq handler - only if seq_ingestion_url is set
+    if settings.seq_ingestion_url:
+        seqHandler = SeqHandler(
+            seqUrl=settings.seq_ingestion_url,
+            apiKey=settings.seq_password
+        )
+        rootLogger.addHandler(seqHandler)
