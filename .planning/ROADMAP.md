@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Supporting Infrastructure** - DB schema, MCP servers, OpenRouter client, Qdrant policy ingestion
 - [x] **Phase 2.1: Intake Agent + Receipt Processing** - VLM extraction, policy validation, conversational claim submission loop, claimant UI
 - [x] **Phase 2.2: Intake Agent Gap Closure** - Fix submitClaim blocker, structured agent output, prompt improvements, startup script, re-test blocked UAT cases
-- [ ] **Phase 2.3: Intake Agent UAT Fix** - Fix submitClaim field mismatch, model fallback on 402, streaming CoT, prompt fixes, Seq log noise
+- [x] **Phase 2.3: Intake Agent UAT Fix** - Fix submitClaim field mismatch, model fallback on 402, streaming CoT, prompt fixes, Seq log noise
 - [ ] **Phase 3: Compliance + Fraud Agents** - Post-submission parallel policy audit and duplicate detection
 - [ ] **Phase 4: Advisor Agent + Reviewer Flow** - Decision synthesis, approval routing, reviewer UI, email notifications
 - [ ] **Phase 5: Evaluation + Demo** - Test dataset, evaluation framework, baseline comparisons, demo polish
@@ -98,18 +98,23 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. submitClaim successfully creates claim + receipt records through full Chainlit -> LangGraph -> MCP pipeline (field names correctly mapped to MCP insertClaim interface)
   2. When OpenRouter returns 402 (quota exhausted), system automatically retries with a configured fallback model and logs the fallback event
-  3. Chainlit Step element shows "Thinking" while busy with CoT populating in real-time, then "Thought for X min Y seconds" when complete
-  4. Agent produces a visible user-facing message after each major tool call (extraction, currency conversion, policy check) — no silent steps
+  3. Each tool call gets its own "Thinking" Step element that updates to "Thought for X min Y seconds" when the tool finishes — multiple Steps per conversation, not one monolithic Step
+  4. Agent narrates before each tool call ("Let me process the image", "Let me convert to SGD") and shows results after — LLM content streams to main chat in real-time
   5. Agent never outputs placeholder text ([claimantId], [amount], [rate]) — all values are resolved before presenting to user
   6. When a tool returns an error, agent reads the error details and either self-corrects or explains the specific issue — never asks user to debug system errors
   7. Only agentic_claims namespace logs appear in Seq; third-party loggers (openai, httpx) filtered to WARNING
-**Plans**: 4 plans
+  8. Agent generates claim ID (CLAIM-NNN, 3-digit zero-padded) before submission and shows it in the summary card — user sees the claim ID before confirming
+  9. Step elements are styled with italic text and smaller font, visually distinct from main chat messages
+  10. CLI ConversationRunner drives the LangGraph graph headlessly for programmatic E2E testing and interactive terminal chat
+  11. E2E test validates full intake narrative (extract -> convert -> policy -> submit) using DIG receipt ($16.20 USD) with CLAIM-NNN verification
+**Plans**: 5 plans
 
 Plans:
-- [ ] 02.3-01-PLAN.md — Fix submitClaim field name mapping and merge logic (BLOCKER Issue A)
-- [ ] 02.3-02-PLAN.md — Third-party logger filtering + OpenRouter 402 model fallback (Issues F, H)
-- [ ] 02.3-03-PLAN.md — Prompt fixes: visible policy check, no placeholders, error self-diagnosis, field alignment (Issues B, C, D, E)
-- [ ] 02.3-04-PLAN.md — Streaming CoT with "Thinking"/"Thought for X" Step naming (Issue G)
+- [x] 02.3-01-PLAN.md — Fix submitClaim field name mapping with claimNumber pass-through (BLOCKER Issue A)
+- [x] 02.3-02-PLAN.md — Third-party logger filtering + OpenRouter 402 model fallback (Issues F, H)
+- [x] 02.3-03-PLAN.md — Prompt: narration pattern, visible policy check, no placeholders, error self-diagnosis, claim ID pre-generation (Issues B, C, D, E)
+- [x] 02.3-04-PLAN.md — Streaming architecture: per-tool-call Steps, real-time message delivery, CSS styling (Issue G)
+- [x] 02.3-05-PLAN.md — CLI conversation runner + E2E intake narrative test with DIG receipt
 
 ### Phase 3: Compliance + Fraud Agents
 **Goal**: After a claim is submitted, Compliance and Fraud agents execute in parallel -- Compliance audits against org-level policies with cited clauses, Fraud detects duplicate receipts against historical data -- and their findings are stored in ClaimState for the Advisor
@@ -168,7 +173,7 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 2.2 -> 2.3 -> 3 -> 4 -> 5
 | 2. Supporting Infrastructure | 2/2 | Complete | 2026-03-24 |
 | 2.1. Intake Agent + Receipt Processing | 3/3 | Complete | 2026-03-25 |
 | 2.2. Intake Agent Gap Closure | 5/5 | Complete | 2026-03-26 |
-| 2.3. Intake Agent UAT Fix | 0/4 | Not started | - |
+| 2.3. Intake Agent UAT Fix | 5/5 | Complete | 2026-03-26 |
 | 3. Compliance + Fraud Agents | 0/2 | Not started | - |
 | 4. Advisor Agent + Reviewer Flow | 0/3 | Not started | - |
 | 5. Evaluation + Demo | 0/2 | Not started | - |
