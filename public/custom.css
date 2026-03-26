@@ -1,0 +1,14 @@
+/* Custom styling for Chainlit Step elements */
+
+/* Step elements: italic and smaller font */
+.step-container,
+.step-header,
+.step-content {
+  font-style: italic;
+  font-size: 0.875em;
+}
+
+/* Keep Step titles readable */
+.step-header .step-name {
+  font-weight: 500;
+}
