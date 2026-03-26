@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation Infrastructure** - Project skeleton, LangGraph orchestration with 4 stub agents, Docker Compose (Chainlit + Postgres)
 - [x] **Phase 2: Supporting Infrastructure** - DB schema, MCP servers, OpenRouter client, Qdrant policy ingestion
 - [x] **Phase 2.1: Intake Agent + Receipt Processing** - VLM extraction, policy validation, conversational claim submission loop, claimant UI
-- [ ] **Phase 2.2: Intake Agent Gap Closure** - Fix submitClaim blocker, structured agent output, prompt improvements, startup script, re-test blocked UAT cases
+- [x] **Phase 2.2: Intake Agent Gap Closure** - Fix submitClaim blocker, structured agent output, prompt improvements, startup script, re-test blocked UAT cases
 - [ ] **Phase 3: Compliance + Fraud Agents** - Post-submission parallel policy audit and duplicate detection
 - [ ] **Phase 4: Advisor Agent + Reviewer Flow** - Decision synthesis, approval routing, reviewer UI, email notifications
 - [ ] **Phase 5: Evaluation + Demo** - Test dataset, evaluation framework, baseline comparisons, demo polish
@@ -87,8 +87,8 @@ Plans:
 - [x] 02.2-01-PLAN.md — Structured JSON logging with Seq, merge insertReceipt into atomic insertClaim, intakeFindings persistence (ClaimState + Alembic JSONB migration)
 - [x] 02.2-02-PLAN.md — 12-step strict checklist system prompt, Chainlit Step elements for collapsible CoT, output filtering
 - [x] 02.2-03-PLAN.md — Startup script (docker + health checks + migrations + ingestion) and blocked UAT re-test
-- [ ] 02.2-04-PLAN.md — Seq log ingestion fix (SeqHandler CLEF HTTP POST) and unified logging consolidation
-- [ ] 02.2-05-PLAN.md — Conversational UX rewrite (two-layer model), message deduplication, CoT capture, conditional cross-reference
+- [x] 02.2-04-PLAN.md — Seq log ingestion fix (SeqHandler CLEF HTTP POST) and unified logging consolidation
+- [x] 02.2-05-PLAN.md — Conversational UX rewrite (two-layer model), message deduplication, CoT capture, conditional cross-reference
 
 ### Phase 3: Compliance + Fraud Agents
 **Goal**: After a claim is submitted, Compliance and Fraud agents execute in parallel -- Compliance audits against org-level policies with cited clauses, Fraud detects duplicate receipts against historical data -- and their findings are stored in ClaimState for the Advisor
@@ -146,7 +146,7 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 3 -> 4 -> 5
 | 1. Foundation Infrastructure | 2/2 | Complete | 2026-03-23 |
 | 2. Supporting Infrastructure | 2/2 | Complete | 2026-03-24 |
 | 2.1. Intake Agent + Receipt Processing | 3/3 | Complete | 2026-03-25 |
-| 2.2. Intake Agent Gap Closure | 3/5 | In Progress | - |
+| 2.2. Intake Agent Gap Closure | 5/5 | Complete | 2026-03-26 |
 | 3. Compliance + Fraud Agents | 0/2 | Not started | - |
 | 4. Advisor Agent + Reviewer Flow | 0/3 | Not started | - |
 | 5. Evaluation + Demo | 0/2 | Not started | - |

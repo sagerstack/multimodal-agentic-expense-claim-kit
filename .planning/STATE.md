@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Phase 2.2: Intake Agent Gap Closure
+**Current focus:** Phase 3: Compliance + Fraud Agents
 
 ## Current Position
 
-Phase: 2.2 of 7 (Intake Agent Gap Closure)
-Plan: 5 of 6 in current phase
-Status: In progress
-Last activity: 2026-03-26 -- Completed 02.2-05-PLAN.md (Intake Agent UX Redesign)
+Phase: 3 of 7 (Compliance + Fraud Agents)
+Plan: 0 of 2 in current phase
+Status: Not started
+Last activity: 2026-03-26 -- Completed Phase 2.2 (Intake Agent Gap Closure) — all 5 plans, verification passed 6/6
 
-Progress: [███████████......] 65% (11/17 plans complete, Phase 2.2 gap closure in progress)
+Progress: [███████████......] 65% (11/17 plans complete, Phase 2.2 complete)
 
 ## Performance Metrics
 
@@ -30,7 +30,7 @@ Progress: [███████████......] 65% (11/17 plans complete, P
 | 1. Foundation Infrastructure | 2 | 7 min | 4 min |
 | 2. Supporting Infrastructure | 2 | 42 min | 21 min |
 | 2.1. Intake Agent | 3 | 21 min | 7 min |
-| 2.2. Intake Agent Gap Closure | 4 | 77 min | 19 min |
+| 2.2. Intake Agent Gap Closure | 5 | 85 min | 17 min |
 
 **Recent Trend:**
 - Last 5 plans: 4min, 65min, 4min, 4min
@@ -111,5 +111,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-26
-Stopped at: Completed 02.2-05-PLAN.md (Intake Agent UX Redesign)
+Stopped at: Completed Phase 2.2 (all 5 plans, verification passed)
 Resume file: None
