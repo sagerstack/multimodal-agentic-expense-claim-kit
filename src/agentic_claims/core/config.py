@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field(..., description="OpenRouter API key")
     openrouter_model_llm: str = Field(..., description="OpenRouter LLM model name")
     openrouter_model_vlm: str = Field(..., description="OpenRouter VLM model name")
+    openrouter_fallback_model_llm: str = Field(..., description="Fallback LLM model when primary returns 402")
+    openrouter_fallback_model_vlm: str = Field(..., description="Fallback VLM model when primary returns 402")
     openrouter_base_url: str = Field(..., description="OpenRouter base URL")
     openrouter_max_retries: int = Field(..., description="OpenRouter max retry count")
     openrouter_retry_delay: float = Field(..., description="OpenRouter retry delay in seconds")

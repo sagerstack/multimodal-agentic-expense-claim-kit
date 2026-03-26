@@ -149,3 +149,7 @@ def setupLogging() -> None:
             apiKey=settings.seq_password
         )
         rootLogger.addHandler(seqHandler)
+
+    # Filter third-party loggers to WARNING (reduce noise from OpenAI SDK, httpx, etc.)
+    for noisyLogger in ["openai", "httpx", "httpcore", "urllib3", "asyncio"]:
+        logging.getLogger(noisyLogger).setLevel(logging.WARNING)
