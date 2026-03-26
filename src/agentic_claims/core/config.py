@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     openrouter_base_url: str = Field(..., description="OpenRouter base URL")
     openrouter_max_retries: int = Field(..., description="OpenRouter max retry count")
     openrouter_retry_delay: float = Field(..., description="OpenRouter retry delay in seconds")
+    openrouter_vlm_max_tokens: int = Field(..., description="Max tokens for VLM response generation")
+    openrouter_llm_max_tokens: int = Field(..., description="Max tokens for LLM response generation")
 
     # Qdrant configuration
     qdrant_host: str = Field(..., description="Qdrant host")

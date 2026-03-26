@@ -7,7 +7,6 @@ from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 from agentic_claims.agents.intake.prompts.agentSystemPrompt import INTAKE_AGENT_SYSTEM_PROMPT
-from agentic_claims.agents.intake.tools.askHuman import askHuman
 from agentic_claims.agents.intake.tools.convertCurrency import convertCurrency
 from agentic_claims.agents.intake.tools.extractReceiptFields import extractReceiptFields
 from agentic_claims.agents.intake.tools.searchPolicies import searchPolicies
@@ -21,8 +20,8 @@ logger = logging.getLogger(__name__)
 def getIntakeAgent(useFallback: bool = False):
     """Create and return the compiled ReAct agent for intake processing.
 
-    The agent uses ChatOpenAI with OpenRouter as the LLM and has access to all
-    5 domain tools for the intake workflow.
+    The agent uses ChatOpenAI with OpenRouter as the LLM and has access to
+    4 domain tools for the intake workflow.
 
     Args:
         useFallback: If True, use fallback LLM model instead of primary
@@ -42,15 +41,15 @@ def getIntakeAgent(useFallback: bool = False):
         api_key=settings.openrouter_api_key,
         temperature=0.7,
         max_retries=settings.openrouter_max_retries,
+        max_tokens=settings.openrouter_llm_max_tokens,
     )
 
-    # Collect all 5 intake tools
+    # Collect intake tools
     tools = [
         extractReceiptFields,
         searchPolicies,
         convertCurrency,
         submitClaim,
-        askHuman,
     ]
 
     # Create ReAct agent with system prompt

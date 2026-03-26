@@ -60,6 +60,7 @@ async def extractReceiptFields(claimId: str) -> dict:
             base_url=settings.openrouter_base_url,
             api_key=settings.openrouter_api_key,
             temperature=0.0,
+            max_tokens=settings.openrouter_vlm_max_tokens,
         )
 
         # Step 4: Build multimodal message with prompt + image (sent directly to VLM, not through LLM)
@@ -94,6 +95,7 @@ async def extractReceiptFields(claimId: str) -> dict:
                     base_url=settings.openrouter_base_url,
                     api_key=settings.openrouter_api_key,
                     temperature=0.0,
+                    max_tokens=settings.openrouter_vlm_max_tokens,
                 )
                 response = await fallbackVlm.ainvoke([message])
             else:

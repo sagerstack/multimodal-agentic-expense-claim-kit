@@ -3,6 +3,7 @@
 import json
 import logging
 import random
+from datetime import datetime
 
 from langchain_core.tools import tool
 
@@ -86,8 +87,8 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
             mcpKey = CLAIM_FIELD_MAP[agentKey]
             mergedArgs[mcpKey] = value
         elif agentKey in ("currency", "originalAmount", "originalCurrency", "convertedAmount",
-                          "exchangeRate", "conversionDate", "expenseDate"):
-            # Pass through known currency conversion and expense fields
+                          "convertedCurrency", "exchangeRate", "conversionDate"):
+            # Pass through known MCP-accepted currency conversion fields
             mergedArgs[agentKey] = value
         else:
             unmappedClaimKeys.append(agentKey)
@@ -116,6 +117,21 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
     # Auto-generate receiptNumber if receipt data exists but no receiptNumber provided
     if hasReceiptData and "receiptNumber" not in mergedArgs:
         mergedArgs["receiptNumber"] = f"REC-{random.randint(1, 999):03d}"
+
+    # Normalize receiptDate to YYYY-MM-DD format (PostgreSQL DATE column requirement)
+    if "receiptDate" in mergedArgs and mergedArgs["receiptDate"]:
+        rawDate = str(mergedArgs["receiptDate"])
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%B %d, %Y", "%b %d, %Y", "%d %B %Y", "%d %b %Y"):
+            try:
+                parsed = datetime.strptime(rawDate, fmt)
+                mergedArgs["receiptDate"] = parsed.strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                continue
+
+    # Ensure lineItems is a list (PostgreSQL JSONB expects valid JSON)
+    if "lineItems" in mergedArgs and not isinstance(mergedArgs["lineItems"], list):
+        mergedArgs["lineItems"] = [mergedArgs["lineItems"]] if mergedArgs["lineItems"] else []
 
     # Log before MCP call
     logger.info(

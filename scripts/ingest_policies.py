@@ -13,7 +13,7 @@ from sentence_transformers import SentenceTransformer
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "expense_policies")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-POLICY_DIR = Path(__file__).parent.parent / "src" / "agentic_claims" / "policy"
+POLICY_DIR = Path(os.getenv("POLICY_DIR", str(Path(__file__).parent.parent / "src" / "agentic_claims" / "policy")))
 
 # Constants
 VECTOR_DIMENSION = 384  # all-MiniLM-L6-v2 dimension

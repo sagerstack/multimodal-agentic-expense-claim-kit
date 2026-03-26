@@ -151,5 +151,5 @@ def setupLogging() -> None:
         rootLogger.addHandler(seqHandler)
 
     # Filter third-party loggers to WARNING (reduce noise from OpenAI SDK, httpx, etc.)
-    for noisyLogger in ["openai", "httpx", "httpcore", "urllib3", "asyncio"]:
+    for noisyLogger in ["openai", "httpx", "httpcore", "urllib3", "asyncio", "python_multipart"]:
         logging.getLogger(noisyLogger).setLevel(logging.WARNING)

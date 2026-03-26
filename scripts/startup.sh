@@ -39,6 +39,19 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Agentic Claims Startup Script${NC}"
 echo -e "${GREEN}========================================${NC}"
 
+# Load environment variables for Docker Compose ${VAR} interpolation
+# Docker Compose reads .env automatically, but .env.local is the canonical config
+# (contains SEQ_PASSWORD, LOG_LEVEL, and other vars not in .env)
+if [ -f .env.local ]; then
+    set -a
+    source .env.local
+    set +a
+    echo -e "${GREEN}✓ Loaded .env.local${NC}"
+else
+    echo -e "${RED}✗ .env.local not found — Docker Compose variable interpolation may fail${NC}"
+    exit 1
+fi
+
 # Step 1: Stop existing containers
 echo -e "\n${YELLOW}[1/6] Stopping existing containers...${NC}"
 docker compose down
@@ -137,8 +150,9 @@ else
 fi
 
 # Step 6: Ingest policies (always run - script is idempotent)
+# Run via mcp-rag container (has sentence-transformers + qdrant-client deps)
 echo -e "\n${YELLOW}[6/6] Ingesting policies...${NC}"
-docker compose exec -T app python scripts/ingest_policies.py
+docker compose exec -T -e POLICY_DIR=/app/policy mcp-rag python /app/scripts/ingest_policies.py
 echo -e "${GREEN}✓ Policies ingested${NC}"
 
 # Success banner

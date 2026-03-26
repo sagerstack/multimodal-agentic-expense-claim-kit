@@ -70,6 +70,9 @@ services:
         condition: service_healthy
     ports:
       - "8001:8000"
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./src/agentic_claims/policy:/app/policy:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -so /dev/null -w '%{http_code}' http://127.0.0.1:8000/mcp | grep -qE '^[0-9]+$'"]
       interval: 5s
