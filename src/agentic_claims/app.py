@@ -3,7 +3,6 @@
 import base64
 import json
 import logging
-import sys
 import uuid
 
 import chainlit as cl
@@ -12,36 +11,10 @@ from langgraph.types import Command
 
 from agentic_claims.core.graph import getCompiledGraph
 from agentic_claims.core.imageStore import storeImage
+from agentic_claims.core.logging import setupLogging
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
-
-
-def setupLogging():
-    """Configure structured JSON logging for the application."""
-    try:
-        # Configure root logger
-        rootLogger = logging.getLogger()
-        rootLogger.setLevel(logging.INFO)
-
-        # Create console handler with JSON-like format
-        consoleHandler = logging.StreamHandler(sys.stdout)
-        consoleHandler.setLevel(logging.INFO)
-
-        # Simple structured format (JSON-like but readable)
-        formatter = logging.Formatter(
-            '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s"}'
-        )
-        consoleHandler.setFormatter(formatter)
-
-        # Remove existing handlers to avoid duplicates
-        rootLogger.handlers.clear()
-        rootLogger.addHandler(consoleHandler)
-
-        logger.info("Structured logging initialized")
-    except Exception as e:
-        # Fallback to stderr if logging setup fails
-        print(f"[ERROR] Failed to setup logging: {e}", file=sys.stderr)
 
 
 @cl.on_chat_start
