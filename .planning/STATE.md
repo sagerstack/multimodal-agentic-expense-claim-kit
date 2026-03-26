@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Phase 3: Compliance + Fraud Agents
+**Current focus:** Phase 2.3: Intake Agent UAT Fix
 
 ## Current Position
 
-Phase: 3 of 7 (Compliance + Fraud Agents)
-Plan: 0 of 2 in current phase
-Status: Not started
-Last activity: 2026-03-26 -- Completed Phase 2.2 (Intake Agent Gap Closure) — all 5 plans, verification passed 6/6
+Phase: 2.3 of 8 (Intake Agent UAT Fix)
+Plan: 1 of 5 in current phase
+Status: In progress
+Last activity: 2026-03-26 -- Completed 02.3-01-PLAN.md (submitClaim field mapping fix)
 
-Progress: [███████████......] 65% (11/17 plans complete, Phase 2.2 complete)
+Progress: [████████████.....] 63% (12/19 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
-- Average duration: 13 min
-- Total execution time: 2.47 hours
+- Total plans completed: 12
+- Average duration: 12 min
+- Total execution time: 2.50 hours
 
 **By Phase:**
 
@@ -31,10 +31,11 @@ Progress: [███████████......] 65% (11/17 plans complete, P
 | 2. Supporting Infrastructure | 2 | 42 min | 21 min |
 | 2.1. Intake Agent | 3 | 21 min | 7 min |
 | 2.2. Intake Agent Gap Closure | 5 | 85 min | 17 min |
+| 2.3. Intake Agent UAT Fix | 1 | 2 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 65min, 4min, 4min
-- Trend: Infrastructure changes take longer (19min avg Phase 2.2), UX/prompt changes very fast (4min)
+- Last 5 plans: 65min, 4min, 4min, 4min, 2min
+- Trend: Bug fixes and field mapping very fast (2-4min), infrastructure slower (17min avg)
 
 *Updated after each plan completion*
 
@@ -95,6 +96,9 @@ Recent decisions affecting current work:
 - 02.2-05: CoT separation (cotEntries captured in Step.output, userFacingMessages sent to main chat)
 - 02.2-05: Confidence bucketing (High/Medium/Low instead of raw 0.95 scores for user-facing output)
 - 02.2-05: Chainlit config.ui.cot="full" (show all Step elements by default, user can collapse)
+- 02.3-01: Agent-to-MCP adapter pattern with explicit field mapping dictionaries (CLAIM_FIELD_MAP, RECEIPT_FIELD_MAP)
+- 02.3-01: Auto-generation of required MCP fields (claimNumber CLAIM-NNN, receiptNumber REC-NNN, status 'pending')
+- 02.3-01: Receipt fields use MCP's actual parameter names without blind 'receipt' prefix (merchant not receiptMerchant)
 
 ### Pending Todos
 
@@ -107,9 +111,15 @@ None yet.
 - 01-01 BLOCKER RESOLVED: Docker daemon started, all services verified healthy
 - 01-02 CONCERN: Python 3.14 + langchain-core Pydantic V1 compatibility warning (tests pass, monitor for issues)
 - 02.1-03 CONCERN: LangGraph deprecation warning for create_react_agent (moved to langchain.agents, will migrate when stable)
+- 02.3-01 BLOCKER RESOLVED: submitClaim field mapping fixed, 14-validation-error bug resolved
 
 ## Session Continuity
 
-Last session: 2026-03-26
-Stopped at: Completed Phase 2.2 (all 5 plans, verification passed)
+Last session: 2026-03-26 12:41:44Z
+Stopped at: Completed 02.3-01-PLAN.md
 Resume file: None
+
+### Roadmap Evolution
+
+- Phase 2.3 planned with 4 plans addressing 8 UAT-2 issues (Issues A-H) from Phase 2.2 verification
+- Plan 02.3-05 added: CLI ConversationRunner + E2E intake narrative test with DIG receipt, enables programmatic testing of the full conversation flow without Chainlit
