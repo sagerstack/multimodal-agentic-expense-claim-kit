@@ -2,6 +2,7 @@
 
 import json
 import logging
+import random
 
 from langchain_core.tools import tool
 
@@ -10,14 +11,45 @@ from agentic_claims.core.config import getSettings
 
 logger = logging.getLogger(__name__)
 
+# Field mapping: agent vocabulary -> MCP parameter names
+CLAIM_FIELD_MAP = {
+    "claimantId": "employeeId",
+    "amountSgd": "totalAmount",
+}
+
+RECEIPT_FIELD_MAP = {
+    "merchant": "merchant",
+    "date": "receiptDate",
+    "totalAmount": "receiptTotalAmount",
+    "currency": "receiptCurrency",
+    "lineItems": "lineItems",
+    "items": "lineItems",
+    "taxAmount": "taxAmount",
+    "paymentMethod": "paymentMethod",
+    "imagePath": "imagePath",
+}
+
 
 @tool
 async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict | None = None) -> dict:
     """Submit a claim and its receipt to the database atomically.
 
     Args:
-        claimData: Claim fields (employeeId, totalAmount, currency, etc.)
-        receiptData: Receipt fields (merchant, date, totalAmount, currency, lineItems, etc.)
+        claimData: Claim fields using agent vocabulary:
+            - claimantId (required, maps to employeeId)
+            - amountSgd (required, maps to totalAmount)
+            - claimNumber (optional, auto-generated if missing)
+            - status (optional, defaults to 'pending')
+            - currency (optional, defaults to 'SGD')
+            - expenseDate (optional)
+            - originalAmount, originalCurrency, convertedAmount, exchangeRate, conversionDate (optional)
+        receiptData: Receipt fields using agent vocabulary:
+            - merchant (required)
+            - date (required, maps to receiptDate)
+            - totalAmount (required, maps to receiptTotalAmount)
+            - currency (optional, maps to receiptCurrency)
+            - lineItems or items (optional)
+            - taxAmount, paymentMethod, imagePath (optional)
         intakeFindings: Agent observations (mismatches, overrides, red flags) for audit trail
 
     Returns:
@@ -36,12 +68,54 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
         }
     )
 
-    # Merge all data into single MCP call arguments
-    mergedArgs = {
-        **claimData,
-        **{f"receipt{k[0].upper()}{k[1:]}": v for k, v in receiptData.items()},
-        "intakeFindings": intakeFindings or {},
-    }
+    # Build MCP arguments by mapping agent vocabulary to MCP parameter names
+    mergedArgs = {}
+
+    # Handle required fields with pass-through + fallback
+    mergedArgs["claimNumber"] = claimData.get("claimNumber", f"CLAIM-{random.randint(1, 999):03d}")
+    mergedArgs["status"] = claimData.get("status", "pending")
+    mergedArgs["intakeFindings"] = intakeFindings or {}
+
+    # Map claim fields through CLAIM_FIELD_MAP
+    unmappedClaimKeys = []
+    for agentKey, value in claimData.items():
+        if agentKey in ("claimNumber", "status"):
+            continue  # Already handled above
+
+        if agentKey in CLAIM_FIELD_MAP:
+            mcpKey = CLAIM_FIELD_MAP[agentKey]
+            mergedArgs[mcpKey] = value
+        elif agentKey in ("currency", "originalAmount", "originalCurrency", "convertedAmount",
+                          "exchangeRate", "conversionDate", "expenseDate"):
+            # Pass through known currency conversion and expense fields
+            mergedArgs[agentKey] = value
+        else:
+            unmappedClaimKeys.append(agentKey)
+
+    if unmappedClaimKeys:
+        logger.warning("Unmapped claim keys", extra={"unmappedKeys": unmappedClaimKeys})
+
+    # Map receipt fields through RECEIPT_FIELD_MAP
+    unmappedReceiptKeys = []
+    hasReceiptData = False
+    for agentKey, value in receiptData.items():
+        if agentKey in RECEIPT_FIELD_MAP:
+            mcpKey = RECEIPT_FIELD_MAP[agentKey]
+            mergedArgs[mcpKey] = value
+            hasReceiptData = True
+        elif agentKey == "receiptNumber":
+            # Pass through receiptNumber
+            mergedArgs["receiptNumber"] = value
+            hasReceiptData = True
+        else:
+            unmappedReceiptKeys.append(agentKey)
+
+    if unmappedReceiptKeys:
+        logger.warning("Unmapped receipt keys", extra={"unmappedKeys": unmappedReceiptKeys})
+
+    # Auto-generate receiptNumber if receipt data exists but no receiptNumber provided
+    if hasReceiptData and "receiptNumber" not in mergedArgs:
+        mergedArgs["receiptNumber"] = f"REC-{random.randint(1, 999):03d}"
 
     # Log before MCP call
     logger.info(
