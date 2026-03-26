@@ -16,6 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Supporting Infrastructure** - DB schema, MCP servers, OpenRouter client, Qdrant policy ingestion
 - [x] **Phase 2.1: Intake Agent + Receipt Processing** - VLM extraction, policy validation, conversational claim submission loop, claimant UI
 - [x] **Phase 2.2: Intake Agent Gap Closure** - Fix submitClaim blocker, structured agent output, prompt improvements, startup script, re-test blocked UAT cases
+- [ ] **Phase 2.3: Intake Agent UAT Fix** - Fix submitClaim field mismatch, model fallback on 402, streaming CoT, prompt fixes, Seq log noise
 - [ ] **Phase 3: Compliance + Fraud Agents** - Post-submission parallel policy audit and duplicate detection
 - [ ] **Phase 4: Advisor Agent + Reviewer Flow** - Decision synthesis, approval routing, reviewer UI, email notifications
 - [ ] **Phase 5: Evaluation + Demo** - Test dataset, evaluation framework, baseline comparisons, demo polish
@@ -90,6 +91,26 @@ Plans:
 - [x] 02.2-04-PLAN.md — Seq log ingestion fix (SeqHandler CLEF HTTP POST) and unified logging consolidation
 - [x] 02.2-05-PLAN.md — Conversational UX rewrite (two-layer model), message deduplication, CoT capture, conditional cross-reference
 
+### Phase 2.3: Intake Agent UAT Fix (INSERTED)
+**Goal**: Fix submitClaim field name mismatch (blocker), add model fallback on OpenRouter 402, switch to streaming CoT with "Thinking" UX, fix prompt issues (placeholder values, silent policy check, no error self-diagnosis), and reduce Seq log noise from third-party loggers
+**Depends on**: Phase 2.2
+**Requirements**: EXTR-01, POLV-03, CHAT-01, CHAT-03, ORCH-02, INFR-02
+**Success Criteria** (what must be TRUE):
+  1. submitClaim successfully creates claim + receipt records through full Chainlit -> LangGraph -> MCP pipeline (field names correctly mapped to MCP insertClaim interface)
+  2. When OpenRouter returns 402 (quota exhausted), system automatically retries with a configured fallback model and logs the fallback event
+  3. Chainlit Step element shows "Thinking" while busy with CoT populating in real-time, then "Thought for X min Y seconds" when complete
+  4. Agent produces a visible user-facing message after each major tool call (extraction, currency conversion, policy check) — no silent steps
+  5. Agent never outputs placeholder text ([claimantId], [amount], [rate]) — all values are resolved before presenting to user
+  6. When a tool returns an error, agent reads the error details and either self-corrects or explains the specific issue — never asks user to debug system errors
+  7. Only agentic_claims namespace logs appear in Seq; third-party loggers (openai, httpx) filtered to WARNING
+**Plans**: 4 plans
+
+Plans:
+- [ ] 02.3-01-PLAN.md — Fix submitClaim field name mapping and merge logic (BLOCKER Issue A)
+- [ ] 02.3-02-PLAN.md — Third-party logger filtering + OpenRouter 402 model fallback (Issues F, H)
+- [ ] 02.3-03-PLAN.md — Prompt fixes: visible policy check, no placeholders, error self-diagnosis, field alignment (Issues B, C, D, E)
+- [ ] 02.3-04-PLAN.md — Streaming CoT with "Thinking"/"Thought for X" Step naming (Issue G)
+
 ### Phase 3: Compliance + Fraud Agents
 **Goal**: After a claim is submitted, Compliance and Fraud agents execute in parallel -- Compliance audits against org-level policies with cited clauses, Fraud detects duplicate receipts against historical data -- and their findings are stored in ClaimState for the Advisor
 **Depends on**: Phase 2.1
@@ -139,7 +160,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 2.1 -> 3 -> 4 -> 5
+Phases execute in numeric order: 1 -> 2 -> 2.1 -> 2.2 -> 2.3 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
@@ -147,6 +168,7 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 3 -> 4 -> 5
 | 2. Supporting Infrastructure | 2/2 | Complete | 2026-03-24 |
 | 2.1. Intake Agent + Receipt Processing | 3/3 | Complete | 2026-03-25 |
 | 2.2. Intake Agent Gap Closure | 5/5 | Complete | 2026-03-26 |
+| 2.3. Intake Agent UAT Fix | 0/4 | Not started | - |
 | 3. Compliance + Fraud Agents | 0/2 | Not started | - |
 | 4. Advisor Agent + Reviewer Flow | 0/3 | Not started | - |
 | 5. Evaluation + Demo | 0/2 | Not started | - |
