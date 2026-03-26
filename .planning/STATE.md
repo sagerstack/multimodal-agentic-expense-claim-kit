@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.3 of 8 (Intake Agent UAT Fix)
-Plan: 1 of 5 in current phase
+Plan: 2 of 5 in current phase
 Status: In progress
-Last activity: 2026-03-26 -- Completed 02.3-01-PLAN.md (submitClaim field mapping fix)
+Last activity: 2026-03-26 -- Completed 02.3-02-PLAN.md (logger filtering + 402 fallback)
 
-Progress: [████████████.....] 63% (12/19 plans complete)
+Progress: [█████████████....] 68% (13/19 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
+- Total plans completed: 13
 - Average duration: 12 min
-- Total execution time: 2.50 hours
+- Total execution time: 2.53 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [████████████.....] 63% (12/19 plans complete)
 | 2. Supporting Infrastructure | 2 | 42 min | 21 min |
 | 2.1. Intake Agent | 3 | 21 min | 7 min |
 | 2.2. Intake Agent Gap Closure | 5 | 85 min | 17 min |
-| 2.3. Intake Agent UAT Fix | 1 | 2 min | 2 min |
+| 2.3. Intake Agent UAT Fix | 2 | 4 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 65min, 4min, 4min, 4min, 2min
-- Trend: Bug fixes and field mapping very fast (2-4min), infrastructure slower (17min avg)
+- Last 5 plans: 4min, 4min, 4min, 2min, 2min
+- Trend: UAT fixes consistently fast (2min avg), infrastructure enhancements take longer
 
 *Updated after each plan completion*
 
@@ -99,6 +99,10 @@ Recent decisions affecting current work:
 - 02.3-01: Agent-to-MCP adapter pattern with explicit field mapping dictionaries (CLAIM_FIELD_MAP, RECEIPT_FIELD_MAP)
 - 02.3-01: Auto-generation of required MCP fields (claimNumber CLAIM-NNN, receiptNumber REC-NNN, status 'pending')
 - 02.3-01: Receipt fields use MCP's actual parameter names without blind 'receipt' prefix (merchant not receiptMerchant)
+- 02.3-02: Filter third-party loggers globally in setupLogging() (openai, httpx, httpcore, urllib3, asyncio to WARNING)
+- 02.3-02: Detect 402 errors via multiple signals (status code "402", "credits", or "quota" keywords in error message)
+- 02.3-02: Fallback model selection via useFallback parameter in getIntakeAgent() (clean separation without duplication)
+- 02.3-02: Log fallback events with structured extra fields (primary_model, fallback_model, error for Seq queries)
 
 ### Pending Todos
 
@@ -112,11 +116,13 @@ None yet.
 - 01-02 CONCERN: Python 3.14 + langchain-core Pydantic V1 compatibility warning (tests pass, monitor for issues)
 - 02.1-03 CONCERN: LangGraph deprecation warning for create_react_agent (moved to langchain.agents, will migrate when stable)
 - 02.3-01 BLOCKER RESOLVED: submitClaim field mapping fixed, 14-validation-error bug resolved
+- 02.3-02 ISSUE F RESOLVED: Third-party logger noise in Seq eliminated via logger filtering
+- 02.3-02 ISSUE H RESOLVED: Automatic OpenRouter 402 quota fallback prevents workflow death
 
 ## Session Continuity
 
-Last session: 2026-03-26 12:41:44Z
-Stopped at: Completed 02.3-01-PLAN.md
+Last session: 2026-03-26 12:15:29Z
+Stopped at: Completed 02.3-02-PLAN.md
 Resume file: None
 
 ### Roadmap Evolution
