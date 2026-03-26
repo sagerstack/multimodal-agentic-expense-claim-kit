@@ -36,6 +36,9 @@ build-backend = "poetry.core.masonry.api"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "e2e: marks tests as end-to-end (requires running Docker services and OpenRouter API key)",
+]
 
 [tool.ruff]
 line-length = 100
