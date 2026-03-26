@@ -1,6 +1,7 @@
 """Intake agent node - ReAct agent with all domain tools."""
 
 import json
+import logging
 
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
@@ -14,21 +15,29 @@ from agentic_claims.agents.intake.tools.submitClaim import submitClaim
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.state import ClaimState
 
+logger = logging.getLogger(__name__)
 
-def getIntakeAgent():
+
+def getIntakeAgent(useFallback: bool = False):
     """Create and return the compiled ReAct agent for intake processing.
 
     The agent uses ChatOpenAI with OpenRouter as the LLM and has access to all
     5 domain tools for the intake workflow.
+
+    Args:
+        useFallback: If True, use fallback LLM model instead of primary
 
     Returns:
         Compiled ReAct agent graph
     """
     settings = getSettings()
 
+    # Select model based on fallback flag
+    modelName = settings.openrouter_fallback_model_llm if useFallback else settings.openrouter_model_llm
+
     # Instantiate ChatOpenAI with OpenRouter configuration
     llm = ChatOpenAI(
-        model=settings.openrouter_model_llm,
+        model=modelName,
         base_url=settings.openrouter_base_url,
         api_key=settings.openrouter_api_key,
         temperature=0.7,
@@ -66,14 +75,34 @@ async def intakeNode(state: ClaimState) -> dict:
     Returns:
         Partial state update with new messages and optional status/fields
     """
+    settings = getSettings()
+
     # Get the ReAct agent
     agent = getIntakeAgent()
 
     # Prepare input for agent (messages only)
     agentInput = {"messages": state["messages"]}
 
-    # Invoke agent - it manages its own tool loop
-    result = await agent.ainvoke(agentInput)
+    # Invoke agent with 402 fallback retry
+    try:
+        result = await agent.ainvoke(agentInput)
+    except Exception as e:
+        errorStr = str(e)
+        # Check for 402 payment/quota errors
+        if "402" in errorStr or "credits" in errorStr.lower() or "quota" in errorStr.lower():
+            logger.warning(
+                "Primary LLM model returned 402, falling back to secondary model",
+                extra={
+                    "primary_model": settings.openrouter_model_llm,
+                    "fallback_model": settings.openrouter_fallback_model_llm,
+                    "error": errorStr,
+                },
+            )
+            # Retry with fallback agent
+            fallbackAgent = getIntakeAgent(useFallback=True)
+            result = await fallbackAgent.ainvoke(agentInput)
+        else:
+            raise
 
     # Build state update
     stateUpdate = {"messages": result["messages"]}

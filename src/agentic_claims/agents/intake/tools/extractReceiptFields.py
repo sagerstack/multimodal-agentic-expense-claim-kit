@@ -2,6 +2,7 @@
 
 import base64
 import json
+import logging
 
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
@@ -11,6 +12,8 @@ from agentic_claims.agents.intake.prompts.vlmExtractionPrompt import VLM_EXTRACT
 from agentic_claims.agents.intake.utils.imageQuality import checkImageQuality
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.imageStore import getImage
+
+logger = logging.getLogger(__name__)
 
 
 @tool
@@ -70,8 +73,31 @@ async def extractReceiptFields(claimId: str) -> dict:
             ]
         )
 
-        # Step 5: Call VLM
-        response = await vlm.ainvoke([message])
+        # Step 5: Call VLM with 402 fallback retry
+        try:
+            response = await vlm.ainvoke([message])
+        except Exception as e:
+            errorStr = str(e)
+            # Check for 402 payment/quota errors
+            if "402" in errorStr or "credits" in errorStr.lower() or "quota" in errorStr.lower():
+                logger.warning(
+                    "Primary VLM model returned 402, falling back to secondary model",
+                    extra={
+                        "primary_model": settings.openrouter_model_vlm,
+                        "fallback_model": settings.openrouter_fallback_model_vlm,
+                        "error": errorStr,
+                    },
+                )
+                # Retry with fallback VLM model
+                fallbackVlm = ChatOpenAI(
+                    model=settings.openrouter_fallback_model_vlm,
+                    base_url=settings.openrouter_base_url,
+                    api_key=settings.openrouter_api_key,
+                    temperature=0.0,
+                )
+                response = await fallbackVlm.ainvoke([message])
+            else:
+                raise
 
         # Step 6: Parse JSON response
         try:
