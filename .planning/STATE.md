@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.3 of 8 (Intake Agent UAT Fix)
-Plan: 2 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-03-26 -- Completed 02.3-02-PLAN.md (logger filtering + 402 fallback)
+Last activity: 2026-03-26 -- Completed 02.3-04-PLAN.md (streaming architecture)
 
-Progress: [█████████████....] 68% (13/19 plans complete)
+Progress: [██████████████...] 74% (14/19 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
-- Average duration: 12 min
-- Total execution time: 2.53 hours
+- Total plans completed: 14
+- Average duration: 11 min
+- Total execution time: 2.57 hours
 
 **By Phase:**
 
@@ -31,10 +31,10 @@ Progress: [█████████████....] 68% (13/19 plans complet
 | 2. Supporting Infrastructure | 2 | 42 min | 21 min |
 | 2.1. Intake Agent | 3 | 21 min | 7 min |
 | 2.2. Intake Agent Gap Closure | 5 | 85 min | 17 min |
-| 2.3. Intake Agent UAT Fix | 2 | 4 min | 2 min |
+| 2.3. Intake Agent UAT Fix | 4 | 6 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 4min, 4min, 2min, 2min
+- Last 5 plans: 4min, 4min, 2min, 2min, 2min
 - Trend: UAT fixes consistently fast (2min avg), infrastructure enhancements take longer
 
 *Updated after each plan completion*
@@ -103,6 +103,11 @@ Recent decisions affecting current work:
 - 02.3-02: Detect 402 errors via multiple signals (status code "402", "credits", or "quota" keywords in error message)
 - 02.3-02: Fallback model selection via useFallback parameter in getIntakeAgent() (clean separation without duplication)
 - 02.3-02: Log fallback events with structured extra fields (primary_model, fallback_model, error for Seq queries)
+- 02.3-04: astream_events(version="v2") for streaming (event-based hooks for tool calls and LLM tokens)
+- 02.3-04: Per-tool Step elements (open Step on on_tool_start, close with elapsed time on on_tool_end)
+- 02.3-04: Real-time token streaming via cl.Message.stream_token() (no batch delay)
+- 02.3-04: Interrupt detection via aget_state() after streaming (astream_events doesn't expose __interrupt__)
+- 02.3-04: Fallback for nested graph (extract last AI message from state if eventCount == 0)
 
 ### Pending Todos
 
@@ -118,11 +123,14 @@ None yet.
 - 02.3-01 BLOCKER RESOLVED: submitClaim field mapping fixed, 14-validation-error bug resolved
 - 02.3-02 ISSUE F RESOLVED: Third-party logger noise in Seq eliminated via logger filtering
 - 02.3-02 ISSUE H RESOLVED: Automatic OpenRouter 402 quota fallback prevents workflow death
+- 02.3-04 ISSUE C RESOLVED: Empty Step panel replaced with per-tool Steps showing real-time progress
+- 02.3-04 ISSUE D RESOLVED: Real-time token streaming eliminates batch delay
+- 02.3-04 ISSUE E RESOLVED: Natural message/Step interleaving creates conversational rhythm
 
 ## Session Continuity
 
-Last session: 2026-03-26 12:15:29Z
-Stopped at: Completed 02.3-02-PLAN.md
+Last session: 2026-03-26 12:16:58Z
+Stopped at: Completed 02.3-04-PLAN.md
 Resume file: None
 
 ### Roadmap Evolution
