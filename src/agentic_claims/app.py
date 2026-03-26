@@ -3,6 +3,7 @@
 import base64
 import json
 import logging
+import time
 import uuid
 
 import chainlit as cl
@@ -46,13 +47,13 @@ async def onChatStart():
     )
 
     await cl.Message(
-        content="Agentic Expense Claims system ready. Upload a receipt to get started."
+        content="Welcome! I'm your expense claims assistant. Please upload a receipt image to get started."
     ).send()
 
 
 @cl.on_message
 async def onMessage(message: cl.Message):
-    """Handle incoming messages with image upload and interrupt support."""
+    """Handle incoming messages with streaming event loop and per-tool Steps."""
     # Retrieve session context
     graph = cl.user_session.get("graph")
     threadId = cl.user_session.get("thread_id")
@@ -91,134 +92,162 @@ async def onMessage(message: cl.Message):
                 logger.info(f"Image uploaded - size: {len(imageBytes)} bytes")
                 break
 
-    # Get current message count from graph state before invoke
-    messageCountBefore = 0
-    try:
-        currentState = await graph.aget_state(config={"configurable": {"thread_id": threadId}})
-        messageCountBefore = len(currentState.values.get("messages", []))
-        logger.info(f"Current message count before invoke: {messageCountBefore}")
-    except Exception as e:
-        logger.warning(f"Could not get state message count, assuming 0: {e}")
-        messageCountBefore = 0
+    logger.info(f"Graph streaming started - claimId={claimId}, status=draft")
 
-    # Wrap agent processing in a Chainlit Step for collapsible chain-of-thought
-    async with cl.Step(name="Processing Receipt", type="tool") as processingStep:
-        processingStep.input = (
-            "Extracting receipt fields, validating policy, converting currency" if imageB64
-            else "Handling user response"
-        )
-
-        logger.info(f"Graph invoke started - input_keys: claimId={claimId}, status=draft, messages")
-
-        # Step 2: If resuming from interrupt (clarification)
-        if awaitingClarification:
-            # User's message is the response to the clarification request
-            result = await graph.ainvoke(
-                Command(
-                    resume={
-                        "action": "correct" if "correct" in message.content.lower() else "confirm",
-                        "corrected_data": message.content,
-                        "response": message.content,
-                    }
-                ),
-                config={"configurable": {"thread_id": threadId}},
-            )
-            cl.user_session.set("awaiting_clarification", False)
-        else:
-            # Step 3: Build human message (text-only; image stored separately to avoid context overflow)
-            if imageB64:
-                storeImage(claimId, imageB64)
-                userText = message.content.strip()
-                if userText:
-                    humanMsg = HumanMessage(
-                        content=f'User says: "{userText}"\n\nI\'ve also uploaded a receipt image for claim {claimId}. Please process it using extractReceiptFields.'
-                    )
-                else:
-                    humanMsg = HumanMessage(
-                        content=f"I've uploaded a receipt image for claim {claimId}. Please process it using extractReceiptFields. No expense description was provided."
-                    )
-            else:
-                humanMsg = HumanMessage(content=message.content)
-
-            # Step 4: Invoke graph
-            inputState = {
-                "claimId": claimId,
-                "status": "draft",
-                "messages": [humanMsg],
+    # Step 2: Build input for graph
+    if awaitingClarification:
+        # User's message is the response to the clarification request
+        inputOrCommand = Command(
+            resume={
+                "action": "correct" if "correct" in message.content.lower() else "confirm",
+                "corrected_data": message.content,
+                "response": message.content,
             }
-
-            result = await graph.ainvoke(
-                inputState, config={"configurable": {"thread_id": threadId}}
-            )
-
-        logger.info(
-            f"Graph invoke completed - has_interrupt: {hasattr(result, '__contains__') and '__interrupt__' in result}, "
-            f"result_type: {type(result).__name__}"
         )
-
-        # Separate messages into CoT entries and user-facing messages
-        if isinstance(result, dict) and "messages" in result:
-            agentMessages = result["messages"]
-            newMessages = agentMessages[messageCountBefore:]  # Only new messages from this turn
-
-            logger.info(f"Processing agent messages - total_count: {len(agentMessages)}, new_count: {len(newMessages)}")
-
-            cotEntries = []
-            userFacingMessages = []
-
-            for msg in newMessages:
-                if hasattr(msg, "type") and msg.type == "ai":
-                    # Check if this is a tool-call-only message (has tool_calls but no content)
-                    if hasattr(msg, "tool_calls") and msg.tool_calls:
-                        for tc in msg.tool_calls:
-                            toolName = tc.get("name", "unknown")
-                            toolArgs = json.dumps(tc.get("args", {}))[:200]
-                            cotEntries.append(f"**Tool Call:** {toolName}({toolArgs})")
-
-                    if hasattr(msg, "content") and msg.content:
-                        # AI message with user-facing content
-                        userFacingMessages.append(msg)
-
-                elif hasattr(msg, "type") and msg.type == "tool":
-                    # ToolMessage - capture for CoT
-                    toolName = getattr(msg, "name", "unknown")
-                    toolContent = str(msg.content)[:500] if hasattr(msg, "content") else ""
-                    cotEntries.append(f"**Tool Result ({toolName}):** {toolContent}")
-
-            # Write CoT to Step output (visible in collapsed panel)
-            if cotEntries:
-                processingStep.output = "\n\n".join(cotEntries)
+        cl.user_session.set("awaiting_clarification", False)
+    else:
+        # Build human message (text-only; image stored separately)
+        if imageB64:
+            storeImage(claimId, imageB64)
+            userText = message.content.strip()
+            if userText:
+                humanMsg = HumanMessage(
+                    content=f'User says: "{userText}"\n\nI\'ve also uploaded a receipt image for claim {claimId}. Please process it using extractReceiptFields.'
+                )
             else:
-                processingStep.output = "No intermediate reasoning captured"
+                humanMsg = HumanMessage(
+                    content=f"I've uploaded a receipt image for claim {claimId}. Please process it using extractReceiptFields. No expense description was provided."
+                )
         else:
-            processingStep.output = "No messages in result"
+            humanMsg = HumanMessage(content=message.content)
 
-    # Step 5: Check for interrupt (clarification request from askHuman tool)
-    if hasattr(result, "__contains__") and "__interrupt__" in result:
-        interruptPayload = result["__interrupt__"][0].value
-        question = interruptPayload.get("question", "Please confirm or correct the following:")
-        data = interruptPayload.get("data", {})
+        inputOrCommand = {
+            "claimId": claimId,
+            "status": "draft",
+            "messages": [humanMsg],
+        }
 
-        logger.info("Interrupt detected - clarification requested")
+    # Step 3: Stream events and create per-tool Steps
+    currentStreamMsg = None  # Current message being streamed
+    currentStep = None       # Current Step element for tool call
+    toolStartTime = None     # Track tool execution time
+    eventCount = 0
 
-        await cl.Message(content=question).send()
-        if data:
-            await cl.Message(content=f"```json\n{json.dumps(data, indent=2)}\n```").send()
+    try:
+        async for event in graph.astream_events(
+            inputOrCommand,
+            config={"configurable": {"thread_id": threadId}},
+            version="v2",
+        ):
+            eventCount += 1
+            eventKind = event.get("event")
 
-        cl.user_session.set("awaiting_clarification", True)
+            # on_chat_model_stream: Stream tokens to main chat
+            if eventKind == "on_chat_model_stream":
+                chunk = event.get("data", {}).get("chunk")
+                if chunk and hasattr(chunk, "content") and chunk.content:
+                    # Finalize any open Step before streaming LLM content
+                    if currentStep is not None:
+                        elapsed = time.time() - toolStartTime
+                        if elapsed >= 60:
+                            minutes = int(elapsed // 60)
+                            seconds = int(elapsed % 60)
+                            currentStep.name = f"Thought for {minutes} min {seconds} seconds"
+                        else:
+                            currentStep.name = f"Thought for {int(elapsed)} seconds"
+                        await currentStep.send()
+                        currentStep = None
+                        toolStartTime = None
+
+                    # Create or append to current streamed message
+                    if currentStreamMsg is None:
+                        currentStreamMsg = cl.Message(content="")
+                        await currentStreamMsg.send()
+
+                    # Stream token
+                    await currentStreamMsg.stream_token(chunk.content)
+
+            # on_chat_model_end: Finalize streamed message
+            elif eventKind == "on_chat_model_end":
+                if currentStreamMsg is not None:
+                    await currentStreamMsg.update()
+                    logger.info(f"Finalized streamed message - length: {len(currentStreamMsg.content)}")
+                    currentStreamMsg = None
+
+            # on_tool_start: Open a "Thinking" Step
+            elif eventKind == "on_tool_start":
+                # Finalize any pending streamed message
+                if currentStreamMsg is not None:
+                    await currentStreamMsg.update()
+                    currentStreamMsg = None
+
+                toolName = event.get("name", "unknown")
+                logger.info(f"Tool call started - name: {toolName}")
+
+                # Open Step with "Thinking" name
+                currentStep = cl.Step(name="Thinking", type="tool")
+                await currentStep.send()
+                toolStartTime = time.time()
+
+            # on_tool_end: Close Step with elapsed time
+            elif eventKind == "on_tool_end":
+                if currentStep is not None and toolStartTime is not None:
+                    elapsed = time.time() - toolStartTime
+                    toolName = event.get("name", "unknown")
+
+                    # Format elapsed time
+                    if elapsed >= 60:
+                        minutes = int(elapsed // 60)
+                        seconds = int(elapsed % 60)
+                        currentStep.name = f"Thought for {minutes} min {seconds} seconds"
+                    else:
+                        currentStep.name = f"Thought for {int(elapsed)} seconds"
+
+                    logger.info(f"Tool call completed - name: {toolName}, elapsed: {elapsed:.2f}s")
+                    await currentStep.send()
+                    currentStep = None
+                    toolStartTime = None
+
+    except Exception as e:
+        logger.error(f"Error during streaming: {e}", exc_info=True)
+        await cl.Message(content=f"Error: {str(e)}").send()
         return
 
-    # Step 6: Send user-facing messages to main chat (AFTER Step context exits)
-    messagesSent = 0
-    for msg in userFacingMessages:
-        # Log first 100 chars of each message
-        logContent = msg.content[:100] + ("..." if len(msg.content) > 100 else "")
-        logger.info(f"Sending message - preview: {logContent}")
+    logger.info(f"Streaming completed - events_processed: {eventCount}")
 
-        await cl.Message(content=msg.content).send()
-        messagesSent += 1
+    # Step 4: Check for interrupt via aget_state (streaming doesn't expose __interrupt__)
+    try:
+        finalState = await graph.aget_state(config={"configurable": {"thread_id": threadId}})
 
-    logger.info(f"Messages sent to user - count: {messagesSent}")
+        # Check if next node is empty (indicating interrupt)
+        if not finalState.next and finalState.tasks:
+            # Interrupt detected - extract from tasks
+            for task in finalState.tasks:
+                if hasattr(task, "interrupts") and task.interrupts:
+                    interruptPayload = task.interrupts[0].value
+                    question = interruptPayload.get("question", "Please confirm or correct the following:")
+                    data = interruptPayload.get("data", {})
+
+                    logger.info("Interrupt detected via aget_state - clarification requested")
+
+                    await cl.Message(content=question).send()
+                    if data:
+                        await cl.Message(content=f"```json\n{json.dumps(data, indent=2)}\n```").send()
+
+                    cl.user_session.set("awaiting_clarification", True)
+                    return
+
+        # Fallback: If no events captured (nested graph issue), extract from state
+        if eventCount == 0:
+            logger.warning("No streaming events captured - using fallback message extraction")
+            messages = finalState.values.get("messages", [])
+            if messages:
+                lastMsg = messages[-1]
+                if hasattr(lastMsg, "type") and lastMsg.type == "ai" and hasattr(lastMsg, "content") and lastMsg.content:
+                    await cl.Message(content=lastMsg.content).send()
+
+    except Exception as e:
+        logger.error(f"Error checking state: {e}", exc_info=True)
 
 
 @cl.on_chat_end
