@@ -81,12 +81,14 @@ Plans:
   4. Agent correctly evaluates numeric conditions in retrieved policy clauses (e.g., SGD 98.56 does NOT exceed SGD 100 threshold)
   5. `scripts/startup.sh` runs docker compose, waits for health checks, runs Alembic migrations, and runs RAG policy ingestion in a single command
   6. Previously blocked UAT tests (human clarification, evaluator gate routing, end-to-end intake flow) pass after fixes
-**Plans**: 3 plans
+**Plans**: 5 plans (3 original + 2 gap closure)
 
 Plans:
-- [ ] 02.2-01-PLAN.md — Structured JSON logging with Seq, merge insertReceipt into atomic insertClaim, intakeFindings persistence (ClaimState + Alembic JSONB migration)
-- [ ] 02.2-02-PLAN.md — 12-step strict checklist system prompt, Chainlit Step elements for collapsible CoT, output filtering
-- [ ] 02.2-03-PLAN.md — Startup script (docker + health checks + migrations + ingestion) and blocked UAT re-test
+- [x] 02.2-01-PLAN.md — Structured JSON logging with Seq, merge insertReceipt into atomic insertClaim, intakeFindings persistence (ClaimState + Alembic JSONB migration)
+- [x] 02.2-02-PLAN.md — 12-step strict checklist system prompt, Chainlit Step elements for collapsible CoT, output filtering
+- [x] 02.2-03-PLAN.md — Startup script (docker + health checks + migrations + ingestion) and blocked UAT re-test
+- [ ] 02.2-04-PLAN.md — Seq log ingestion fix (SeqHandler CLEF HTTP POST) and unified logging consolidation
+- [ ] 02.2-05-PLAN.md — Conversational UX rewrite (two-layer model), message deduplication, CoT capture, conditional cross-reference
 
 ### Phase 3: Compliance + Fraud Agents
 **Goal**: After a claim is submitted, Compliance and Fraud agents execute in parallel -- Compliance audits against org-level policies with cited clauses, Fraud detects duplicate receipts against historical data -- and their findings are stored in ClaimState for the Advisor
@@ -144,7 +146,7 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 3 -> 4 -> 5
 | 1. Foundation Infrastructure | 2/2 | Complete | 2026-03-23 |
 | 2. Supporting Infrastructure | 2/2 | Complete | 2026-03-24 |
 | 2.1. Intake Agent + Receipt Processing | 3/3 | Complete | 2026-03-25 |
-| 2.2. Intake Agent Gap Closure | 0/3 | Planned | - |
+| 2.2. Intake Agent Gap Closure | 3/5 | In Progress | - |
 | 3. Compliance + Fraud Agents | 0/2 | Not started | - |
 | 4. Advisor Agent + Reviewer Flow | 0/3 | Not started | - |
 | 5. Evaluation + Demo | 0/2 | Not started | - |
