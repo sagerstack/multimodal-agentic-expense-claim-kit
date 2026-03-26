@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.2 of 7 (Intake Agent Gap Closure)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-25 -- Completed 02.2-01-PLAN.md (Atomic submitClaim + Structured Logging + intakeFindings)
+Last activity: 2026-03-26 -- Completed 02.2-04-PLAN.md (Fix Seq Log Ingestion + Centralize Logging Setup)
 
-Progress: [█████████........] 53% (9/17 plans complete, Phase 2.2 gap closure in progress)
+Progress: [██████████.......] 59% (10/17 plans complete, Phase 2.2 gap closure in progress)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: 15 min
-- Total execution time: 2.33 hours
+- Total plans completed: 10
+- Average duration: 14 min
+- Total execution time: 2.40 hours
 
 **By Phase:**
 
@@ -30,11 +30,11 @@ Progress: [█████████........] 53% (9/17 plans complete, Phase 
 | 1. Foundation Infrastructure | 2 | 7 min | 4 min |
 | 2. Supporting Infrastructure | 2 | 42 min | 21 min |
 | 2.1. Intake Agent | 3 | 21 min | 7 min |
-| 2.2. Intake Agent Gap Closure | 2 | 69 min | 35 min |
+| 2.2. Intake Agent Gap Closure | 3 | 73 min | 24 min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 12min, 4min, 65min
-- Trend: Infrastructure changes (atomic transactions, logging) take longer (65min), prompt/config changes very fast (4min)
+- Last 5 plans: 12min, 4min, 65min, 4min
+- Trend: Infrastructure changes take longer (24min avg), config/prompt changes very fast (4min)
 
 *Updated after each plan completion*
 
@@ -86,6 +86,9 @@ Recent decisions affecting current work:
 - 02.2-02: Few-shot examples only for complex steps (keeps prompt under token limit while providing clear format guidance)
 - 02.2-02: Chainlit Step wrapping for collapsible CoT (cot="tool_call" shows Steps collapsed, user sees clean output)
 - 02.2-02: Message filtering in Chainlit app (only send AI messages with content, skip ToolMessages and empty messages)
+- 02.2-04: Separate seq_ingestion_url for Docker-internal Seq access (seq_url is for browser, app needs http://seq/api/events/raw)
+- 02.2-04: SeqHandler formats CLEF directly without JsonFormatter (Seq requires specific @t, @l, @mt keys)
+- 02.2-04: Centralized logging setup in core/logging.py (app.py imports setupLogging, no inline duplicate)
 
 ### Pending Todos
 
@@ -101,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-25
-Stopped at: Completed 02.2-01-PLAN.md (Atomic submitClaim + Structured Logging + intakeFindings)
+Last session: 2026-03-26
+Stopped at: Completed 02.2-04-PLAN.md (Fix Seq Log Ingestion + Centralize Logging Setup)
 Resume file: None
