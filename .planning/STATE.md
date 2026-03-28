@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.5 of 9 (Reasoning Panel + Model Upgrade)
-Plan: 4 of 5 in current phase
+Plan: 2 of 5 in current phase
 Status: In progress
-Last activity: 2026-03-28 -- Completed 02.5-04 (Reasoning block CSS styling)
+Last activity: 2026-03-28 -- Completed 02.5-02 (System prompt v2)
 
 Progress: [████████████████████░] 21/49 plans complete (43% complete)
 
@@ -20,8 +20,8 @@ Progress: [████████████████████░] 21/4
 
 **Velocity:**
 - Total plans completed: 21
-- Average duration: 7 min
-- Total execution time: 2.80 hours
+- Average duration: 8 min
+- Total execution time: 2.92 hours
 
 **By Phase:**
 
@@ -33,11 +33,11 @@ Progress: [████████████████████░] 21/4
 | 2.2. Intake Agent Gap Closure | 5 | 85 min | 17 min |
 | 2.3. Intake Agent UAT Fix | 5 | 10 min | 2 min |
 | 2.4. CoT Thinking Panel + Bug Fixes | 4 | 14 min | 4 min |
-| 2.5. Reasoning Panel + Model Upgrade | 2 | 4 min | 2 min |
+| 2.5. Reasoning Panel + Model Upgrade | 2 | 11 min | 6 min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 2min, 3min, 1min, [next]
-- Trend: Very fast CSS/UI updates (1-3min)
+- Last 5 plans: 5min, 3min, 2min, 3min, 8min
+- Trend: System prompt updates take longer (8min), UI changes faster (2-3min)
 
 *Updated after each plan completion*
 
@@ -131,6 +131,11 @@ Recent decisions affecting current work:
 - 02.5-01: Max tokens increased to 8192 for QwQ (reasoning models produce verbose output with explicit thinking)
 - 02.5-01: getClaimSchema tool for dynamic schema discovery (queries information_schema.columns for claims and receipts metadata)
 - 02.5-01: getClaimSchema as first tool in agent (signals schema awareness is foundational for schema-driven prompting)
+- 02.5-02: System prompt v2 calls getClaimSchema first every turn (schema-driven field mapping replaces hardcoded list)
+- 02.5-02: Convert ALL monetary values individually via convertCurrency (total AND tax, never batch or manual calculations)
+- 02.5-02: Capture justification for policy violations in summary and intakeFindings (audit trail for compliance)
+- 02.5-02: Capture remarks from upload description in summary and intakeFindings (preserves user context)
+- 02.5-02: Immediate acknowledgment at turn start (user sees feedback while thinking panel streams)
 - 02.5-04: Type A reasoning uses gray border (neutral), Type B uses purple (model-specific identity)
 - 02.5-04: Type B includes "Model reasoning" label via ::before pseudo-element for clarity
 - 02.5-04: Border opacity differs between themes (0.3 dark, 0.4 light) for optimal contrast
@@ -164,8 +169,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28 13:06:29Z
-Stopped at: Completed 02.5-04-PLAN.md (Reasoning block CSS styling)
+Last session: 2026-03-28 13:13:48Z
+Stopped at: Completed 02.5-02-PLAN.md (System prompt v2)
 Resume file: None
 
 ### Roadmap Evolution
