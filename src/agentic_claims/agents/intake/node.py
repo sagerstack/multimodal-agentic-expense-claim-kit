@@ -3,12 +3,14 @@
 import json
 import logging
 
+import httpx
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 from agentic_claims.agents.intake.prompts.agentSystemPrompt import INTAKE_AGENT_SYSTEM_PROMPT
 from agentic_claims.agents.intake.tools.convertCurrency import convertCurrency
 from agentic_claims.agents.intake.tools.extractReceiptFields import extractReceiptFields
+from agentic_claims.agents.intake.tools.getClaimSchema import getClaimSchema
 from agentic_claims.agents.intake.tools.searchPolicies import searchPolicies
 from agentic_claims.agents.intake.tools.submitClaim import submitClaim
 from agentic_claims.core.config import getSettings
@@ -39,13 +41,15 @@ def getIntakeAgent(useFallback: bool = False):
         model=modelName,
         base_url=settings.openrouter_base_url,
         api_key=settings.openrouter_api_key,
-        temperature=0.7,
+        temperature=settings.openrouter_llm_temperature,
         max_retries=settings.openrouter_max_retries,
         max_tokens=settings.openrouter_llm_max_tokens,
+        http_async_client=httpx.AsyncClient(verify=False),
     )
 
     # Collect intake tools
     tools = [
+        getClaimSchema,
         extractReceiptFields,
         searchPolicies,
         convertCurrency,

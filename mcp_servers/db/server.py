@@ -368,6 +368,45 @@ def updateClaimStatus(claimId: int, newStatus: str, actor: str) -> dict[str, Any
 
 
 @mcp.tool()
+def getClaimSchema() -> dict[str, Any]:
+    """Get the database schema for claims and receipts tables.
+
+    Returns column names, types, and nullable status for both tables.
+    Agents use this to discover required/optional fields dynamically.
+
+    Returns:
+        Dict with 'claims' and 'receipts' keys, each containing a list of
+        column descriptors {name, type, nullable, has_default}
+    """
+    conn = getConnection()
+    try:
+        with conn.cursor() as cur:
+            schema = {}
+            for tableName in ("claims", "receipts"):
+                cur.execute(
+                    """
+                    SELECT column_name, data_type, is_nullable, column_default
+                    FROM information_schema.columns
+                    WHERE table_name = %s AND table_schema = 'public'
+                    ORDER BY ordinal_position
+                    """,
+                    (tableName,)
+                )
+                columns = []
+                for row in cur.fetchall():
+                    columns.append({
+                        "name": row[0],
+                        "type": row[1],
+                        "nullable": row[2] == "YES",
+                        "hasDefault": row[3] is not None,
+                    })
+                schema[tableName] = columns
+            return schema
+    except Exception as e:
+        return {"error": f"Failed to get schema: {e}"}
+
+
+@mcp.tool()
 def getClaimWithReceipts(claimId: int) -> dict[str, Any]:
     """
     Get claim with all linked receipts.
