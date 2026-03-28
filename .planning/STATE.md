@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.4 of 8 (CoT Thinking Panel + Bug Fixes)
-Plan: 2 of 3 in current phase
+Plan: 1 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-28 -- Completed 02.4-02-PLAN.md (BUG-008, BUG-009 fixed: DB-generated claim numbers with idempotency)
+Last activity: 2026-03-28 -- Completed 02.4-01-PLAN.md (BUG-006, BUG-007 fixed: SSL certs + theme-aware CSS)
 
-Progress: [████████████████] 89% (17/19 plans complete)
+Progress: [████████████████] 84% (16/19 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 17
+- Total plans completed: 16
 - Average duration: 9 min
-- Total execution time: 2.69 hours
+- Total execution time: 2.64 hours
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [████████████████] 89% (17/19 plans co
 | 2.1. Intake Agent | 3 | 21 min | 7 min |
 | 2.2. Intake Agent Gap Closure | 5 | 85 min | 17 min |
 | 2.3. Intake Agent UAT Fix | 5 | 10 min | 2 min |
-| 2.4. CoT Thinking Panel + Bug Fixes | 2 | 4 min | 2 min |
+| 2.4. CoT Thinking Panel + Bug Fixes | 1 | 5 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 2min, 4min, 1min, 3min
-- Trend: Bug fixes consistently fast (2min avg)
+- Last 5 plans: 4min, 2min, 2min, 4min, 5min
+- Trend: Bug fixes consistently fast (3min avg)
 
 *Updated after each plan completion*
 
@@ -119,6 +119,8 @@ Recent decisions affecting current work:
 - 02.3-05: Structural E2E assertions (tool ordering, CLAIM-NNN pattern, concept keywords) handle LLM non-determinism
 - 02.3-05: .env.e2e uses localhost:8001-8004 MCP URLs matching Docker Compose port mappings for host-based CLI execution
 - 02.3-05: E2E test handles both interrupt (askHuman) and non-interrupt agent behavior for robustness
+- 02.4-01: certifi upgrade after poetry dependencies install (not before) to avoid build-time SSL issues
+- 02.4-01: Reset claim_number_seq gracefully (DO $$ exception handling) to support missing sequence
 - 02.4-03: pendingToolCalls counter tracks active tool executions (robust finalResponse detection, fixes BUG-011)
 - 02.4-03: Last-wins strategy for finalResponse assignment (intermediate generations safely overwritten)
 - 02.4-03: Thinking panel summary shows tool count: "Thought for 5s · 3 tools" (prepares for reasoning token display)
@@ -144,14 +146,16 @@ None yet.
 - 02.3-04 ISSUE C RESOLVED: Empty Step panel replaced with per-tool Steps showing real-time progress
 - 02.3-04 ISSUE D RESOLVED: Real-time token streaming eliminates batch delay
 - 02.3-04 ISSUE E RESOLVED: Natural message/Step interleaving creates conversational rhythm
+- 02.4-01 BUG-006 RESOLVED: Docker SSL certificate verification working via ca-certificates + certifi upgrade + REQUESTS_CA_BUNDLE
+- 02.4-01 BUG-007 RESOLVED: Thinking panel visible in light mode via @media (prefers-color-scheme) CSS
 - 02.4-03 BUG-011 RESOLVED: finalResponse detection now robust via pendingToolCalls tracking (intermediate generations no longer cause fragility)
 - 02.4-02 BUG-008 RESOLVED: Duplicate submissions prevented via ON CONFLICT idempotent pattern with natural key
 - 02.4-02 BUG-009 RESOLVED: Claim number collisions eliminated via PostgreSQL sequence (claim_number_seq)
 
 ## Session Continuity
 
-Last session: 2026-03-28
-Stopped at: Completed 02.4-02-PLAN.md (BUG-008, BUG-009 fixed)
+Last session: 2026-03-28 08:45:36Z
+Stopped at: Completed 02.4-01-PLAN.md (SSL certs + theme-aware CSS)
 Resume file: None
 
 ### Roadmap Evolution
