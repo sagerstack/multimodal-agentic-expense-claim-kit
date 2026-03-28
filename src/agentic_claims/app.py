@@ -1,14 +1,16 @@
 """Chainlit app entry point for Agentic Expense Claims.
 
-Architecture: Buffer-first with HTML thinking panels.
-- All streaming events are buffered in memory first (Chainlit shows loading)
-- Thinking panel rendered as HTML <details> inside the response Message
-- Guarantees correct ordering: thinking panel above, response below
-- No thinking panel for direct responses (no tool usage)
+Architecture: Progressive streaming with Type A+B reasoning capture.
+- Thinking panel appears immediately with "Thinking..." placeholder
+- Type A reasoning (agent text before tool calls) captured and displayed
+- Type B reasoning (QwQ reasoning_content tokens) captured when available
+- Interleaved reasoning blocks and tool summaries in chronological order
+- Final response streamed below thinking panel
 """
 
 import asyncio
 import base64
+import html
 import json
 import logging
 import time
@@ -26,6 +28,11 @@ logger = logging.getLogger(__name__)
 REPLAY_DELAY_MS = 8
 
 
+def _escapeHtml(text: str) -> str:
+    """Escape HTML to prevent XSS from LLM-generated reasoning text."""
+    return html.escape(text)
+
+
 def _formatElapsed(elapsed: float) -> str:
     """Format elapsed seconds into a human-readable duration string."""
     if elapsed >= 60:
@@ -38,30 +45,46 @@ def _formatElapsed(elapsed: float) -> str:
     return f"{seconds}s"
 
 
-def _buildThinkingHtml(toolCalls: list, totalElapsed: float) -> str:
-    """Build an HTML <details> block for the thinking panel."""
+def _buildThinkingHtml(thinkingEntries: list, totalElapsed: float) -> str:
+    """Build an HTML <details> block for the thinking panel with interleaved reasoning and tools."""
     elapsed = _formatElapsed(totalElapsed)
-    toolCount = len(toolCalls)
+    toolCount = sum(1 for e in thinkingEntries if e["type"] == "tool")
     toolLabel = "tool" if toolCount == 1 else "tools"
 
-    toolLines = []
-    for tc in toolCalls:
-        summary = _summarizeToolOutput(tc["name"], tc["output"])
-        tcElapsed = _formatElapsed(tc["elapsed"])
-        toolLines.append(
-            f'<div class="thinking-tool">'
-            f'<b>{tc["name"]}</b> '
-            f'<span class="thinking-elapsed">({tcElapsed})</span>'
-            f'<div class="thinking-summary">{summary}</div>'
-            f'</div>'
-        )
+    entryLines = []
+    for entry in thinkingEntries:
+        if entry["type"] == "reasoning":
+            # Type A: agent intermediate text (before tool calls)
+            text = entry["content"]
+            if len(text) > 500:
+                text = text[:500] + "..."
+            entryLines.append(
+                f'<div class="thinking-reasoning">{_escapeHtml(text)}</div>'
+            )
+        elif entry["type"] == "reasoning_b":
+            # Type B: model reasoning tokens (QwQ)
+            text = entry["content"]
+            if len(text) > 500:
+                text = text[:500] + "..."
+            entryLines.append(
+                f'<div class="thinking-reasoning thinking-reasoning-b">{_escapeHtml(text)}</div>'
+            )
+        elif entry["type"] == "tool":
+            summary = _summarizeToolOutput(entry["name"], entry["output"])
+            tcElapsed = _formatElapsed(entry["elapsed"])
+            entryLines.append(
+                f'<div class="thinking-tool">'
+                f'<b>{entry["name"]}</b> '
+                f'<span class="thinking-elapsed">({tcElapsed})</span>'
+                f'<div class="thinking-summary">{summary}</div>'
+                f'</div>'
+            )
 
-    toolsHtml = "\n".join(toolLines)
-
+    entriesHtml = "\n".join(entryLines)
     return (
         f'<details class="thinking-panel">\n'
         f'<summary>Thought for {elapsed} · {toolCount} {toolLabel}</summary>\n'
-        f'{toolsHtml}\n'
+        f'{entriesHtml}\n'
         f'</details>\n\n'
     )
 
@@ -94,13 +117,14 @@ async def onChatStart():
 
 @cl.on_message
 async def onMessage(message: cl.Message):
-    """Handle incoming messages with buffer-first streaming architecture.
+    """Handle incoming messages with progressive streaming architecture.
 
     Flow:
-    1. Buffer ALL streaming events in memory (Chainlit shows loading indicator)
-    2. If tool calls occurred: render thinking Step(s) with tool summaries
-    3. Replay final response as a streamed chat Message
-    4. Skip thinking panel entirely for direct responses (no tools)
+    1. Create placeholder message with "Thinking..." immediately
+    2. Buffer streaming events, capturing Type A+B reasoning and tool calls
+    3. Update message with thinking panel HTML + final response when complete
+    4. Type A reasoning: agent text before tool calls (captured instead of discarded)
+    5. Type B reasoning: model reasoning tokens from QwQ (if available)
     """
     graph = cl.user_session.get("graph")
     threadId = cl.user_session.get("thread_id")
@@ -160,10 +184,14 @@ async def onMessage(message: cl.Message):
         "messages": [humanMsg],
     }
 
-    # ── Phase 1: Buffer ALL streaming events ──
-    # Chainlit shows its built-in loading indicator while we process
+    # Create placeholder immediately for progressive UX
+    responseMsg = cl.Message(content="*Thinking...*")
+    await responseMsg.send()
+
+    # ── Phase 1: Stream events, capture reasoning (Type A+B) and tool calls ──
+    thinkingEntries = []  # Chronological list: {"type": "reasoning"|"tool"|"reasoning_b", "content": ...}
     tokenBuffer = ""
-    toolCalls = []
+    reasoningBuffer = ""  # Type B reasoning tokens
     finalResponse = None
     currentToolName = None
     currentToolStartTime = None
@@ -185,6 +213,22 @@ async def onMessage(message: cl.Message):
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     tokenBuffer += chunk.content
 
+                # Type B reasoning: check for reasoning_content in chunk
+                # QwQ via OpenRouter may surface this in additional_kwargs or response_metadata
+                if chunk:
+                    # Try additional_kwargs first
+                    reasoning = None
+                    if hasattr(chunk, "additional_kwargs"):
+                        reasoning = chunk.additional_kwargs.get("reasoning_content") or chunk.additional_kwargs.get("reasoning")
+
+                    # Fall back to response_metadata
+                    if not reasoning and hasattr(chunk, "response_metadata"):
+                        reasoning = chunk.response_metadata.get("reasoning_content") or chunk.response_metadata.get("reasoning")
+
+                    if reasoning:
+                        reasoningBuffer += str(reasoning)
+                        logger.debug(f"Type B reasoning captured: {len(str(reasoning))} chars")
+
             elif eventKind == "on_chat_model_end":
                 output = event.get("data", {}).get("output")
                 hasToolCalls = (
@@ -194,12 +238,38 @@ async def onMessage(message: cl.Message):
                 )
 
                 if hasToolCalls:
-                    # About to call tools — discard narration tokens
+                    # Intermediate generation (about to call tools)
+                    # CAPTURE Type A reasoning instead of discarding
+                    if tokenBuffer.strip():
+                        thinkingEntries.append({
+                            "type": "reasoning",
+                            "content": tokenBuffer.strip(),
+                        })
+                        logger.debug(f"Type A reasoning captured: {len(tokenBuffer.strip())} chars")
+
+                    # Also capture Type B if present
+                    if reasoningBuffer.strip():
+                        thinkingEntries.append({
+                            "type": "reasoning_b",
+                            "content": reasoningBuffer.strip(),
+                        })
+                        logger.debug(f"Type B reasoning captured at intermediate: {len(reasoningBuffer.strip())} chars")
+
                     tokenBuffer = ""
+                    reasoningBuffer = ""
                 else:
-                    # Candidate final response — overwrite (last one wins)
+                    # Final response (no more tool calls)
+                    # Capture Type B if present before final response
+                    if reasoningBuffer.strip():
+                        thinkingEntries.append({
+                            "type": "reasoning_b",
+                            "content": reasoningBuffer.strip(),
+                        })
+                        logger.debug(f"Type B reasoning captured at final: {len(reasoningBuffer.strip())} chars")
+
                     finalResponse = tokenBuffer
                     tokenBuffer = ""
+                    reasoningBuffer = ""
 
                 logger.info(
                     f"LLM generation ended - intermediate: {hasToolCalls}, "
@@ -225,7 +295,8 @@ async def onMessage(message: cl.Message):
                     else 0
                 )
 
-                toolCalls.append({
+                thinkingEntries.append({
+                    "type": "tool",
                     "name": toolName,
                     "elapsed": elapsed,
                     "output": toolOutput,
@@ -241,34 +312,26 @@ async def onMessage(message: cl.Message):
 
     except Exception as e:
         logger.error(f"Error during streaming: {e}", exc_info=True)
-        await cl.Message(
-            content="I ran into an issue processing your request. Please try again."
-        ).send()
+        responseMsg.content = "I ran into an issue processing your request. Please try again."
+        await responseMsg.update()
         return
 
     totalElapsed = time.time() - turnStartTime
     logger.info(
-        f"Streaming completed - events: {eventCount}, tools: {len(toolCalls)}"
+        f"Streaming completed - events: {eventCount}, "
+        f"thinking_entries: {len(thinkingEntries)}, "
+        f"reasoning_entries: {sum(1 for e in thinkingEntries if e['type'] in ('reasoning', 'reasoning_b'))}"
     )
 
-    # ── Phase 2: Render response (with thinking panel if tools were called) ──
+    # ── Phase 2: Update message with thinking panel + final response ──
     if finalResponse and finalResponse.strip():
-        if toolCalls:
-            # Single message: HTML thinking panel + streamed response below
-            thinkingHtml = _buildThinkingHtml(toolCalls, totalElapsed)
-            responseMsg = cl.Message(content=thinkingHtml)
-        else:
-            # Direct response — no thinking panel
-            responseMsg = cl.Message(content="")
-
-        await responseMsg.send()
-
-        for token in finalResponse:
-            await responseMsg.stream_token(token)
-            await asyncio.sleep(REPLAY_DELAY_MS / 1000)
-
+        content = ""
+        if thinkingEntries:
+            content = _buildThinkingHtml(thinkingEntries, totalElapsed)
+        content += finalResponse
+        responseMsg.content = content
         await responseMsg.update()
-        logger.info(f"Final response replayed - length: {len(finalResponse)}")
+        logger.info(f"Final response rendered - length: {len(finalResponse)}")
 
     else:
         # Fallback: events captured but no final text response
@@ -276,7 +339,7 @@ async def onMessage(message: cl.Message):
         # nested graph doesn't emit expected events, or interrupt occurred
         logger.warning(
             f"No final response to render - events: {eventCount}, "
-            f"tools: {len(toolCalls)}, extracting from state"
+            f"thinking_entries: {len(thinkingEntries)}, extracting from state"
         )
         try:
             finalState = await graph.aget_state(
@@ -295,10 +358,11 @@ async def onMessage(message: cl.Message):
                     if hasattr(task, "interrupts") and task.interrupts:
                         interruptValue = task.interrupts[0].value
                         content = ""
-                        if toolCalls:
-                            content = _buildThinkingHtml(toolCalls, totalElapsed)
+                        if thinkingEntries:
+                            content = _buildThinkingHtml(thinkingEntries, totalElapsed)
                         content += str(interruptValue)
-                        await cl.Message(content=content).send()
+                        responseMsg.content = content
+                        await responseMsg.update()
                         return
 
             # No interrupt — extract last AI message from state
@@ -316,18 +380,16 @@ async def onMessage(message: cl.Message):
 
             if fallbackContent:
                 content = ""
-                if toolCalls:
-                    content = _buildThinkingHtml(toolCalls, totalElapsed)
+                if thinkingEntries:
+                    content = _buildThinkingHtml(thinkingEntries, totalElapsed)
                 content += fallbackContent
-                responseMsg = cl.Message(content=content)
-                await responseMsg.send()
-            elif toolCalls:
+                responseMsg.content = content
+                await responseMsg.update()
+            elif thinkingEntries:
                 # Show thinking panel even without text (so user sees tool errors)
-                thinkingHtml = _buildThinkingHtml(toolCalls, totalElapsed)
-                await cl.Message(
-                    content=thinkingHtml
-                    + "I encountered an issue. Please try again."
-                ).send()
+                thinkingHtml = _buildThinkingHtml(thinkingEntries, totalElapsed)
+                responseMsg.content = thinkingHtml + "I encountered an issue. Please try again."
+                await responseMsg.update()
 
         except Exception as e:
             logger.error(
@@ -354,6 +416,11 @@ def _summarizeToolOutput(toolName: str, toolOutput) -> str:
 
         if "error" in data:
             return f"Error: {data['error']}"
+
+        if toolName == "getClaimSchema":
+            claims = data.get("claims", [])
+            receipts = data.get("receipts", [])
+            return f"Schema loaded: {len(claims)} claim fields, {len(receipts)} receipt fields"
 
         if toolName == "extractReceiptFields":
             fields = data.get("fields", {})
