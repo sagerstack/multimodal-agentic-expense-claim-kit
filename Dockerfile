@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
-# Install curl for healthcheck and poetry for dependency management
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/* \
+# Install curl for healthcheck, ca-certificates for SSL, and poetry for dependency management
+RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir poetry
 
 WORKDIR /app
@@ -13,13 +13,21 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi --without dev --no-root
 
-# Copy source code and Alembic migrations
+# Upgrade certifi to latest CA bundle
+RUN pip install --no-cache-dir --upgrade certifi
+
+# Copy source code, config, and Alembic migrations
 COPY src/ ./src/
 COPY alembic.ini ./
 COPY alembic/ ./alembic/
+COPY .chainlit/ ./.chainlit/
+COPY public/ ./public/
 
 # Install root project
 RUN poetry install --no-interaction --no-ansi --without dev
+
+# Set environment variable to use system CA certificates
+ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 # Expose port
 EXPOSE 8000

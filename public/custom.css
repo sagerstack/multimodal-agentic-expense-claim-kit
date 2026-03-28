@@ -1,14 +1,121 @@
-/* Custom styling for Chainlit Step elements */
+/* Thinking panel — collapsible tool call details
+   Theme-aware: adapts to light/dark mode automatically via @media queries */
 
-/* Step elements: italic and smaller font */
-.step-container,
-.step-header,
-.step-content {
-  font-style: italic;
-  font-size: 0.875em;
+/* ─────────────────────────────────────────────────────────────
+   Dark Mode (default)
+   ───────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  .thinking-panel {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+  }
+
+  .thinking-panel summary {
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.45);
+    list-style: none;
+    user-select: none;
+  }
+
+  .thinking-tool b {
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .thinking-elapsed {
+    font-size: 0.8em;
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  .thinking-summary {
+    font-size: 0.85em;
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 2px;
+  }
+
+  .thinking-reasoning {
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 0.85em;
+    padding: 8px 12px;
+    margin: 8px 0;
+    white-space: pre-wrap;
+    color: rgba(255, 255, 255, 0.4);
+  }
 }
 
-/* Keep Step titles readable */
-.step-header .step-name {
-  font-weight: 500;
+/* ─────────────────────────────────────────────────────────────
+   Light Mode
+   ───────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: light) {
+  .thinking-panel {
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+  }
+
+  .thinking-panel summary {
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.6);
+    list-style: none;
+    user-select: none;
+  }
+
+  .thinking-tool b {
+    font-size: 0.85em;
+    color: rgba(0, 0, 0, 0.75);
+  }
+
+  .thinking-elapsed {
+    font-size: 0.8em;
+    color: rgba(0, 0, 0, 0.4);
+  }
+
+  .thinking-summary {
+    font-size: 0.85em;
+    color: rgba(0, 0, 0, 0.6);
+    margin-top: 2px;
+  }
+
+  .thinking-reasoning {
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 0.85em;
+    padding: 8px 12px;
+    margin: 8px 0;
+    white-space: pre-wrap;
+    color: rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Theme-independent styles
+   ───────────────────────────────────────────────────────────── */
+.thinking-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.thinking-panel summary::before {
+  content: "\25B6\00a0";
+  font-size: 0.7em;
+  vertical-align: middle;
+}
+
+.thinking-panel[open] summary::before {
+  content: "\25BC\00a0";
+}
+
+.thinking-tool {
+  padding: 6px 0 6px 12px;
+  border-left: 2px solid rgba(128, 128, 128, 0.3);  /* Gray works in both modes */
+  margin: 8px 0;
 }
