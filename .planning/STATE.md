@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.5 of 9 (Reasoning Panel + Model Upgrade)
-Plan: 2 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: In progress
-Last activity: 2026-03-28 -- Completed 02.5-02 (System prompt v2)
+Last activity: 2026-03-28 -- Completed 02.5-03 (Progressive streaming with Type A+B reasoning)
 
-Progress: [████████████████████░] 21/49 plans complete (43% complete)
+Progress: [████████████████████░] 22/49 plans complete (45% complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21
+- Total plans completed: 22
 - Average duration: 8 min
-- Total execution time: 2.92 hours
+- Total execution time: 2.97 hours
 
 **By Phase:**
 
@@ -33,11 +33,11 @@ Progress: [████████████████████░] 21/4
 | 2.2. Intake Agent Gap Closure | 5 | 85 min | 17 min |
 | 2.3. Intake Agent UAT Fix | 5 | 10 min | 2 min |
 | 2.4. CoT Thinking Panel + Bug Fixes | 4 | 14 min | 4 min |
-| 2.5. Reasoning Panel + Model Upgrade | 2 | 11 min | 6 min |
+| 2.5. Reasoning Panel + Model Upgrade | 3 | 14 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 5min, 3min, 2min, 3min, 8min
-- Trend: System prompt updates take longer (8min), UI changes faster (2-3min)
+- Last 5 plans: 3min, 2min, 3min, 8min, 3min
+- Trend: UI streaming changes consistently 2-3min, system prompt longer (8min)
 
 *Updated after each plan completion*
 
@@ -135,6 +135,11 @@ Recent decisions affecting current work:
 - 02.5-02: Convert ALL monetary values individually via convertCurrency (total AND tax, never batch or manual calculations)
 - 02.5-02: Capture justification for policy violations in summary and intakeFindings (audit trail for compliance)
 - 02.5-02: Capture remarks from upload description in summary and intakeFindings (preserves user context)
+- 02.5-03: Type A reasoning captured (tokenBuffer before tool calls) instead of discarding (provides visibility into agent reasoning)
+- 02.5-03: Type B reasoning tokens captured from chunk.additional_kwargs or chunk.response_metadata (QwQ reasoning_content field)
+- 02.5-03: Chronological thinkingEntries list replaces flat toolCalls (mixed-type list preserves temporal relationship: reasoning → tool → reasoning)
+- 02.5-03: Progressive UX via placeholder message (create "Thinking...", update with full content after streaming — Chainlit limitation)
+- 02.5-03: HTML escape all reasoning text (_escapeHtml) to prevent XSS from LLM-generated content
 - 02.5-02: Immediate acknowledgment at turn start (user sees feedback while thinking panel streams)
 - 02.5-04: Type A reasoning uses gray border (neutral), Type B uses purple (model-specific identity)
 - 02.5-04: Type B includes "Model reasoning" label via ::before pseudo-element for clarity
@@ -169,8 +174,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28 13:13:48Z
-Stopped at: Completed 02.5-02-PLAN.md (System prompt v2)
+Last session: 2026-03-28 13:21:33Z
+Stopped at: Completed 02.5-03-PLAN.md (Progressive streaming with Type A+B reasoning)
 Resume file: None
 
 ### Roadmap Evolution
