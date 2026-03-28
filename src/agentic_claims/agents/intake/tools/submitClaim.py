@@ -2,7 +2,6 @@
 
 import json
 import logging
-import random
 from datetime import datetime
 
 from langchain_core.tools import tool
@@ -32,14 +31,13 @@ RECEIPT_FIELD_MAP = {
 
 
 @tool
-async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict | None = None) -> dict:
+async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict | None = None, threadId: str | None = None) -> dict:
     """Submit a claim and its receipt to the database atomically.
 
     Args:
         claimData: Claim fields using agent vocabulary:
             - claimantId (required, maps to employeeId)
             - amountSgd (required, maps to totalAmount)
-            - claimNumber (optional, auto-generated if missing)
             - status (optional, defaults to 'pending')
             - currency (optional, defaults to 'SGD')
             - expenseDate (optional)
@@ -52,10 +50,11 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
             - lineItems or items (optional)
             - taxAmount, paymentMethod, imagePath (optional)
         intakeFindings: Agent observations (mismatches, overrides, red flags) for audit trail
+        threadId: Conversation thread ID for idempotency (optional)
 
     Returns:
         Dict with "claim" and "receipt" keys containing the inserted records,
-        or error dict if submission fails
+        or note key if duplicate detected, or error dict if submission fails
     """
     settings = getSettings()
 
@@ -73,9 +72,25 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
     mergedArgs = {}
 
     # Handle required fields with pass-through + fallback
-    mergedArgs["claimNumber"] = claimData.get("claimNumber", f"CLAIM-{random.randint(1, 999):03d}")
     mergedArgs["status"] = claimData.get("status", "pending")
     mergedArgs["intakeFindings"] = intakeFindings or {}
+
+    # Idempotency key from natural key (employeeId + merchant + receiptDate + totalAmount)
+    idempParts = [
+        str(claimData.get("claimantId", "")),
+        str(receiptData.get("merchant", "")),
+        str(receiptData.get("date", "")),
+        str(receiptData.get("totalAmount", "")),
+    ]
+    mergedArgs["idempotencyKey"] = "_".join(idempParts)
+
+    # If agent provides claimNumber, pass through but log warning (legacy path)
+    if "claimNumber" in claimData:
+        mergedArgs["claimNumber"] = claimData["claimNumber"]
+        logger.warning(
+            "Agent provided claimNumber (legacy behavior, DB should generate it)",
+            extra={"claimNumber": claimData["claimNumber"]}
+        )
 
     # Map claim fields through CLAIM_FIELD_MAP
     unmappedClaimKeys = []
@@ -114,9 +129,17 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
     if unmappedReceiptKeys:
         logger.warning("Unmapped receipt keys", extra={"unmappedKeys": unmappedReceiptKeys})
 
-    # Auto-generate receiptNumber if receipt data exists but no receiptNumber provided
+    # Auto-generate deterministic receiptNumber if receipt data exists but no receiptNumber provided
     if hasReceiptData and "receiptNumber" not in mergedArgs:
-        mergedArgs["receiptNumber"] = f"REC-{random.randint(1, 999):03d}"
+        # Use date-based receipt number for determinism
+        receiptDate = mergedArgs.get("receiptDate", "")
+        if receiptDate:
+            mergedArgs["receiptNumber"] = f"REC-{receiptDate.replace('-', '')}"
+        else:
+            # Fallback if date missing
+            import hashlib
+            keyHash = hashlib.md5(mergedArgs["idempotencyKey"].encode()).hexdigest()[:8]
+            mergedArgs["receiptNumber"] = f"REC-{keyHash}"
 
     # Normalize receiptDate to YYYY-MM-DD format (PostgreSQL DATE column requirement)
     if "receiptDate" in mergedArgs and mergedArgs["receiptDate"]:

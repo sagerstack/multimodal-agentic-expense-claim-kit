@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 import psycopg
+from psycopg.types.json import Json
 from fastmcp import FastMCP
 
 # Environment configuration
@@ -66,12 +67,13 @@ def executeQuery(query: str) -> list[dict[str, Any]]:
 
 @mcp.tool()
 def insertClaim(
-    claimNumber: str,
     employeeId: str,
     status: str,
     totalAmount: float,
     currency: str = "SGD",
     intakeFindings: dict | None = None,
+    claimNumber: str | None = None,
+    idempotencyKey: str | None = None,
     receiptNumber: str | None = None,
     merchant: str | None = None,
     receiptDate: str | None = None,
@@ -92,12 +94,13 @@ def insertClaim(
     Insert a new claim and optionally its receipt atomically.
 
     Args:
-        claimNumber: Unique claim identifier
         employeeId: Employee ID who created the claim
         status: Claim status (draft, pending, approved, rejected, paid)
         totalAmount: Total claim amount
         currency: Currency code (default SGD)
         intakeFindings: Agent observations (mismatches, overrides, red flags)
+        claimNumber: Unique claim identifier (optional, DB generates via sequence if omitted)
+        idempotencyKey: Natural key for deduplication (optional, enables ON CONFLICT)
         receiptNumber: Unique receipt identifier (optional)
         merchant: Merchant name (optional)
         receiptDate: Receipt date (optional)
@@ -115,42 +118,152 @@ def insertClaim(
         conversionDate: Date of conversion (optional)
 
     Returns:
-        Dict with "claim" and "receipt" keys containing the inserted records
+        Dict with "claim" and "receipt" keys containing the inserted records,
+        or note key if duplicate detected
     """
     conn = getConnection()
     try:
         with conn.cursor() as cur:
-            # Insert claim with intake_findings
-            cur.execute(
-                """
-                INSERT INTO claims (
-                    claim_number, employee_id, status, total_amount, currency,
-                    intake_findings, original_amount, original_currency, converted_amount_sgd
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, claim_number, employee_id, status, total_amount, currency,
-                          intake_findings, original_amount, original_currency, converted_amount_sgd,
-                          created_at, updated_at
-                """,
-                (
-                    claimNumber,
-                    employeeId,
-                    status,
-                    totalAmount,
-                    currency,
-                    intakeFindings or {},
-                    originalAmount,
-                    originalCurrency,
-                    convertedAmount,
-                ),
-            )
-            claimColumns = [desc[0] for desc in cur.description]
-            claimRow = cur.fetchone()
-            if not claimRow:
-                conn.rollback()
-                return {"error": "Claim insert failed"}
+            # Build claim INSERT with idempotent pattern
+            if idempotencyKey:
+                # Idempotent insert: ON CONFLICT DO NOTHING, then fetch existing if duplicate
+                if claimNumber:
+                    # Legacy path: claimNumber provided (backwards compatibility)
+                    claimSql = """
+                        INSERT INTO claims (
+                            claim_number, employee_id, status, total_amount, currency,
+                            intake_findings, original_amount, original_currency, converted_amount_sgd,
+                            idempotency_key
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (idempotency_key) DO NOTHING
+                        RETURNING id, claim_number, employee_id, status, total_amount, currency,
+                                  intake_findings, original_amount, original_currency, converted_amount_sgd,
+                                  created_at, updated_at
+                    """
+                    claimParams = (
+                        claimNumber,
+                        employeeId,
+                        status,
+                        totalAmount,
+                        currency,
+                        Json(intakeFindings or {}),
+                        originalAmount,
+                        originalCurrency,
+                        convertedAmount,
+                        idempotencyKey,
+                    )
+                else:
+                    # Standard path: DB generates claim_number via DEFAULT (sequence)
+                    claimSql = """
+                        INSERT INTO claims (
+                            employee_id, status, total_amount, currency,
+                            intake_findings, original_amount, original_currency, converted_amount_sgd,
+                            idempotency_key
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (idempotency_key) DO NOTHING
+                        RETURNING id, claim_number, employee_id, status, total_amount, currency,
+                                  intake_findings, original_amount, original_currency, converted_amount_sgd,
+                                  created_at, updated_at
+                    """
+                    claimParams = (
+                        employeeId,
+                        status,
+                        totalAmount,
+                        currency,
+                        Json(intakeFindings or {}),
+                        originalAmount,
+                        originalCurrency,
+                        convertedAmount,
+                        idempotencyKey,
+                    )
 
-            claimRecord = serializeRow(dict(zip(claimColumns, claimRow)))
+                cur.execute(claimSql, claimParams)
+                claimColumns = [desc[0] for desc in cur.description]
+                claimRow = cur.fetchone()
+
+                # If no row returned, duplicate detected — fetch existing
+                if not claimRow:
+                    cur.execute(
+                        """
+                        SELECT id, claim_number, employee_id, status, total_amount, currency,
+                               intake_findings, original_amount, original_currency, converted_amount_sgd,
+                               created_at, updated_at
+                        FROM claims WHERE idempotency_key = %s
+                        """,
+                        (idempotencyKey,)
+                    )
+                    claimColumns = [desc[0] for desc in cur.description]
+                    claimRow = cur.fetchone()
+                    if not claimRow:
+                        conn.rollback()
+                        return {"error": "Claim insert failed and existing claim not found"}
+
+                    claimRecord = serializeRow(dict(zip(claimColumns, claimRow)))
+                    conn.rollback()  # No changes to commit
+                    return {
+                        "claim": claimRecord,
+                        "receipt": None,
+                        "note": "Duplicate submission detected, returning existing claim"
+                    }
+
+                claimRecord = serializeRow(dict(zip(claimColumns, claimRow)))
+            else:
+                # Non-idempotent path (backwards compatibility or testing)
+                if claimNumber:
+                    claimSql = """
+                        INSERT INTO claims (
+                            claim_number, employee_id, status, total_amount, currency,
+                            intake_findings, original_amount, original_currency, converted_amount_sgd
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id, claim_number, employee_id, status, total_amount, currency,
+                                  intake_findings, original_amount, original_currency, converted_amount_sgd,
+                                  created_at, updated_at
+                    """
+                    claimParams = (
+                        claimNumber,
+                        employeeId,
+                        status,
+                        totalAmount,
+                        currency,
+                        Json(intakeFindings or {}),
+                        originalAmount,
+                        originalCurrency,
+                        convertedAmount,
+                    )
+                else:
+                    # DB generates claim_number via DEFAULT
+                    claimSql = """
+                        INSERT INTO claims (
+                            employee_id, status, total_amount, currency,
+                            intake_findings, original_amount, original_currency, converted_amount_sgd
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id, claim_number, employee_id, status, total_amount, currency,
+                                  intake_findings, original_amount, original_currency, converted_amount_sgd,
+                                  created_at, updated_at
+                    """
+                    claimParams = (
+                        employeeId,
+                        status,
+                        totalAmount,
+                        currency,
+                        Json(intakeFindings or {}),
+                        originalAmount,
+                        originalCurrency,
+                        convertedAmount,
+                    )
+
+                cur.execute(claimSql, claimParams)
+                claimColumns = [desc[0] for desc in cur.description]
+                claimRow = cur.fetchone()
+                if not claimRow:
+                    conn.rollback()
+                    return {"error": "Claim insert failed"}
+
+                claimRecord = serializeRow(dict(zip(claimColumns, claimRow)))
             claimId = claimRecord["id"]
 
             # Insert receipt if receipt data provided
@@ -174,7 +287,7 @@ def insertClaim(
                         receiptDate,
                         receiptTotalAmount or 0.0,
                         receiptCurrency or currency,
-                        lineItems or [],
+                        Json(lineItems or []),
                         imagePath,
                         originalAmount,
                         originalCurrency,
