@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.5 of 9 (Reasoning Panel + Model Upgrade)
-Plan: 1 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-03-28 -- Completed 02.5-01 (QwQ-32B model + getClaimSchema)
+Last activity: 2026-03-28 -- Completed 02.5-04 (Reasoning block CSS styling)
 
-Progress: [██████████████████░░] 20/49 plans complete (41% complete)
+Progress: [████████████████████░] 21/49 plans complete (43% complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 20
-- Average duration: 8 min
-- Total execution time: 2.78 hours
+- Total plans completed: 21
+- Average duration: 7 min
+- Total execution time: 2.80 hours
 
 **By Phase:**
 
@@ -33,11 +33,11 @@ Progress: [██████████████████░░] 20/49 p
 | 2.2. Intake Agent Gap Closure | 5 | 85 min | 17 min |
 | 2.3. Intake Agent UAT Fix | 5 | 10 min | 2 min |
 | 2.4. CoT Thinking Panel + Bug Fixes | 4 | 14 min | 4 min |
-| 2.5. Reasoning Panel + Model Upgrade | 1 | 3 min | 3 min |
+| 2.5. Reasoning Panel + Model Upgrade | 2 | 4 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 5min, 3min, 2min, 3min
-- Trend: Consistent 3-5min for recent implementations
+- Last 5 plans: 3min, 2min, 3min, 1min, [next]
+- Trend: Very fast CSS/UI updates (1-3min)
 
 *Updated after each plan completion*
 
@@ -131,6 +131,9 @@ Recent decisions affecting current work:
 - 02.5-01: Max tokens increased to 8192 for QwQ (reasoning models produce verbose output with explicit thinking)
 - 02.5-01: getClaimSchema tool for dynamic schema discovery (queries information_schema.columns for claims and receipts metadata)
 - 02.5-01: getClaimSchema as first tool in agent (signals schema awareness is foundational for schema-driven prompting)
+- 02.5-04: Type A reasoning uses gray border (neutral), Type B uses purple (model-specific identity)
+- 02.5-04: Type B includes "Model reasoning" label via ::before pseudo-element for clarity
+- 02.5-04: Border opacity differs between themes (0.3 dark, 0.4 light) for optimal contrast
 
 ### Pending Todos
 
@@ -161,8 +164,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28 13:01:02Z
-Stopped at: Completed 02.5-01-PLAN.md (QwQ-32B model + getClaimSchema tool)
+Last session: 2026-03-28 13:06:29Z
+Stopped at: Completed 02.5-04-PLAN.md (Reasoning block CSS styling)
 Resume file: None
 
 ### Roadmap Evolution
