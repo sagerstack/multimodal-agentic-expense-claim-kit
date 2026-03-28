@@ -17,6 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2.1: Intake Agent + Receipt Processing** - VLM extraction, policy validation, conversational claim submission loop, claimant UI
 - [x] **Phase 2.2: Intake Agent Gap Closure** - Fix submitClaim blocker, structured agent output, prompt improvements, startup script, re-test blocked UAT cases
 - [x] **Phase 2.3: Intake Agent UAT Fix** - Fix submitClaim field mismatch, model fallback on 402, streaming CoT, prompt fixes, Seq log noise
+- [ ] **Phase 2.4: OpenRouter Reasoning Tokens in CoT Thinking Panel** - Enable reasoning parameter, capture reasoning_details, display model thinking in collapsible panel
 - [ ] **Phase 3: Compliance + Fraud Agents** - Post-submission parallel policy audit and duplicate detection
 - [ ] **Phase 4: Advisor Agent + Reviewer Flow** - Decision synthesis, approval routing, reviewer UI, email notifications
 - [ ] **Phase 5: Evaluation + Demo** - Test dataset, evaluation framework, baseline comparisons, demo polish
@@ -116,6 +117,29 @@ Plans:
 - [x] 02.3-04-PLAN.md — Streaming architecture: per-tool-call Steps, real-time message delivery, CSS styling (Issue G)
 - [x] 02.3-05-PLAN.md — CLI conversation runner + E2E intake narrative test with DIG receipt
 
+### Phase 2.4: CoT Thinking Panel + Bug Fixes (INSERTED)
+**Goal**: Thinking panel is visible and functional in both light and dark mode, SSL connectivity is reliable, claim number generation is collision-free, and reasoning tokens are displayed when the model supports them
+**Depends on**: Phase 2.3
+**Requirements**: CHAT-03, ORCH-02, INFR-03
+**Success Criteria** (what must be TRUE):
+  1. Collapsible thinking panel (`<details>`) is visible in both light and dark Chainlit themes with proper contrast and styling (BUG-007)
+  2. Docker container connects to OpenRouter reliably — CA certificates installed and verified (BUG-006)
+  3. Claim numbers are unique across sessions — generated via DB sequence or timestamp-based format, no CLAIM-NNN collisions (BUG-009)
+  4. submitClaim is idempotent — duplicate submission attempts within the same conversation do not create duplicate records (BUG-008)
+  5. `finalResponse` assignment in app.py streaming is robust — only the last non-tool LLM generation is used, intermediate generations are discarded (BUG-011)
+  6. OpenRouter API requests include the `reasoning` parameter to enable reasoning tokens from supported models
+  7. `reasoning_details` from OpenRouter responses are captured during streaming and stored alongside tool call data
+  8. The thinking panel shows the model's reasoning text (when available) in addition to tool call names and summaries
+  9. When the selected model doesn't support reasoning tokens, the panel gracefully falls back to tool-call-only display (no errors)
+  10. E2E test (CLI) and browser test both pass end-to-end with all fixes applied
+**Plans**: 4 plans
+
+Plans:
+- [ ] 02.4-01-PLAN.md — SSL cert fix (Dockerfile), theme-aware CSS (light+dark), dev-mode table truncation (startup.sh)
+- [ ] 02.4-02-PLAN.md — DB claim number sequence, idempotent insertClaim, submitClaim tool cleanup, system prompt update
+- [ ] 02.4-03-PLAN.md — Robust finalResponse detection (pendingToolCalls counter), thinking panel metrics summary
+- [ ] 02.4-04-PLAN.md — E2E test update for DB-generated claim numbers, browser verification, bug resolution docs
+
 ### Phase 3: Compliance + Fraud Agents
 **Goal**: After a claim is submitted, Compliance and Fraud agents execute in parallel -- Compliance audits against org-level policies with cited clauses, Fraud detects duplicate receipts against historical data -- and their findings are stored in ClaimState for the Advisor
 **Depends on**: Phase 2.1
@@ -165,7 +189,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 2.1 -> 2.2 -> 2.3 -> 3 -> 4 -> 5
+Phases execute in numeric order: 1 -> 2 -> 2.1 -> 2.2 -> 2.3 -> 2.4 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
@@ -174,6 +198,7 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 2.2 -> 2.3 -> 3 -> 4 -> 5
 | 2.1. Intake Agent + Receipt Processing | 3/3 | Complete | 2026-03-25 |
 | 2.2. Intake Agent Gap Closure | 5/5 | Complete | 2026-03-26 |
 | 2.3. Intake Agent UAT Fix | 5/5 | Complete | 2026-03-26 |
+| 2.4. OpenRouter Reasoning in CoT | 0/4 | Planned | - |
 | 3. Compliance + Fraud Agents | 0/2 | Not started | - |
 | 4. Advisor Agent + Reviewer Flow | 0/3 | Not started | - |
 | 5. Evaluation + Demo | 0/2 | Not started | - |
