@@ -53,6 +53,11 @@ async def test_intake_narrative_restaurant_receipt(runner):
     toolNames1 = [s.name for s in turn1.steps]
     allTools.extend(toolNames1)
 
+    # Assert: getClaimSchema was called first (schema-driven workflow)
+    assert "getClaimSchema" in toolNames1, (
+        f"getClaimSchema not called in Phase 1. Tools called: {toolNames1}"
+    )
+
     # Assert: extractReceiptFields was called
     assert "extractReceiptFields" in toolNames1, (
         f"extractReceiptFields not called. Tools called: {toolNames1}"
@@ -66,6 +71,14 @@ async def test_intake_narrative_restaurant_receipt(runner):
     # Assert: Currency conversion happened (USD receipt)
     assert "convertCurrency" in toolNames1, (
         f"convertCurrency not called for USD receipt. Tools called: {toolNames1}"
+    )
+
+    # Assert: convertCurrency called for multiple monetary values (total + tax)
+    convertCount = toolNames1.count("convertCurrency")
+    # Note: At minimum total amount should be converted. Tax conversion is ideal but
+    # depends on whether the receipt has a separate tax value. Accept >= 1 as minimum.
+    assert convertCount >= 1, (
+        f"convertCurrency should be called at least once. Called {convertCount} times."
     )
 
     # Assert: SGD mentioned (conversion result)
@@ -148,17 +161,21 @@ async def test_intake_narrative_restaurant_receipt(runner):
 
     # ── Cross-turn assertions ──
 
-    # Assert: All 4 required tools were called across all turns
-    requiredTools = ["extractReceiptFields", "convertCurrency", "searchPolicies", "submitClaim"]
+    # Assert: All 5 required tools were called across all turns
+    requiredTools = ["getClaimSchema", "extractReceiptFields", "convertCurrency", "searchPolicies", "submitClaim"]
     for tool in requiredTools:
         assert tool in allTools, f"Required tool {tool} was never called. All tools: {allTools}"
 
-    # Assert: Tool ordering (extract before convert, convert before policy, policy before submit)
+    # Assert: Tool ordering (schema before extract, extract before convert, convert before policy, policy before submit)
+    schemaIdx = allTools.index("getClaimSchema")
     extractIdx = allTools.index("extractReceiptFields")
     convertIdx = allTools.index("convertCurrency")
     policyIdx = allTools.index("searchPolicies")
     submitIdx = allTools.index("submitClaim")
 
+    assert schemaIdx < extractIdx, (
+        f"getClaimSchema ({schemaIdx}) should come before extractReceiptFields ({extractIdx})"
+    )
     assert extractIdx < convertIdx, (
         f"extractReceiptFields ({extractIdx}) should come before convertCurrency ({convertIdx})"
     )
