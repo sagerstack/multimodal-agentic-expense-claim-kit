@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Phase 2.4: CoT Thinking Panel + Bug Fixes
+**Current focus:** Phase 2.5: Reasoning Panel + Model Upgrade
 
 ## Current Position
 
-Phase: 2.4 of 8 (CoT Thinking Panel + Bug Fixes)
-Plan: 4 of 4 in current phase
-Status: Phase complete (browser verification checkpoint pending)
-Last activity: 2026-03-28 -- Completed 02.4-04-PLAN.md (E2E test updated for DB-generated claim numbers, all 5 bugs documented)
+Phase: 2.5 of 9 (Reasoning Panel + Model Upgrade)
+Plan: 1 of 5 in current phase
+Status: In progress
+Last activity: 2026-03-28 -- Completed 02.5-01 (QwQ-32B model + getClaimSchema)
 
-Progress: [██████████████████] 100% (19/19 plans complete)
+Progress: [██████████████████░░] 20/49 plans complete (41% complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
+- Total plans completed: 20
 - Average duration: 8 min
-- Total execution time: 2.73 hours
+- Total execution time: 2.78 hours
 
 **By Phase:**
 
@@ -33,10 +33,11 @@ Progress: [██████████████████] 100% (19/19 p
 | 2.2. Intake Agent Gap Closure | 5 | 85 min | 17 min |
 | 2.3. Intake Agent UAT Fix | 5 | 10 min | 2 min |
 | 2.4. CoT Thinking Panel + Bug Fixes | 4 | 14 min | 4 min |
+| 2.5. Reasoning Panel + Model Upgrade | 1 | 3 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 4min, 5min, 3min, 2min
-- Trend: Bug fix phase complete at avg 4min/plan
+- Last 5 plans: 4min, 5min, 3min, 2min, 3min
+- Trend: Consistent 3-5min for recent implementations
 
 *Updated after each plan completion*
 
@@ -125,6 +126,11 @@ Recent decisions affecting current work:
 - 02.4-03: Last-wins strategy for finalResponse assignment (intermediate generations safely overwritten)
 - 02.4-03: Thinking panel summary shows tool count: "Thought for 5s · 3 tools" (prepares for reasoning token display)
 - 02.4-04: E2E test now asserts CLAIM-NNN in Phase 3 (after submitClaim) not Phase 2 (agent no longer generates claim numbers)
+- 02.5-01: QwQ-32B as primary LLM via OpenRouter (qwen/qwq-32b provides Type B reasoning tokens for thinking panel)
+- 02.5-01: Temperature configurable per model type (0.3 for reasoning models, lower than 0.7 for conversational)
+- 02.5-01: Max tokens increased to 8192 for QwQ (reasoning models produce verbose output with explicit thinking)
+- 02.5-01: getClaimSchema tool for dynamic schema discovery (queries information_schema.columns for claims and receipts metadata)
+- 02.5-01: getClaimSchema as first tool in agent (signals schema awareness is foundational for schema-driven prompting)
 
 ### Pending Todos
 
@@ -155,8 +161,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28 08:51:07Z
-Stopped at: Completed 02.4-04-PLAN.md (E2E test + bug documentation) — Phase 2.4 COMPLETE (browser verification pending)
+Last session: 2026-03-28 13:01:02Z
+Stopped at: Completed 02.5-01-PLAN.md (QwQ-32B model + getClaimSchema tool)
 Resume file: None
 
 ### Roadmap Evolution
@@ -164,3 +170,5 @@ Resume file: None
 - Phase 2.3 planned with 4 plans addressing 8 UAT-2 issues (Issues A-H) from Phase 2.2 verification
 - Plan 02.3-05 added: CLI ConversationRunner + E2E intake narrative test with DIG receipt, enables programmatic testing of the full conversation flow without Chainlit
 - Phase 2.4 scope expanded: Combined original reasoning tokens scope with 6 open bugs from Phase 2.3 UAT (BUG-006 through BUG-011). Bugs: SSL cert failure in Docker, thinking panel invisible in light mode, submitClaim double-call, CLAIM-NNN collisions, post-submission agent visibility (expected stub), finalResponse buffer fragility. See docs/project_notes/bugs.md for full details.
+- Phase 2.4 UAT closed: 2 passed (Docker startup, SSL), 5 deferred to Phase 2.5. UAT surfaced 9 issues requiring architectural changes beyond 2.4 scope.
+- Phase 2.5 inserted: Reasoning Panel + Model Upgrade. Scope: QwQ-32B model switch, Type A+B reasoning capture, progressive streaming, schema-driven intake prompt with getClaimSchema tool, system prompt redesign, deferred 2.4 tests. 9 issues total from UAT analysis.
