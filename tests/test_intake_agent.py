@@ -53,11 +53,11 @@ def test_intakeAgentHasFiveTools():
 
 
 def test_intakeAgentUsesOpenRouterModel():
-    """Verify ChatOpenAI is configured with OpenRouter base_url."""
-    with patch("agentic_claims.agents.intake.node.ChatOpenAI") as mockChatOpenAI:
-        # Mock ChatOpenAI constructor
+    """Verify ChatOpenRouter is configured with OpenRouter API key."""
+    with patch("agentic_claims.agents.intake.node.ChatOpenRouter") as mockChatOpenRouter:
+        # Mock ChatOpenRouter constructor
         mockLlm = MagicMock()
-        mockChatOpenAI.return_value = mockLlm
+        mockChatOpenRouter.return_value = mockLlm
 
         # Mock create_react_agent to avoid actual agent creation
         with patch("agentic_claims.agents.intake.node.create_react_agent") as mockCreateAgent:
@@ -67,17 +67,14 @@ def test_intakeAgentUsesOpenRouterModel():
             # Call getIntakeAgent
             getIntakeAgent()
 
-            # Verify ChatOpenAI was instantiated with OpenRouter config
-            assert mockChatOpenAI.called, "ChatOpenAI should be instantiated"
-            callArgs = mockChatOpenAI.call_args
+            # Verify ChatOpenRouter was instantiated with OpenRouter config
+            assert mockChatOpenRouter.called, "ChatOpenRouter should be instantiated"
+            callArgs = mockChatOpenRouter.call_args
 
-            # Check that base_url is set (OpenRouter endpoint)
-            assert "base_url" in callArgs.kwargs, "base_url should be set"
-            # Verify it contains expected OpenRouter pattern
-            baseUrl = callArgs.kwargs["base_url"]
-            assert "openrouter" in baseUrl.lower() or callArgs.kwargs.get(
-                "base_url"
-            ), "base_url should be OpenRouter endpoint"
+            # Check that openrouter_api_key is set
+            assert "openrouter_api_key" in callArgs.kwargs, "openrouter_api_key should be set"
+            # Verify base_url is NOT passed (ChatOpenRouter defaults to OpenRouter)
+            assert "base_url" not in callArgs.kwargs, "base_url should not be passed to ChatOpenRouter"
 
 
 @pytest.mark.asyncio

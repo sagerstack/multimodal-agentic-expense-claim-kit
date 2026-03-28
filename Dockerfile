@@ -1,20 +1,23 @@
 FROM python:3.11-slim
 
-# Install curl for healthcheck, ca-certificates for SSL, and poetry for dependency management
-RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir poetry
+# Install system packages: curl for healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Build-time pip trusted hosts (workaround for SSL cert interception in Docker build)
+ENV PIP_TRUSTED_HOST="pypi.org files.pythonhosted.org pypi.python.org"
+
+# Install poetry + export plugin for lock file conversion
+RUN pip install --no-cache-dir poetry poetry-plugin-export
 
 WORKDIR /app
 
 # Copy dependency files first for layer caching
 COPY pyproject.toml poetry.lock ./
 
-# Install dependencies only (no root project, no dev deps)
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --without dev --no-root
-
-# Upgrade certifi to latest CA bundle
-RUN pip install --no-cache-dir --upgrade certifi
+# Export lock file to requirements.txt and install via pip
+RUN poetry export --without dev -f requirements.txt -o requirements.txt \
+    && pip install --no-cache-dir -r requirements.txt \
+    && rm requirements.txt
 
 # Copy source code, config, and Alembic migrations
 COPY src/ ./src/
@@ -23,11 +26,11 @@ COPY alembic/ ./alembic/
 COPY .chainlit/ ./.chainlit/
 COPY public/ ./public/
 
-# Install root project
-RUN poetry install --no-interaction --no-ansi --without dev
+# Install root project (no deps — already installed above)
+RUN pip install --no-cache-dir --no-deps .
 
-# Set environment variable to use system CA certificates
-ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+# Clear build-time trusted hosts for runtime
+ENV PIP_TRUSTED_HOST=""
 
 # Expose port
 EXPOSE 8000

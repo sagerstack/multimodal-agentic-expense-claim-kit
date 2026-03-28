@@ -23,7 +23,7 @@ mask_user_env = false
 allow_origins = ["*"]
 
 [features]
-# Process and display HTML in messages. This can be a security risk (see https://stackoverflow.com/questions/19603097/why-is-it-dangerous-to-render-user-generated-html-or-javascript)
+# Process and display HTML in messages. Disabled — thinking panel uses cl.Step, not HTML.
 unsafe_allow_html = false
 
 # Process and display mathematical expressions. This can clash with "$" characters in messages.
@@ -120,8 +120,8 @@ confirm_new_chat = true
 # description = ""
 
 # Chain of Thought (CoT) display mode. Can be "hidden", "tool_call" or "full".
-# tool_call shows Steps collapsed, full shows everything expanded
-cot = "full"
+# "tool_call" renders LangGraph tool calls as collapsible Steps in the UI
+cot = "tool_call"
 
 # Specify a CSS file that can be used to customize the user interface.
 # The CSS file can be served from the public directory or via an external link.

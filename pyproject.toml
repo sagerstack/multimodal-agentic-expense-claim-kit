@@ -22,6 +22,8 @@ mcp = ">=1.8"
 httpx = ">=0.27"
 numpy = ">=1.26"
 python-json-logger = "^4.0.0"
+langchain-openrouter = "^0.2.0"
+openrouter = "0.7.11"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0"

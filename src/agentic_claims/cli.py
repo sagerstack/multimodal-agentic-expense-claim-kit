@@ -69,9 +69,11 @@ class ConversationRunner:
         Args:
             envFile: Path to environment file for Settings
         """
-        # Import here to allow envFile override before Settings loads
+        # Load env file into os.environ so all getSettings() calls use these values
+        # (env vars take priority over env files in pydantic-settings)
         import os
-        os.environ["ENV_FILE"] = envFile
+        from dotenv import load_dotenv
+        load_dotenv(envFile, override=True)
         from agentic_claims.core.config import Settings
         self._settings = Settings(_env_file=envFile)
 

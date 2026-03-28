@@ -42,7 +42,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U agentic -d agentic_claims"]
       interval: 5s
       timeout: 3s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -54,8 +55,8 @@ services:
       test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/localhost/6333' || exit 1"]
       interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 30s
 
   mcp-rag:
     build: ./mcp_servers/rag
@@ -142,7 +143,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:80"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
 volumes:
   postgres_data:

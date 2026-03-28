@@ -91,10 +91,7 @@ waitForHealthy() {
                 return 0
                 ;;
             unhealthy)
-                echo -e "\n${RED}  ✗ $service is unhealthy${NC}"
-                echo -e "${YELLOW}Last 20 log lines:${NC}"
-                docker compose logs --tail=20 $service
-                return 1
+                echo -ne "\r  ⏳ $service: unhealthy, retrying (${elapsed}s elapsed)...          "
                 ;;
             starting)
                 echo -ne "\r  ⏳ $service: starting (${elapsed}s elapsed)...          "

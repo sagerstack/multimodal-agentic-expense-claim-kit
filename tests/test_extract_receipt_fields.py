@@ -91,8 +91,8 @@ async def testVlmCalledWithCorrectPrompt(sharpImageB64, mockVlmResponse):
     mockVlm = AsyncMock()
     mockVlm.ainvoke.return_value.content = json.dumps(mockVlmResponse)
 
-    with patch("agentic_claims.agents.intake.tools.extractReceiptFields.ChatOpenAI") as MockChatOpenAI:
-        MockChatOpenAI.return_value = mockVlm
+    with patch("agentic_claims.agents.intake.tools.extractReceiptFields.ChatOpenRouter") as MockChatOpenRouter:
+        MockChatOpenRouter.return_value = mockVlm
 
         result = await extractReceiptFields.ainvoke({"claimId": TEST_CLAIM_ID})
 
@@ -118,8 +118,8 @@ async def testExtractedFieldsStructure(sharpImageB64, mockVlmResponse):
     mockVlm = AsyncMock()
     mockVlm.ainvoke.return_value.content = json.dumps(mockVlmResponse)
 
-    with patch("agentic_claims.agents.intake.tools.extractReceiptFields.ChatOpenAI") as MockChatOpenAI:
-        MockChatOpenAI.return_value = mockVlm
+    with patch("agentic_claims.agents.intake.tools.extractReceiptFields.ChatOpenRouter") as MockChatOpenRouter:
+        MockChatOpenRouter.return_value = mockVlm
 
         result = await extractReceiptFields.ainvoke({"claimId": TEST_CLAIM_ID})
 
@@ -149,8 +149,8 @@ async def testInvalidVlmResponseHandled(sharpImageB64):
     mockVlm = AsyncMock()
     mockVlm.ainvoke.return_value.content = "Invalid JSON response"
 
-    with patch("agentic_claims.agents.intake.tools.extractReceiptFields.ChatOpenAI") as MockChatOpenAI:
-        MockChatOpenAI.return_value = mockVlm
+    with patch("agentic_claims.agents.intake.tools.extractReceiptFields.ChatOpenRouter") as MockChatOpenRouter:
+        MockChatOpenRouter.return_value = mockVlm
 
         result = await extractReceiptFields.ainvoke({"claimId": TEST_CLAIM_ID})
 

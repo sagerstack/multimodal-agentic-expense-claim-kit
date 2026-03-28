@@ -34,6 +34,7 @@ def convertCurrency(
             f"{FRANKFURTER_BASE_URL}/latest",
             params={"from": fromCurrency.upper(), "to": toCurrency.upper()},
             timeout=10.0,
+            verify=False,
         )
         response.raise_for_status()
 
@@ -71,7 +72,7 @@ def getSupportedCurrencies() -> list[str]:
         List of currency codes
     """
     try:
-        response = httpx.get(f"{FRANKFURTER_BASE_URL}/currencies", timeout=10.0)
+        response = httpx.get(f"{FRANKFURTER_BASE_URL}/currencies", timeout=10.0, verify=False)
         response.raise_for_status()
 
         currencies = response.json()
@@ -84,7 +85,7 @@ def getSupportedCurrencies() -> list[str]:
 def getFrankfurterHealth() -> str:
     """Check Frankfurter API health."""
     try:
-        response = httpx.get(f"{FRANKFURTER_BASE_URL}/latest", timeout=5.0)
+        response = httpx.get(f"{FRANKFURTER_BASE_URL}/latest", timeout=5.0, verify=False)
         response.raise_for_status()
         return "Connected to Frankfurter API"
     except Exception as e:

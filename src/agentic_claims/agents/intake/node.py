@@ -4,7 +4,8 @@ import json
 import logging
 
 import httpx
-from langchain_openai import ChatOpenAI
+from langchain_core.runnables import RunnableConfig
+from langchain_openrouter import ChatOpenRouter
 from langgraph.prebuilt import create_react_agent
 
 from agentic_claims.agents.intake.prompts.agentSystemPrompt import INTAKE_AGENT_SYSTEM_PROMPT
@@ -22,8 +23,8 @@ logger = logging.getLogger(__name__)
 def getIntakeAgent(useFallback: bool = False):
     """Create and return the compiled ReAct agent for intake processing.
 
-    The agent uses ChatOpenAI with OpenRouter as the LLM and has access to
-    4 domain tools for the intake workflow.
+    The agent uses ChatOpenRouter as the LLM and has access to
+    5 domain tools for the intake workflow.
 
     Args:
         useFallback: If True, use fallback LLM model instead of primary
@@ -36,16 +37,18 @@ def getIntakeAgent(useFallback: bool = False):
     # Select model based on fallback flag
     modelName = settings.openrouter_fallback_model_llm if useFallback else settings.openrouter_model_llm
 
-    # Instantiate ChatOpenAI with OpenRouter configuration
-    llm = ChatOpenAI(
+    # Instantiate ChatOpenRouter for reasoning token capture
+    llm = ChatOpenRouter(
         model=modelName,
-        base_url=settings.openrouter_base_url,
-        api_key=settings.openrouter_api_key,
+        openrouter_api_key=settings.openrouter_api_key,
         temperature=settings.openrouter_llm_temperature,
         max_retries=settings.openrouter_max_retries,
         max_tokens=settings.openrouter_llm_max_tokens,
-        http_async_client=httpx.AsyncClient(verify=False),
     )
+
+    # Bypass SSL verification (Zscaler corporate proxy workaround)
+    llm.client.sdk_configuration.client = httpx.Client(verify=False, follow_redirects=True)
+    llm.client.sdk_configuration.async_client = httpx.AsyncClient(verify=False, follow_redirects=True)
 
     # Collect intake tools
     tools = [
@@ -66,14 +69,19 @@ def getIntakeAgent(useFallback: bool = False):
     return agent
 
 
-async def intakeNode(state: ClaimState) -> dict:
+async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
     """Process claim intake through ReAct agent loop.
 
     This node wraps the ReAct agent and manages state updates. The agent
     handles the full conversational loop internally (tool calling, reasoning, etc.).
 
+    Config is passed through from the outer graph so that streaming events
+    (on_chat_model_stream, on_tool_start, etc.) propagate to the outer
+    graph's astream_events consumer in app.py.
+
     Args:
         state: Current claim state with messages
+        config: RunnableConfig from outer graph (carries event callbacks)
 
     Returns:
         Partial state update with new messages and optional status/fields
@@ -87,8 +95,9 @@ async def intakeNode(state: ClaimState) -> dict:
     agentInput = {"messages": state["messages"]}
 
     # Invoke agent with 402 fallback retry
+    # Pass config through so streaming events propagate to outer graph
     try:
-        result = await agent.ainvoke(agentInput)
+        result = await agent.ainvoke(agentInput, config=config)
     except Exception as e:
         errorStr = str(e)
         # Check for 402 payment/quota errors
@@ -103,7 +112,7 @@ async def intakeNode(state: ClaimState) -> dict:
             )
             # Retry with fallback agent
             fallbackAgent = getIntakeAgent(useFallback=True)
-            result = await fallbackAgent.ainvoke(agentInput)
+            result = await fallbackAgent.ainvoke(agentInput, config=config)
         else:
             raise
 

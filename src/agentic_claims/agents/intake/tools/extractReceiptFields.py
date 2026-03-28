@@ -4,9 +4,10 @@ import base64
 import json
 import logging
 
+import httpx
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
+from langchain_openrouter import ChatOpenRouter
 
 from agentic_claims.agents.intake.prompts.vlmExtractionPrompt import VLM_EXTRACTION_PROMPT
 from agentic_claims.agents.intake.utils.imageQuality import checkImageQuality
@@ -54,13 +55,18 @@ async def extractReceiptFields(claimId: str) -> dict:
                 "error": f"Image quality check failed: {qualityCheck['reason']}. Please upload a clearer, higher-resolution image."
             }
 
-        # Step 3: Instantiate VLM using existing Settings fields
-        vlm = ChatOpenAI(
+        # Step 3: Instantiate VLM using ChatOpenRouter
+        vlm = ChatOpenRouter(
             model=settings.openrouter_model_vlm,
-            base_url=settings.openrouter_base_url,
-            api_key=settings.openrouter_api_key,
+            openrouter_api_key=settings.openrouter_api_key,
             temperature=0.0,
             max_tokens=settings.openrouter_vlm_max_tokens,
+        )
+
+        # Bypass SSL verification (Zscaler corporate proxy workaround)
+        vlm.client.sdk_configuration.client = httpx.Client(verify=False, follow_redirects=True)
+        vlm.client.sdk_configuration.async_client = httpx.AsyncClient(
+            verify=False, follow_redirects=True
         )
 
         # Step 4: Build multimodal message with prompt + image (sent directly to VLM, not through LLM)
@@ -90,20 +96,35 @@ async def extractReceiptFields(claimId: str) -> dict:
                     },
                 )
                 # Retry with fallback VLM model
-                fallbackVlm = ChatOpenAI(
+                fallbackVlm = ChatOpenRouter(
                     model=settings.openrouter_fallback_model_vlm,
-                    base_url=settings.openrouter_base_url,
-                    api_key=settings.openrouter_api_key,
+                    openrouter_api_key=settings.openrouter_api_key,
                     temperature=0.0,
                     max_tokens=settings.openrouter_vlm_max_tokens,
+                )
+                # Bypass SSL verification (Zscaler corporate proxy workaround)
+                fallbackVlm.client.sdk_configuration.client = httpx.Client(
+                    verify=False, follow_redirects=True
+                )
+                fallbackVlm.client.sdk_configuration.async_client = httpx.AsyncClient(
+                    verify=False, follow_redirects=True
                 )
                 response = await fallbackVlm.ainvoke([message])
             else:
                 raise
 
-        # Step 6: Parse JSON response
+        # Step 6: Parse JSON response (strip markdown code block wrapping if present)
+        rawContent = response.content.strip()
+        if rawContent.startswith("```"):
+            # Remove opening ```json or ``` and closing ```
+            lines = rawContent.split("\n")
+            lines = lines[1:]  # Remove opening ```json
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]  # Remove closing ```
+            rawContent = "\n".join(lines)
+
         try:
-            result = json.loads(response.content)
+            result = json.loads(rawContent)
             return result
         except json.JSONDecodeError as e:
             return {"error": f"Failed to parse VLM response as JSON: {str(e)}"}
