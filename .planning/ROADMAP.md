@@ -18,6 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2.2: Intake Agent Gap Closure** - Fix submitClaim blocker, structured agent output, prompt improvements, startup script, re-test blocked UAT cases
 - [x] **Phase 2.3: Intake Agent UAT Fix** - Fix submitClaim field mismatch, model fallback on 402, streaming CoT, prompt fixes, Seq log noise
 - [x] **Phase 2.4: OpenRouter Reasoning Tokens in CoT Thinking Panel** - Enable reasoning parameter, capture reasoning_details, display model thinking in collapsible panel
+- [ ] **Phase 2.5: Reasoning Panel + Model Upgrade** - QwQ-32B model switch, Type A+B reasoning in thinking panel, progressive streaming, schema-driven intake prompt, getClaimSchema tool
 - [ ] **Phase 3: Compliance + Fraud Agents** - Post-submission parallel policy audit and duplicate detection
 - [ ] **Phase 4: Advisor Agent + Reviewer Flow** - Decision synthesis, approval routing, reviewer UI, email notifications
 - [ ] **Phase 5: Evaluation + Demo** - Test dataset, evaluation framework, baseline comparisons, demo polish
@@ -140,6 +141,30 @@ Plans:
 - [x] 02.4-03-PLAN.md — Robust finalResponse detection (pendingToolCalls counter), thinking panel metrics summary
 - [x] 02.4-04-PLAN.md — E2E test update for DB-generated claim numbers, browser verification, bug resolution docs
 
+### Phase 2.5: Reasoning Panel + Model Upgrade (INSERTED)
+**Goal**: Thinking panel shows LLM reasoning (Type A agent text + Type B QwQ reasoning tokens) interleaved with tool calls, streams progressively, and the intake agent uses QwQ-32B with a schema-driven field mapping workflow that converts all monetary values and captures justification/remarks
+**Depends on**: Phase 2.4
+**Requirements**: CHAT-03, ORCH-02, EXTR-01, EXTR-06
+**Success Criteria** (what must be TRUE):
+  1. Thinking panel shows LLM reasoning text before each tool call (Type A) and QwQ-32B reasoning tokens (Type B) when available, interleaved chronologically with tool call summaries
+  2. Thinking panel streams progressively — "Thinking..." appears immediately, reasoning and tool entries stream in real-time as the agent works
+  3. Primary LLM is QwQ-32B via OpenRouter, with graceful fallback that degrades to Type A reasoning only if fallback model lacks reasoning tokens
+  4. Thinking panel CSS renders correctly in both light and dark mode with proper contrast
+  5. Agent calls `getClaimSchema` first to discover required/optional fields, then maps extracted receipt fields to schema dynamically
+  6. ALL monetary values (total, tax, etc.) are converted to SGD via `convertCurrency` tool calls — no manual calculations
+  7. User justification (for policy violations) and remarks (from upload description) appear in the finalized claim summary and are included in intakeFindings
+  8. System prompt aligns with reasoning-first architecture: agent acknowledges immediately, reasons substantively before tool calls, presents gaps for user confirmation
+  9. Deferred Phase 2.4 UAT tests pass: claim number after submission only, duplicate handling, E2E test
+**Execution Gate**: Each plan MUST be verified in-browser using Chrome automation (claude-in-chrome) before completion. The executor launches the app, uploads a receipt, and confirms each objective works as specified. See 02.5-CONTEXT.md for verification protocol. UAT with user is conducted separately after all plans pass self-verification.
+**Plans**: 5 plans
+
+Plans:
+- [ ] 02.5-01-PLAN.md — QwQ-32B model config, temperature setting, getClaimSchema tool (MCP + LangChain), agent wiring
+- [ ] 02.5-02-PLAN.md — System prompt v2: schema-driven workflow, all-value currency conversion, justification/remarks, acknowledgment pattern
+- [ ] 02.5-03-PLAN.md — Progressive streaming architecture: Type A+B reasoning capture, interleaved thinking panel, "Thinking..." placeholder
+- [ ] 02.5-04-PLAN.md — CSS reasoning block styles (Type A gray, Type B purple) for light and dark mode
+- [ ] 02.5-05-PLAN.md — E2E test update + comprehensive browser verification (all 9 objectives)
+
 ### Phase 3: Compliance + Fraud Agents
 **Goal**: After a claim is submitted, Compliance and Fraud agents execute in parallel -- Compliance audits against org-level policies with cited clauses, Fraud detects duplicate receipts against historical data -- and their findings are stored in ClaimState for the Advisor
 **Depends on**: Phase 2.1
@@ -189,7 +214,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 2.1 -> 2.2 -> 2.3 -> 2.4 -> 3 -> 4 -> 5
+Phases execute in numeric order: 1 -> 2 -> 2.1 -> 2.2 -> 2.3 -> 2.4 -> 2.5 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
@@ -199,6 +224,7 @@ Phases execute in numeric order: 1 -> 2 -> 2.1 -> 2.2 -> 2.3 -> 2.4 -> 3 -> 4 ->
 | 2.2. Intake Agent Gap Closure | 5/5 | Complete | 2026-03-26 |
 | 2.3. Intake Agent UAT Fix | 5/5 | Complete | 2026-03-26 |
 | 2.4. OpenRouter Reasoning in CoT | 4/4 | Complete | 2026-03-28 |
+| 2.5. Reasoning Panel + Model Upgrade | 0/5 | Not started | - |
 | 3. Compliance + Fraud Agents | 0/2 | Not started | - |
 | 4. Advisor Agent + Reviewer Flow | 0/3 | Not started | - |
 | 5. Evaluation + Demo | 0/2 | Not started | - |
