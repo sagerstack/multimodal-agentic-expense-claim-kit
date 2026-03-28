@@ -1,13 +1,15 @@
 """Chainlit app entry point for Agentic Expense Claims.
 
-Architecture: Thinking-first streaming with parent wrapper Steps.
-- All intermediate LLM reasoning + tool calls render inside nested Thinking Steps
-- Only the final LLM response (no tool_calls) replays as a chat Message
-- Parent wrapper Step keeps the busy indicator active throughout processing
+Architecture: Buffer-first with HTML thinking panels.
+- All streaming events are buffered in memory first (Chainlit shows loading)
+- Thinking panel rendered as HTML <details> inside the response Message
+- Guarantees correct ordering: thinking panel above, response below
+- No thinking panel for direct responses (no tool usage)
 """
 
 import asyncio
 import base64
+import json
 import logging
 import time
 import uuid
@@ -29,8 +31,39 @@ def _formatElapsed(elapsed: float) -> str:
     if elapsed >= 60:
         minutes = int(elapsed // 60)
         seconds = int(elapsed % 60)
-        return f"Thought for {minutes} min {seconds} seconds"
-    return f"Thought for {int(elapsed)} seconds"
+        return f"{minutes}m {seconds}s"
+    seconds = int(elapsed)
+    if seconds < 1:
+        return "<1s"
+    return f"{seconds}s"
+
+
+def _buildThinkingHtml(toolCalls: list, totalElapsed: float) -> str:
+    """Build an HTML <details> block for the thinking panel."""
+    elapsed = _formatElapsed(totalElapsed)
+    toolCount = len(toolCalls)
+    toolLabel = "tool" if toolCount == 1 else "tools"
+
+    toolLines = []
+    for tc in toolCalls:
+        summary = _summarizeToolOutput(tc["name"], tc["output"])
+        tcElapsed = _formatElapsed(tc["elapsed"])
+        toolLines.append(
+            f'<div class="thinking-tool">'
+            f'<b>{tc["name"]}</b> '
+            f'<span class="thinking-elapsed">({tcElapsed})</span>'
+            f'<div class="thinking-summary">{summary}</div>'
+            f'</div>'
+        )
+
+    toolsHtml = "\n".join(toolLines)
+
+    return (
+        f'<details class="thinking-panel">\n'
+        f'<summary>Thought for {elapsed} · {toolCount} {toolLabel}</summary>\n'
+        f'{toolsHtml}\n'
+        f'</details>\n\n'
+    )
 
 
 @cl.on_chat_start
@@ -61,15 +94,13 @@ async def onChatStart():
 
 @cl.on_message
 async def onMessage(message: cl.Message):
-    """Handle incoming messages with thinking-first streaming architecture.
+    """Handle incoming messages with buffer-first streaming architecture.
 
-    Flow per invocation:
-    1. Open a parent "Processing" Step (keeps spinner alive)
-    2. For each ReAct cycle: buffer LLM tokens, classify on on_chat_model_end
-       - If tool_calls present: intermediate thinking -> nested Thinking Step
-       - If no tool_calls: final response -> buffer for replay
-    3. Close parent Step
-    4. Replay final response via stream_token() for typing effect
+    Flow:
+    1. Buffer ALL streaming events in memory (Chainlit shows loading indicator)
+    2. If tool calls occurred: render thinking Step(s) with tool summaries
+    3. Replay final response as a streamed chat Message
+    4. Skip thinking panel entirely for direct responses (no tools)
     """
     graph = cl.user_session.get("graph")
     threadId = cl.user_session.get("thread_id")
@@ -129,22 +160,18 @@ async def onMessage(message: cl.Message):
         "messages": [humanMsg],
     }
 
-    # Streaming state
+    # ── Phase 1: Buffer ALL streaming events ──
+    # Chainlit shows its built-in loading indicator while we process
     tokenBuffer = ""
-    thinkingLog = []
+    toolCalls = []
     finalResponse = None
     currentToolName = None
-    currentToolStep = None
-    toolStartTime = None
+    currentToolStartTime = None
+    pendingToolCalls = 0
     eventCount = 0
     turnStartTime = time.time()
 
     try:
-        # Parent wrapper Step keeps spinner alive for the entire turn
-        parentStep = cl.Step(name="Processing", type="tool")
-        parentStep.input = "Processing your request"
-        await parentStep.send()
-
         async for event in graph.astream_events(
             graphInput,
             config={"configurable": {"thread_id": threadId}},
@@ -167,91 +194,73 @@ async def onMessage(message: cl.Message):
                 )
 
                 if hasToolCalls:
-                    # Intermediate thinking — capture narration in thinking log
-                    if tokenBuffer.strip():
-                        thinkingLog.append(f"**Reasoning:** {tokenBuffer.strip()}")
+                    # About to call tools — discard narration tokens
                     tokenBuffer = ""
                 else:
-                    # Final response — store for replay after parent Step closes
+                    # Candidate final response — overwrite (last one wins)
                     finalResponse = tokenBuffer
                     tokenBuffer = ""
 
                 logger.info(
                     f"LLM generation ended - intermediate: {hasToolCalls}, "
+                    f"pending_tools: {pendingToolCalls}, "
                     f"buffer_length: {len(finalResponse or tokenBuffer)}"
                 )
 
             elif eventKind == "on_tool_start":
-                toolName = event.get("name", "unknown")
-                currentToolName = toolName
-                toolStartTime = time.time()
-
-                # Open a nested Thinking Step inside the parent
-                currentToolStep = cl.Step(
-                    name="Thinking",
-                    type="tool",
-                    parent_id=parentStep.id,
-                    show_input=True,
+                currentToolName = event.get("name", "unknown")
+                currentToolStartTime = time.time()
+                pendingToolCalls += 1
+                logger.info(
+                    f"Tool call started - name: {currentToolName}, "
+                    f"pending: {pendingToolCalls}"
                 )
-                currentToolStep.input = f"Calling {toolName}"
-                await currentToolStep.send()
-
-                thinkingLog.append(f"Calling {toolName}...")
-                parentStep.output = "\n\n".join(thinkingLog)
-                await parentStep.update()
-
-                logger.info(f"Tool call started - name: {toolName}")
 
             elif eventKind == "on_tool_end":
                 toolName = event.get("name", "unknown")
                 toolOutput = event.get("data", {}).get("output", "")
+                elapsed = (
+                    time.time() - currentToolStartTime
+                    if currentToolStartTime
+                    else 0
+                )
 
-                if currentToolStep and toolStartTime:
-                    elapsed = time.time() - toolStartTime
-                    currentToolStep.name = _formatElapsed(elapsed)
+                toolCalls.append({
+                    "name": toolName,
+                    "elapsed": elapsed,
+                    "output": toolOutput,
+                })
 
-                    # Build tool result summary for the Thinking panel
-                    outputSummary = _summarizeToolOutput(toolName, toolOutput)
-                    currentToolStep.output = outputSummary
-
-                    await currentToolStep.update()
-                    logger.info(f"Tool call completed - name: {toolName}, elapsed: {elapsed:.2f}s")
-
-                # Update thinking log with completion
-                if thinkingLog and thinkingLog[-1].startswith(f"Calling {toolName}"):
-                    thinkingLog[-1] = f"Completed {toolName}"
-                else:
-                    thinkingLog.append(f"Completed {toolName}")
-
-                parentStep.output = "\n\n".join(thinkingLog)
-                await parentStep.update()
-
-                currentToolStep = None
+                pendingToolCalls = max(0, pendingToolCalls - 1)
+                logger.info(
+                    f"Tool call completed - name: {toolName}, "
+                    f"elapsed: {elapsed:.2f}s, pending: {pendingToolCalls}"
+                )
                 currentToolName = None
-                toolStartTime = None
-
-        # Close the parent wrapper Step
-        totalElapsed = time.time() - turnStartTime
-        parentStep.name = _formatElapsed(totalElapsed)
-        parentStep.output = "\n\n".join(thinkingLog) if thinkingLog else "Completed"
-        await parentStep.update()
+                currentToolStartTime = None
 
     except Exception as e:
         logger.error(f"Error during streaming: {e}", exc_info=True)
-        # Close parent Step on error
-        parentStep.name = "Error during processing"
-        parentStep.output = str(e)
-        await parentStep.update()
         await cl.Message(
             content="I ran into an issue processing your request. Please try again."
         ).send()
         return
 
-    logger.info(f"Streaming completed - events_processed: {eventCount}")
+    totalElapsed = time.time() - turnStartTime
+    logger.info(
+        f"Streaming completed - events: {eventCount}, tools: {len(toolCalls)}"
+    )
 
-    # Replay final response as a streamed chat message
+    # ── Phase 2: Render response (with thinking panel if tools were called) ──
     if finalResponse and finalResponse.strip():
-        responseMsg = cl.Message(content="")
+        if toolCalls:
+            # Single message: HTML thinking panel + streamed response below
+            thinkingHtml = _buildThinkingHtml(toolCalls, totalElapsed)
+            responseMsg = cl.Message(content=thinkingHtml)
+        else:
+            # Direct response — no thinking panel
+            responseMsg = cl.Message(content="")
+
         await responseMsg.send()
 
         for token in finalResponse:
@@ -261,41 +270,90 @@ async def onMessage(message: cl.Message):
         await responseMsg.update()
         logger.info(f"Final response replayed - length: {len(finalResponse)}")
 
-    elif eventCount == 0:
-        # Fallback: no streaming events captured (nested graph issue)
-        logger.warning("No streaming events captured - using fallback message extraction")
+    else:
+        # Fallback: events captured but no final text response
+        # This happens when: tool returns error and LLM produces no text,
+        # nested graph doesn't emit expected events, or interrupt occurred
+        logger.warning(
+            f"No final response to render - events: {eventCount}, "
+            f"tools: {len(toolCalls)}, extracting from state"
+        )
         try:
             finalState = await graph.aget_state(
                 config={"configurable": {"thread_id": threadId}}
             )
+
+            # Check for interrupt (askHuman)
+            interruptTasks = finalState.tasks if hasattr(finalState, "tasks") else []
+            hasInterrupt = any(
+                hasattr(t, "interrupts") and t.interrupts for t in interruptTasks
+            )
+
+            if hasInterrupt:
+                # Extract interrupt value (the question to ask the user)
+                for task in interruptTasks:
+                    if hasattr(task, "interrupts") and task.interrupts:
+                        interruptValue = task.interrupts[0].value
+                        content = ""
+                        if toolCalls:
+                            content = _buildThinkingHtml(toolCalls, totalElapsed)
+                        content += str(interruptValue)
+                        await cl.Message(content=content).send()
+                        return
+
+            # No interrupt — extract last AI message from state
             messages = finalState.values.get("messages", [])
-            if messages:
-                lastMsg = messages[-1]
+            fallbackContent = None
+            for msg in reversed(messages):
                 if (
-                    hasattr(lastMsg, "type")
-                    and lastMsg.type == "ai"
-                    and hasattr(lastMsg, "content")
-                    and lastMsg.content
+                    hasattr(msg, "type")
+                    and msg.type == "ai"
+                    and hasattr(msg, "content")
+                    and msg.content
                 ):
-                    await cl.Message(content=lastMsg.content).send()
+                    fallbackContent = msg.content
+                    break
+
+            if fallbackContent:
+                content = ""
+                if toolCalls:
+                    content = _buildThinkingHtml(toolCalls, totalElapsed)
+                content += fallbackContent
+                responseMsg = cl.Message(content=content)
+                await responseMsg.send()
+            elif toolCalls:
+                # Show thinking panel even without text (so user sees tool errors)
+                thinkingHtml = _buildThinkingHtml(toolCalls, totalElapsed)
+                await cl.Message(
+                    content=thinkingHtml
+                    + "I encountered an issue. Please try again."
+                ).send()
+
         except Exception as e:
-            logger.error(f"Error in fallback message extraction: {e}", exc_info=True)
+            logger.error(
+                f"Error in fallback message extraction: {e}", exc_info=True
+            )
 
 
 def _summarizeToolOutput(toolName: str, toolOutput) -> str:
     """Create a human-readable summary of a tool's output for the Thinking panel."""
     try:
         if isinstance(toolOutput, str):
-            import json
             data = json.loads(toolOutput)
         elif hasattr(toolOutput, "content"):
-            import json
-            data = json.loads(toolOutput.content) if isinstance(toolOutput.content, str) else toolOutput.content
+            data = (
+                json.loads(toolOutput.content)
+                if isinstance(toolOutput.content, str)
+                else toolOutput.content
+            )
         else:
             data = toolOutput
 
         if not isinstance(data, dict):
             return f"Completed {toolName}"
+
+        if "error" in data:
+            return f"Error: {data['error']}"
 
         if toolName == "extractReceiptFields":
             fields = data.get("fields", {})
