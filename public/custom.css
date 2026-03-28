@@ -46,6 +46,13 @@
     margin: 8px 0;
     white-space: pre-wrap;
     color: rgba(255, 255, 255, 0.4);
+    border-left: 2px solid rgba(128, 128, 128, 0.2);
+    padding-left: 10px;
+  }
+
+  .thinking-reasoning-b {
+    border-left: 2px solid rgba(139, 92, 246, 0.3);  /* Purple accent for model reasoning */
+    padding-left: 10px;
   }
 }
 
@@ -94,6 +101,13 @@
     margin: 8px 0;
     white-space: pre-wrap;
     color: rgba(0, 0, 0, 0.5);
+    border-left: 2px solid rgba(128, 128, 128, 0.2);
+    padding-left: 10px;
+  }
+
+  .thinking-reasoning-b {
+    border-left: 2px solid rgba(139, 92, 246, 0.4);  /* Purple accent for model reasoning */
+    padding-left: 10px;
   }
 }
 
@@ -118,4 +132,15 @@
   padding: 6px 0 6px 12px;
   border-left: 2px solid rgba(128, 128, 128, 0.3);  /* Gray works in both modes */
   margin: 8px 0;
+}
+
+.thinking-reasoning-b::before {
+  content: "Model reasoning";
+  display: block;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+  opacity: 0.5;
 }
