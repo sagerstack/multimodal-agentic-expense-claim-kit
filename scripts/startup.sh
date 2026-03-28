@@ -53,27 +53,27 @@ else
 fi
 
 # Step 1: Stop existing containers
-echo -e "\n${YELLOW}[1/6] Stopping existing containers...${NC}"
+echo -e "\n${YELLOW}[1/7] Stopping existing containers...${NC}"
 docker compose down
 echo -e "${GREEN}✓ Containers stopped${NC}"
 
 # Step 2: Handle reset mode
 if [ "$RESET_MODE" = true ]; then
-    echo -e "\n${YELLOW}[2/6] Resetting volumes...${NC}"
+    echo -e "\n${YELLOW}[2/7] Resetting volumes...${NC}"
     docker compose down -v
     echo -e "${GREEN}✓ Volumes wiped (clean restart)${NC}"
 else
-    echo -e "\n${YELLOW}[2/6] Keeping existing volumes${NC}"
+    echo -e "\n${YELLOW}[2/7] Keeping existing volumes${NC}"
     echo -e "${GREEN}✓ Volumes preserved${NC}"
 fi
 
 # Step 3: Start Docker Compose
-echo -e "\n${YELLOW}[3/6] Starting Docker Compose services...${NC}"
+echo -e "\n${YELLOW}[3/7] Starting Docker Compose services...${NC}"
 docker compose up -d --build
 echo -e "${GREEN}✓ Services starting${NC}"
 
 # Step 4: Wait for health checks
-echo -e "\n${YELLOW}[4/6] Waiting for services to be healthy (timeout: ${TIMEOUT}s)...${NC}"
+echo -e "\n${YELLOW}[4/7] Waiting for services to be healthy (timeout: ${TIMEOUT}s)...${NC}"
 
 waitForHealthy() {
     local service=$1
@@ -126,7 +126,7 @@ for service in postgres qdrant mcp-rag mcp-db mcp-currency mcp-email seq app; do
 done
 
 # Step 5: Run Alembic migrations with retry logic
-echo -e "\n${YELLOW}[5/6] Running database migrations...${NC}"
+echo -e "\n${YELLOW}[5/7] Running database migrations...${NC}"
 
 MIGRATION_SUCCESS=false
 for attempt in {1..3}; do
@@ -149,9 +149,27 @@ else
     exit 1
 fi
 
-# Step 6: Ingest policies (always run - script is idempotent)
+# Step 6: Truncate tables in reset mode (clean dev state)
+if [ "$RESET_MODE" = true ]; then
+    echo -e "\n${YELLOW}[6/7] Truncating claims, receipts, audit_log tables for clean dev state...${NC}"
+    docker compose exec -T postgres psql -U agentic -d agentic_claims -c "
+        TRUNCATE claims, receipts, audit_log CASCADE;
+        -- Reset claim number sequence if it exists (created by migration 004)
+        DO \$\$ BEGIN
+            PERFORM setval('claim_number_seq', 1, false);
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END \$\$;
+    " 2>/dev/null
+    echo -e "${GREEN}✓ Tables truncated${NC}"
+else
+    echo -e "\n${YELLOW}[6/7] Keeping existing claim data${NC}"
+    echo -e "${GREEN}✓ Data preserved${NC}"
+fi
+
+# Step 7: Ingest policies (always run - script is idempotent)
 # Run via mcp-rag container (has sentence-transformers + qdrant-client deps)
-echo -e "\n${YELLOW}[6/6] Ingesting policies...${NC}"
+echo -e "\n${YELLOW}[7/7] Ingesting policies...${NC}"
 docker compose exec -T -e POLICY_DIR=/app/policy mcp-rag python /app/scripts/ingest_policies.py
 echo -e "${GREEN}✓ Policies ingested${NC}"
 
