@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 2.4 of 8 (CoT Thinking Panel + Bug Fixes)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-03-28 -- Completed 02.4-03-PLAN.md (BUG-011 fix + thinking panel metrics)
+Last activity: 2026-03-28 -- Completed 02.4-02-PLAN.md (BUG-008, BUG-009 fixed: DB-generated claim numbers with idempotency)
 
-Progress: [███████████████.] 84% (16/19 plans complete)
+Progress: [████████████████] 89% (17/19 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16
+- Total plans completed: 17
 - Average duration: 9 min
-- Total execution time: 2.64 hours
+- Total execution time: 2.69 hours
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [███████████████.] 84% (16/19 plans comp
 | 2.1. Intake Agent | 3 | 21 min | 7 min |
 | 2.2. Intake Agent Gap Closure | 5 | 85 min | 17 min |
 | 2.3. Intake Agent UAT Fix | 5 | 10 min | 2 min |
-| 2.4. CoT Thinking Panel + Bug Fixes | 1 | 1 min | 1 min |
+| 2.4. CoT Thinking Panel + Bug Fixes | 2 | 4 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 2min, 2min, 4min, 1min
-- Trend: Bug fixes consistently fast (1-2min avg)
+- Last 5 plans: 2min, 2min, 4min, 1min, 3min
+- Trend: Bug fixes consistently fast (2min avg)
 
 *Updated after each plan completion*
 
@@ -145,11 +145,13 @@ None yet.
 - 02.3-04 ISSUE D RESOLVED: Real-time token streaming eliminates batch delay
 - 02.3-04 ISSUE E RESOLVED: Natural message/Step interleaving creates conversational rhythm
 - 02.4-03 BUG-011 RESOLVED: finalResponse detection now robust via pendingToolCalls tracking (intermediate generations no longer cause fragility)
+- 02.4-02 BUG-008 RESOLVED: Duplicate submissions prevented via ON CONFLICT idempotent pattern with natural key
+- 02.4-02 BUG-009 RESOLVED: Claim number collisions eliminated via PostgreSQL sequence (claim_number_seq)
 
 ## Session Continuity
 
-Last session: 2026-03-28 08:41:42Z
-Stopped at: Completed 02.4-03-PLAN.md
+Last session: 2026-03-28
+Stopped at: Completed 02.4-02-PLAN.md (BUG-008, BUG-009 fixed)
 Resume file: None
 
 ### Roadmap Evolution
