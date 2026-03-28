@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Phase 2.3: Intake Agent UAT Fix
+**Current focus:** Phase 2.4: CoT Thinking Panel + Bug Fixes
 
 ## Current Position
 
-Phase: 2.3 of 8 (Intake Agent UAT Fix)
-Plan: 5 of 5 in current phase
-Status: Phase complete
-Last activity: 2026-03-26 -- Completed 02.3-05-PLAN.md (CLI testing infrastructure)
+Phase: 2.4 of 8 (CoT Thinking Panel + Bug Fixes)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-28 -- Completed 02.4-03-PLAN.md (BUG-011 fix + thinking panel metrics)
 
-Progress: [███████████████.] 79% (15/19 plans complete)
+Progress: [███████████████.] 84% (16/19 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
-- Average duration: 10 min
-- Total execution time: 2.61 hours
+- Total plans completed: 16
+- Average duration: 9 min
+- Total execution time: 2.64 hours
 
 **By Phase:**
 
@@ -32,10 +32,11 @@ Progress: [███████████████.] 79% (15/19 plans comp
 | 2.1. Intake Agent | 3 | 21 min | 7 min |
 | 2.2. Intake Agent Gap Closure | 5 | 85 min | 17 min |
 | 2.3. Intake Agent UAT Fix | 5 | 10 min | 2 min |
+| 2.4. CoT Thinking Panel + Bug Fixes | 1 | 1 min | 1 min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 2min, 2min, 2min, 4min
-- Trend: UAT fixes consistently fast (2min avg), testing infrastructure moderate (4min avg)
+- Last 5 plans: 2min, 2min, 2min, 4min, 1min
+- Trend: Bug fixes consistently fast (1-2min avg)
 
 *Updated after each plan completion*
 
@@ -118,6 +119,9 @@ Recent decisions affecting current work:
 - 02.3-05: Structural E2E assertions (tool ordering, CLAIM-NNN pattern, concept keywords) handle LLM non-determinism
 - 02.3-05: .env.e2e uses localhost:8001-8004 MCP URLs matching Docker Compose port mappings for host-based CLI execution
 - 02.3-05: E2E test handles both interrupt (askHuman) and non-interrupt agent behavior for robustness
+- 02.4-03: pendingToolCalls counter tracks active tool executions (robust finalResponse detection, fixes BUG-011)
+- 02.4-03: Last-wins strategy for finalResponse assignment (intermediate generations safely overwritten)
+- 02.4-03: Thinking panel summary shows tool count: "Thought for 5s · 3 tools" (prepares for reasoning token display)
 
 ### Pending Todos
 
@@ -140,14 +144,16 @@ None yet.
 - 02.3-04 ISSUE C RESOLVED: Empty Step panel replaced with per-tool Steps showing real-time progress
 - 02.3-04 ISSUE D RESOLVED: Real-time token streaming eliminates batch delay
 - 02.3-04 ISSUE E RESOLVED: Natural message/Step interleaving creates conversational rhythm
+- 02.4-03 BUG-011 RESOLVED: finalResponse detection now robust via pendingToolCalls tracking (intermediate generations no longer cause fragility)
 
 ## Session Continuity
 
-Last session: 2026-03-26 12:30:38Z
-Stopped at: Completed 02.3-05-PLAN.md (Phase 2.3 complete)
+Last session: 2026-03-28 08:41:42Z
+Stopped at: Completed 02.4-03-PLAN.md
 Resume file: None
 
 ### Roadmap Evolution
 
 - Phase 2.3 planned with 4 plans addressing 8 UAT-2 issues (Issues A-H) from Phase 2.2 verification
 - Plan 02.3-05 added: CLI ConversationRunner + E2E intake narrative test with DIG receipt, enables programmatic testing of the full conversation flow without Chainlit
+- Phase 2.4 scope expanded: Combined original reasoning tokens scope with 6 open bugs from Phase 2.3 UAT (BUG-006 through BUG-011). Bugs: SSL cert failure in Docker, thinking panel invisible in light mode, submitClaim double-call, CLAIM-NNN collisions, post-submission agent visibility (expected stub), finalResponse buffer fragility. See docs/project_notes/bugs.md for full details.
