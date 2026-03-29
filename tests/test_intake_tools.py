@@ -1,10 +1,9 @@
-"""Tests for Intake Agent tools (policy search, currency conversion, claim submission, human clarification)."""
+"""Tests for Intake Agent tools (policy search, currency conversion, claim submission)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentic_claims.agents.intake.tools.askHuman import askHuman
 from agentic_claims.agents.intake.tools.convertCurrency import convertCurrency
 from agentic_claims.agents.intake.tools.searchPolicies import searchPolicies
 from agentic_claims.agents.intake.tools.submitClaim import submitClaim
@@ -327,36 +326,3 @@ async def testSubmitClaimPassesIntakeFindings():
         callKwargs = mockMcpCall.call_args[1] if mockMcpCall.call_args[1] else {}
         arguments = callArgs[2] if len(callArgs) > 2 else callKwargs.get("arguments")
         assert arguments["intakeFindings"] == intakeFindings
-
-
-# ==================== askHuman Tests ====================
-
-
-def testAskHumanCallsInterrupt():
-    """Verify askHuman calls LangGraph interrupt."""
-    with patch("agentic_claims.agents.intake.tools.askHuman.interrupt") as mockInterrupt:
-        mockInterrupt.return_value = {"action": "confirm", "data": {}}
-
-        askHuman.invoke({"question": "Is this correct?", "data": {"amount": 100}})
-
-        # Verify interrupt was called once
-        mockInterrupt.assert_called_once()
-
-        # Verify payload contains question and data
-        callArgs = mockInterrupt.call_args[0]
-        payload = callArgs[0] if len(callArgs) > 0 else mockInterrupt.call_args[1].get("value")
-        assert payload["question"] == "Is this correct?"
-        assert payload["data"]["amount"] == 100
-
-
-def testAskHumanReturnsInterruptResponse():
-    """Verify askHuman returns interrupt response."""
-    mockResponse = {"action": "confirm", "data": {"correctedAmount": 150}}
-
-    with patch("agentic_claims.agents.intake.tools.askHuman.interrupt") as mockInterrupt:
-        mockInterrupt.return_value = mockResponse
-
-        result = askHuman.invoke({"question": "Confirm amount?", "data": {}})
-
-        assert result["action"] == "confirm"
-        assert result["data"]["correctedAmount"] == 150

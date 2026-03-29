@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 
 from agentic_claims.agents.intake.node import getIntakeAgent, intakeNode
 from agentic_claims.core.state import ClaimState
@@ -42,11 +43,11 @@ def test_intakeAgentHasFiveTools():
         # Verify tool names
         toolNames = [tool.name for tool in tools]
         expectedTools = [
+            "getClaimSchema",
             "extractReceiptFields",
             "searchPolicies",
             "convertCurrency",
             "submitClaim",
-            "askHuman",
         ]
         for expectedTool in expectedTools:
             assert expectedTool in toolNames, f"Tool {expectedTool} missing from agent"
@@ -100,7 +101,7 @@ async def test_intakeNodeReturnsMessagesUpdate():
         }
 
         # Call intakeNode
-        result = await intakeNode(state)
+        result = await intakeNode(state, RunnableConfig())
 
         # Verify result structure
         assert isinstance(result, dict), "Result should be a dict"
@@ -138,7 +139,7 @@ async def test_intakeNodeSetsClaimSubmittedOnSuccessfulSubmitClaim():
             "messages": [HumanMessage(content="Submit my claim")],
         }
 
-        result = await intakeNode(state)
+        result = await intakeNode(state, RunnableConfig())
 
         assert result.get("claimSubmitted") is True, "claimSubmitted should be True after successful submitClaim"
 
@@ -169,7 +170,7 @@ async def test_intakeNodeDoesNotSetClaimSubmittedOnError():
             "messages": [HumanMessage(content="Submit my claim")],
         }
 
-        result = await intakeNode(state)
+        result = await intakeNode(state, RunnableConfig())
 
         assert "claimSubmitted" not in result, "claimSubmitted should NOT be set when submitClaim returns error"
 
@@ -194,6 +195,6 @@ async def test_intakeNodeClaimSubmittedNotSetWithoutSubmitClaim():
             "messages": [HumanMessage(content="What is the meal limit?")],
         }
 
-        result = await intakeNode(state)
+        result = await intakeNode(state, RunnableConfig())
 
         assert "claimSubmitted" not in result, "claimSubmitted should NOT be set without submitClaim call"

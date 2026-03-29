@@ -49,7 +49,7 @@ class ConversationRunner:
     """Headless LangGraph conversation runner for CLI and testing.
 
     Drives the same graph as app.py but without Chainlit dependency.
-    Supports multi-turn conversation with interrupt detection for askHuman.
+    Supports multi-turn conversation.
 
     Usage (programmatic):
         runner = ConversationRunner(envFile=".env.e2e")
@@ -193,7 +193,7 @@ class ConversationRunner:
                             step.output = toolContent
                             break
 
-        # Check for interrupt (askHuman)
+        # Check for interrupt
         finalState = await self.graph.aget_state(config=config)
         if finalState.next:
             for task in finalState.tasks:

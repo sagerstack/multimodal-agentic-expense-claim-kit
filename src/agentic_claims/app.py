@@ -354,20 +354,7 @@ async def onMessage(message: cl.Message):
                 config={"configurable": {"thread_id": threadId}}
             )
 
-            # Check for interrupt (askHuman)
-            interruptTasks = finalState.tasks if hasattr(finalState, "tasks") else []
-            hasInterrupt = any(
-                hasattr(t, "interrupts") and t.interrupts for t in interruptTasks
-            )
-
-            if hasInterrupt:
-                for task in interruptTasks:
-                    if hasattr(task, "interrupts") and task.interrupts:
-                        interruptValue = task.interrupts[0].value
-                        await cl.Message(content=str(interruptValue)).send()
-                        return
-
-            # No interrupt — extract last AI message from state
+            # Extract last AI message from state
             messages = finalState.values.get("messages", [])
             fallbackContent = None
             for msg in reversed(messages):
