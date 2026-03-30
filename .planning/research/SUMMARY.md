@@ -1,364 +1,274 @@
 # Project Research Summary
 
-**Project:** Agentic Expense Claims
-**Domain:** Multi-Agent LLM Expense Automation System
-**Researched:** 2026-03-23
+**Project:** Agentic Expense Claims — v2.0 UX Redesign (Chainlit → FastAPI + HTMX)
+**Domain:** Multi-page server-rendered AI chat application with LangGraph streaming backend
+**Researched:** 2026-03-30
 **Confidence:** HIGH
+
+---
 
 ## Executive Summary
 
-This is a multi-agent LLM system for automating expense claim processing, a domain where AI is rapidly becoming table stakes in 2026. The recommended approach uses LangGraph for graph-based multi-agent orchestration with four specialized agents (Intake, Compliance, Fraud, Advisor), each implementing proven patterns from production systems like Allianz's Nemo. The architecture centers on shared TypedDict state with PostgreSQL checkpointing for resilience, integrating four MCP servers (RAG, DBHub, Frankfurter, Email) as stateless tools accessed via langchain-mcp-adapters. Chainlit provides conversational UI with real-time streaming, while OpenRouter's free tier VLM models handle receipt extraction.
+This milestone replaces Chainlit with a custom FastAPI + Jinja2 + HTMX web application while leaving the entire backend stack unchanged. The research confirms this is a well-understood pattern in 2026: FastAPI 0.135.2 ships native SSE support, HTMX 2.0.8 has a mature SSE extension, and Alpine.js 3.x handles client-side state cleanly. The combination covers all required interactivity (streaming AI responses, drag-and-drop file upload, real-time thinking panels, interrupt/resume clarification) without a JavaScript build pipeline. All technology choices are validated against official documentation with HIGH confidence.
 
-The core technical advantage is graph-based control flow with parallel execution (Compliance and Fraud agents run concurrently) and conditional routing (auto-approve/return/escalate). Research validates that VLM-based OCR (97-99% accuracy) outperforms traditional pattern matching (64%), and RAG-driven policy validation with semantic chunking at 400-512 tokens delivers reliable compliance checks. The zero-cost constraint is feasible with OpenRouter's 29 free models, though rate limits (20 req/min, 200 req/day) require caching strategies and async processing to prevent multi-agent call amplification from blocking production.
+The recommended approach is a clean vertical slice: introduce a `web/` package inside `src/agentic_claims/` to house the new FastAPI app, routers, session management, and dependencies. Jinja2 templates live at the repo root (matching the Stitch HTML designs directly). The LangGraph graph is compiled once at app startup via FastAPI's lifespan pattern and shared as a singleton via `app.state`. Each browser session gets isolated state through Starlette's `SessionMiddleware` (signed cookie holding `thread_id` + `claim_id`), with all LangGraph checkpointing still persisted in PostgreSQL.
 
-Key risks center on multi-agent coordination failures (36.9% of failures in multi-agent systems), LangGraph state explosion from storing receipt images directly in checkpoints, and VLM hallucinations on low-quality receipts. Mitigation requires typed state schemas with explicit validation gates between agent handoffs, external storage for binary data with path references only in state, and hybrid validation (VLM extraction + rule-based checks + confidence scoring) to catch extraction errors early. The suggested phase structure front-loads infrastructure setup (state schema, MCP servers, checkpointing) before agent development to prevent compounding integration errors.
+The critical risks are infrastructure-level, not feature-level. Two pitfalls can cause complete rewrites if ignored: opening the `AsyncPostgresSaver` checkpointer per-request instead of once at app startup (produces connection-closed errors on every second message), and failing to cancel SSE generators on client disconnect (causes silent LLM cost burn and memory leaks). Both have clear prevention patterns that must be established in Phase 1 before any streaming work begins. SSE event name mismatches, Alpine state destruction from HTMX DOM swaps, and the Playwright EventSource interception limitation are well-understood moderate risks with documented mitigations.
+
+---
 
 ## Key Findings
 
 ### Recommended Stack
 
-The technology stack is validated for production multi-agent systems as of March 2026. LangGraph is the clear choice for orchestration, trusted by Klarna and Replit for graph-based control flow that handles the intake→compliance→fraud→advisor pipeline with parallel execution and conditional routing. Chainlit (v2.10.0) provides purpose-built conversational UI with native LangGraph integration, though original team stepped back in May 2025 (now community-maintained — monitor for stagnation). OpenRouter's 29 free models include VLMs (Qwen3 VL 235B, NVIDIA Nemotron Nano 12B VL) sufficient for receipt OCR, with rate limits (20 req/min, 200 req/day) manageable via caching and async processing.
+The new UI layer adds six components on top of the unchanged backend (LangGraph, PostgreSQL, Qdrant, MCP servers, OpenRouter). All are either already in the stack or add zero operational overhead. FastAPI 0.135.2 and Jinja2 3.1.6 are the server-side core. HTMX 2.0.8 + Alpine.js 3.x handle frontend interactivity with no build step. Tailwind via `pytailwindcss` (v3, matching the Stitch designs) generates production CSS without Node.js. Playwright with the async pytest plugin covers E2E tests.
+
+See `.planning/research/STACK.md` for version matrix, CDN vs vendor tradeoffs, and installation commands.
 
 **Core technologies:**
-- **LangGraph**: Multi-agent orchestration with graph-based control flow — handles sequential, parallel, and conditional execution with stateful persistence
-- **Chainlit 2.10.0**: Conversational UI with async streaming, file uploads, session management — native LangGraph integration
-- **OpenRouter API**: Unified access to 29 free LLM/VLM models — zero-cost tier with Qwen3 VL and Nemotron Nano VL for receipt extraction
-- **PostgreSQL 16.13**: Relational database for claims data — also serves as LangGraph checkpointer for state persistence and crash recovery
-- **Qdrant (client 1.13.4)**: Vector database for policy embeddings — runs in Docker, FastEmbed integration for one-line embedding creation
-- **FastMCP (mcp Python SDK)**: MCP server implementation — for building RAG, DBHub, Frankfurter, Email servers as Docker services
-- **Pydantic v2**: Data validation and serialization — 5-50x faster than v1, used for agent inputs/outputs, LangGraph state, API payloads
-- **httpx**: Async HTTP client — supports both sync/async (unlike aiohttp), HTTP/2 support, matches LangGraph/Chainlit async patterns
-- **pytest-asyncio**: Async test support — handles event loop, async fixtures, auto mode for asyncio-only projects
-- **psycopg3**: PostgreSQL async driver — modern async-first driver matching LangGraph/Chainlit patterns
-- **SQLAlchemy 2.x + Alembic**: ORM and schema migrations — industry standard with async support
+- **FastAPI 0.135.2**: ASGI web framework with native SSE (`EventSourceResponse` built-in since 0.135.0); already in the stack.
+- **Jinja2 3.1.6**: Server-side templating via Starlette's built-in `Jinja2Templates`; template inheritance maps directly to the 4 Stitch HTML designs.
+- **HTMX 2.0.8 + htmx-ext-sse 2.2.4**: Hypermedia for all server round-trips; SSE extension for declarative token streaming without JavaScript.
+- **Alpine.js 3.x**: Local client state (drag-over highlight, thinking panel expand/collapse, file preview); auto-picks up HTMX-injected DOM via MutationObserver.
+- **pytailwindcss 0.3.0 (Tailwind v3)**: Wraps Tailwind v3 standalone CLI; stays on v3 because the Stitch designs use `tailwind.config = { theme: { extend: { colors: {...} } } }` JS config syntax, which breaks under v4's CSS-first `@theme` system.
+- **playwright 1.58.0 + pytest-playwright-asyncio 0.7.2**: Browser E2E testing with async-native fixtures; consistent with the project's existing `pytest-asyncio` usage.
+- **Starlette SessionMiddleware + StaticFiles** (bundled): Cookie-based session for `thread_id`/`claim_id`; static file serving for built CSS and vendored JS.
 
-**Critical version requirements:**
-- Python 3.10-3.13 (Chainlit requires <4.0, >=3.10)
-- langgraph-checkpoint >= 3.0.0 (security patch for CVE-2025-XXXX remote code execution vulnerability)
-- Node.js 22 LTS for MCP servers (protocol compatibility)
+**What NOT to use:** `sse-starlette` (redundant), Tailwind v4 CDN, React/Vue/any SPA, WebSockets, `fastapi-jinja` (abandoned), or pytest-playwright sync variant.
 
-**Alternative evaluations:**
-- CrewAI vs LangGraph: Role-based teams don't fit structured pipeline as well as graph-based control flow
-- Streamlit vs Chainlit: Not optimized for chat workflows, no native LangGraph integration
-- aiohttp vs httpx: aiohttp faster for pure async but httpx more flexible (can mix sync/async) — choose aiohttp if performance bottleneck emerges
+---
 
 ### Expected Features
 
-Research reveals a clear feature hierarchy for expense systems. Table stakes features are non-negotiable — users expect VLM receipt extraction (95-99% accuracy), real-time policy validation, duplicate detection, currency conversion, audit trail, and approval workflow. Missing these means system fails its purpose. The multi-agent architecture itself is a differentiator in 2026, following Allianz's Nemo (7 agents, <5 min processing) and Brex's approach (99% of reports processed without human involvement).
+The 4 Stitch HTML pages define the full feature set. Research confirmed industry norms (Expensify, Ramp, AppZen) and validated which features are genuinely expected vs. differentiating.
+
+See `.planning/research/FEATURES.md` for the full feature priority matrix and dependency graph.
 
 **Must have (table stakes):**
-- **Receipt OCR extraction** — Core value prop, eliminates manual entry. VLM-based OCR achieves 97-99% accuracy vs 64% for traditional pattern matching. Must extract merchant, date, amount, line items, tax.
-- **Real-time policy validation** — Users expect instant feedback before submission. Pre-submission reduces back-and-forth by 40%.
-- **Duplicate detection** — Prevents fraud and honest mistakes. Match on date + amount + currency, advanced approaches use receipt image hashing and fuzzy vendor matching.
-- **Currency conversion** — Essential for international organizations. Auto-detect from receipt, apply correct rates, store original and converted amounts.
-- **Approval workflow** — Human-in-the-loop for escalated/flagged claims. Cannot be fully autonomous in 2026.
-- **Audit trail** — Regulatory requirement. Track all actions, decisions, state changes (who did what when).
-- **Conversational UI** — Industry shifted from forms to chat. Reduces submission time from 15-25 min to <3 min.
+- SSE-streamed AI responses — static "wait and load" is unacceptable in 2026 for any AI chat UI
+- Drag-and-drop receipt upload with inline image preview in the chat thread
+- Visible AI thinking state (spinner/indicator while VLM extraction and policy check run)
+- Clarification prompt display + clarification pause (LangGraph interrupt surfaces as a UI pattern)
+- Submission summary right panel with item count, total, category breakdown, and warning flags count
+- KPI cards on the approver dashboard (Pending, Auto-Approved, Escalated counts)
+- Recent Claims table with status column and row navigation to Claim Review page
+- Decision pathway timeline on the Audit Log page (Upload → Extraction → Policy Check → Final Decision)
+- Flag reason card + Approve/Reject actions on the Claim Review page
 
-**Should have (competitive):**
-- **Multi-agent architecture** — Specialized agents provide deeper analysis than monolithic AI. Industry trend for 2026.
-- **Pre-submission fraud detection** — Catches issues before submission (proactive vs reactive). Analyzes receipt authenticity, behavioral patterns, contextual anomalies.
-- **Conversational advisor agent** — Synthesizes findings into clear guidance. Goes beyond "approved/rejected" to explain why and suggest fixes.
-- **100% automated audit** — Every claim analyzed by AI, not sample-based. Brex processes 99% without human involvement.
-- **Explainable AI decisions** — Shows reasoning for flagged claims. Required for reviewers to override AI confidently.
+**Should have (differentiators):**
+- Thinking panel with named step labels (maps LangGraph node names to human-readable text — the research contribution the demo is built around)
+- Inline per-field confidence scores in the chat extraction response
+- Policy citation with specific clause reference in the chat response
+- AI Insight card on Claim Review (Advisor Agent's contextual note for the human reviewer)
+- Download Log as JSON on the Audit Log page
 
 **Defer (v2+):**
-- **Behavioral pattern analysis** — Requires seeding historical data, complex ML beyond course scope.
-- **AI-generated receipt detection** — Cutting-edge but high complexity/low demo value for course project.
-- **Multi-language OCR** — English-only sufficient for MVP at SUTD.
+- Voice input (requires Web Speech API or Whisper)
+- Return-to-Claimant action on Claim Review (requires Email MCP wiring; Approve/Reject is sufficient for demo)
+- Anomaly Detection + Cost Benchmark bento cards (require historical data and Fraud Agent completion)
+- Auto-Approval Threshold editing (requires Advisor Agent reading config at runtime)
 
-**Explicitly exclude (anti-features):**
-- Travel booking integration, corporate card issuance, accounting system integration, mobile app, reimbursement payment processing, multi-tenant SaaS, advanced reporting/analytics, vendor management, budgeting tools, real-time notifications (SMTP/Twilio infrastructure)
+**Critical dependency note:** Page 1 (Chat) is fully functional with only the Intake Agent. Pages 3 and 4 (Audit Log, Claim Review) require Compliance + Fraud + Advisor agent output to show the full decision pathway and flag reason card. Page 2 (Dashboard) requires only database queries against `claims.status`.
+
+---
 
 ### Architecture Approach
 
-The recommended architecture is a graph-based multi-agent system with shared TypedDict state and PostgreSQL checkpointing. All agents read/write a single ClaimState object with reducers for coordination (message_history uses add_messages reducer to prevent overwrites). LangGraph orchestrates the 4-agent pipeline with automatic parallelization (Compliance and Fraud agents execute in the same superstep) and conditional routing (Intake loops for clarifications, Advisor routes to approve/reject/escalate). PostgreSQL checkpointer provides crash recovery, state persistence across restarts, and time-travel debugging. MCP servers run as stateless Docker services, accessed via langchain-mcp-adapters which convert MCP tools to LangGraph-compatible tools. Chainlit streams LangGraph outputs in real-time with metadata-based filtering (e.g., only show Advisor agent messages to user).
+The architecture is a clean UI-layer replacement. The `src/agentic_claims/web/` package is added; everything else in `src/agentic_claims/` (core, agents, infrastructure) is unchanged. A single `app.state.graph` instance (compiled at startup via `lifespan`) handles all concurrent sessions — each session is isolated by `thread_id` which flows through the LangGraph checkpointer. POST messages and GET SSE streams are decoupled via per-session `asyncio.Queue` objects: the message POST enqueues and returns an HTMX HTML fragment immediately; the long-lived SSE GET dequeues and streams graph events.
+
+See `.planning/research/ARCHITECTURE.md` for the full system diagram, project structure, and all 5 architectural patterns with code examples.
 
 **Major components:**
-1. **Chainlit UI Layer (Two Personas)** — Claimant-facing chat for receipt upload and status tracking; Reviewer-facing interface for escalated claims. Real-time message streaming with token-by-token display.
-2. **LangGraph Orchestration Layer** — StateGraph with ClaimState (TypedDict) shared across all nodes. Manages sequential (Intake), parallel (Compliance || Fraud), and conditional execution (Advisor routing). PostgreSQL checkpointer handles state persistence.
-3. **Agent Nodes** — Intake (ReAct + Evaluator Gate), Compliance (Evaluator), Fraud (Tool Call), Advisor (Reflection + Routing). Each is a pure function: (state) -> state.
-4. **MCP Layer (4 Docker Services)** — RAG Server (FastMCP + Qdrant + FastEmbed), DBHub Server (FastMCP + psycopg3), Frankfurter Server (FastMCP + httpx), Email Server (mcp-email-server 0.6.2).
-5. **PostgreSQL Checkpointer** — State persistence after every node execution. Enables crash recovery via thread_id, time-travel debugging via checkpoint_id.
-6. **Database Layer** — Postgres stores claims, receipts, line items, history. Qdrant stores policy embeddings for RAG retrieval.
+1. **`web/main.py`** — FastAPI app, lifespan (checkpointer + graph initialization), middleware (SessionMiddleware, StaticFiles), router mounting.
+2. **`web/routers/pages.py`** — Full-page GET routes returning `TemplateResponse` for all 4 pages.
+3. **`web/routers/chat.py`** — `POST /chat/message` (enqueue + return HTML fragment) and `GET /chat/stream` (SSE bridge to `astream_events()`).
+4. **`web/routers/api.py`** — JSON endpoints for dashboard KPI counts, audit log data, and claim review details (HTMX partial swaps on non-chat pages).
+5. **`web/session.py`** — Dependency that reads/creates `thread_id` + `claim_id` from the signed session cookie.
+6. **`templates/`** — `base.html` (shared layout: sidebar, topnav, Tailwind config) + 4 page templates + partial fragments for HTMX swaps.
 
-**Key patterns to follow:**
-- TypedDict shared state with reducers (eliminates message-ordering races)
-- MCP adapters for tool integration (standardized tool access across distributed services)
-- Conditional routing with parallel execution (automatic parallelization where safe, ordered supersteps for dependencies)
-- PostgreSQL checkpointer for production (not MemorySaver — state must survive restarts)
-- Chainlit streaming integration with metadata filtering (show only user-facing events)
+**Key patterns:**
+- Graph as application-level singleton via `lifespan` (never per-request)
+- `asyncio.Queue` per `thread_id` to decouple POST from SSE GET
+- HTMX `HX-Request` header check to return partial vs. full template
+- Alpine.js state scoped to stable outer containers; HTMX swaps target inner leaf nodes only
+- Centralized `SseEvent` constants class shared between server and templates
 
-**Anti-patterns to avoid:**
-- Direct agent-to-agent communication (breaks observability, loses checkpointing)
-- Stateful MCP servers (creates race conditions, breaks parallelization)
-- In-memory checkpointer in production (state lost on restart)
-- Ignoring superstep execution model (leads to deadlocks)
-- Storing binary data directly in state (causes state explosion)
+---
 
 ### Critical Pitfalls
 
-1. **Multi-Agent Coordination Breakdowns** — Multi-agent LLM systems fail at 41-86.7% rates, with coordination failures representing 36.9% of all failures. Inter-agent misalignment causes agents to proceed with wrong assumptions, withhold information, or ignore other agents' input. Prevention: Design explicit communication protocols, implement validation gates between agent handoffs, use LangGraph's typed state schemas, tag outputs with confidence scores. Address in Phase 1 (Core Architecture) — establish state schema and agent communication contracts upfront.
+See `.planning/research/PITFALLS.md` for all 12 pitfalls with code examples, warning signs, and recovery costs.
 
-2. **LangGraph State Explosion and Serialization Failures** — Checkpoint database grows indefinitely due to large state objects (base64-encoded receipts) causing memory errors and database crashes. Critical CVE (langgraph-checkpoint < 3.0.0) allowed remote code execution. Prevention: Upgrade to langgraph-checkpoint >= 3.0.0, configure checkpoint TTL (7-day retention), store receipts in external storage with path references only, redirect all MCP server logs to stderr (stdout pollution causes Error -32000, accounting for 97% of MCP failures). Address in Phase 2 (Receipt Processing) when binary data enters system.
+1. **Checkpointer per-request lifecycle** — Opening `AsyncPostgresSaver` in a request handler instead of `lifespan` causes `psycopg.OperationalError: the connection is closed` on every second message. Must be resolved in Phase 1. **Recovery cost: HIGH.**
 
-3. **VLM Receipt Extraction Hallucinations** — VLMs hallucinate on low-quality images, producing fluent but incorrect results without signaling uncertainty. Open-source VLMs show 15-20% error rates; Mistral OCR has 50% character error rate. Prevention: Prompt engineering to return "UNCERTAIN" for low-quality fields, structured output validation with Pydantic, hybrid approach (VLM extracts + rule-based validation), multiple VLM passes with comparison. For production use GPT-4o (25% CER) or Gemini 2.0 Flash (15% CER); zero-cost constraint means accepting higher error rates with free models and investing in validation instead. Address in Phase 2 (Receipt Processing) — build validation pipeline in parallel with extraction.
+2. **SSE generator not cancelled on client disconnect** — Closing a browser tab leaves `astream_events()` running, burning LLM tokens and Postgres connections. Check `await request.is_disconnected()` inside the generator loop. Must be implemented from day one. **Recovery cost: MEDIUM.**
 
-4. **RAG Policy Retrieval Returns Irrelevant Chunks** — Naive chunking breaks policy rules mid-sentence, causing agents to make incorrect approval decisions. Character-based splitting mixes unrelated rules in same chunk. Prevention: Semantic chunking at 400-512 tokens with 10-20% overlap (2026 benchmark winner), hierarchical chunking preserving section structure, metadata tagging for filtered retrieval, reranking after initial retrieval. Address in Phase 1 (RAG Infrastructure) — chunking strategy affects all downstream policy validation.
+3. **HTMX SSE attribute placement bug** — `hx-ext="sse"` and `sse-connect` must be on the same element. Splitting them across parent/child silently prevents SSE from connecting with zero console errors. **Recovery cost: LOW but costs hours to diagnose.**
 
-5. **OpenRouter Free Model Rate Limits Break Production** — Free tier limits (20 req/min, 200 req/day) insufficient for multi-agent systems where each claim triggers 5-10 LLM calls. Prevention: Budget for paid tier ($10/month unlocks 1000 req/day), aggressive caching (cache policy RAG results), batch operations, async processing with queue system showing estimated wait time. Address in Phase 1 (Infrastructure) — establish API rate limiting strategy before building agents.
+4. **Interrupt/resume state lost between requests** — The Chainlit `awaiting_clarification` flag does not survive stateless HTTP. Use `await graph.aget_state()` to inspect `state.tasks` for pending interrupts before each dispatch. **Recovery cost: MEDIUM.**
+
+5. **Alpine.js state destroyed on HTMX DOM swap** — HTMX replacing a container that owns Alpine `x-data` resets local state (collapsed panel, file preview). Target inner leaf nodes with swaps; keep Alpine state on stable outer containers. **Recovery cost: MEDIUM.**
+
+---
 
 ## Implications for Roadmap
 
-Based on dependency analysis and pitfall research, the recommended build order follows a foundation-first approach. The shared ClaimState TypedDict is the foundational contract — all agents depend on it. MCP servers must exist before agents can use them. Agents are built in dependency order: Intake first (validates end-to-end flow), Compliance and Fraud in parallel (tests superstep execution), Advisor last (synthesizes all previous outputs). UI integration comes after graph is functional. Production hardening spans all layers after core functionality is validated.
+Based on combined research, a 6-phase structure is recommended. The ordering is driven by infrastructure dependencies (checkpointer and SSE patterns must be correct before any feature work), then by agent dependencies (Page 1 first because it only needs Intake Agent; Pages 3–4 last because they need Compliance + Fraud + Advisor output).
 
-### Phase 1: Foundation Infrastructure
-**Rationale:** Establishes foundational contracts and infrastructure before any agent development. ClaimState schema defines the communication protocol between agents. PostgreSQL checkpointer enables testing with state persistence from day one. MCP server stubs allow agent development to proceed in parallel without blocking on tool implementation. This phase directly addresses Critical Pitfall #1 (Multi-Agent Coordination) by establishing typed state schemas and explicit communication contracts, and Critical Pitfall #4 (RAG Retrieval) by implementing semantic chunking upfront, and Critical Pitfall #5 (Rate Limits) by establishing caching and API strategy.
+### Phase 1: FastAPI Scaffold + Static Pages
 
-**Delivers:**
-- ClaimState TypedDict definition (central contract)
-- PostgreSQL checkpointer setup (state persistence infrastructure)
-- MCP server stubs for RAG, DBHub, Frankfurter, Email (placeholder implementations)
-- Qdrant setup with policy document ingestion pipeline (semantic chunking at 400-512 tokens)
-- Docker Compose orchestration (all services configured with health checks)
-- API rate limiting strategy (caching layer, request tracking)
+**Rationale:** All pitfalls classified as "Phase 1 / FastAPI Scaffold" (checkpointer lifecycle, Jinja2 template paths, StaticFiles mounting) must be resolved before any streaming or feature work begins. Getting these wrong causes cascading failures that are expensive to retrofit.
 
-**Addresses features:**
-- Audit trail infrastructure (checkpointing enables "who did what when" tracking)
-- RAG policy validation infrastructure (Qdrant + semantic chunking)
-- Currency conversion infrastructure (Frankfurter MCP stub)
+**Delivers:** Running FastAPI app serving all 4 static pages (no backend data yet), correct middleware stack, lifespan with compiled graph singleton, single shared Jinja2Templates instance, static file serving with `url_for`, session middleware with `thread_id`/`claim_id` creation. Smoke-tests in Docker verify zero 404s and no `TemplateNotFound` errors.
 
-**Avoids pitfalls:**
-- Multi-Agent Coordination Breakdowns (typed state schema prevents misalignment)
-- RAG Irrelevant Chunks (semantic chunking with overlap configured upfront)
-- OpenRouter Rate Limits (caching strategy established before agent multiplication)
-- MCP Protocol Compliance Failures (stderr logging pattern established in stubs)
+**Features from FEATURES.md:** Shared layout (sidebar, top nav, active page indicator), page navigation shell for all 4 pages.
 
-**Research flag:** Standard patterns — well-documented in LangGraph docs, skip research-phase.
+**Pitfalls to avoid:** Checkpointer per-request lifecycle (Pitfall 1), Jinja2 template path breaks (Pitfall 7), StaticFiles 404s in Docker (Pitfall 8).
 
-### Phase 2: Receipt Processing and Validation
-**Rationale:** Builds the entry point to the system where binary data (receipt images) enters. Must implement external storage strategy before building full agent pipeline to prevent state explosion. Validates VLM extraction early with hybrid validation approach to surface hallucination issues before they compound. This phase directly addresses Critical Pitfall #2 (State Explosion) by storing receipts externally, and Critical Pitfall #3 (VLM Hallucinations) by building validation pipeline in parallel with extraction.
+**Research flag:** Standard patterns — skip `/gsd:research-phase`.
 
-**Delivers:**
-- Receipt upload to external storage (filesystem/S3) with path reference in state
-- VLM extraction via OpenRouter free models (Qwen3 VL, Nemotron Nano)
-- Structured output validation with Pydantic schemas (reject incomplete responses)
-- Hybrid validation pipeline (VLM extracts → rule-based checks → confidence scoring)
-- Low-confidence field handling (trigger clarification prompts)
-- Currency conversion integration (Frankfurter MCP server implementation)
-- Receipt image quality checks (reject blurry/low-resolution images pre-VLM)
+---
 
-**Addresses features:**
-- Receipt OCR extraction (table stakes)
-- Currency conversion (table stakes)
-- Low-confidence clarification (conversational UX)
+### Phase 2: SSE Streaming + Thinking Panel
 
-**Avoids pitfalls:**
-- LangGraph State Explosion (receipts stored externally, only paths in state)
-- VLM Hallucinations (validation pipeline catches extraction errors early)
+**Rationale:** The SSE event taxonomy must be designed before writing either the backend stream or the frontend templates. Pitfalls 3, 5, 6, and 12 all live in this phase. The queue-based POST → SSE decoupling pattern is non-obvious and must be established before page-specific feature work builds on top of it.
 
-**Research flag:** Needs research — VLM prompt engineering for structured extraction with confidence scoring, testing different free models for accuracy/refusal rates.
+**Delivers:** Working `POST /chat/message` → `asyncio.Queue` → `GET /chat/stream` pipeline. All 6 SSE event types rendering correctly in isolation (`thinking_start`, `step_name`, `step_content`, `thinking_done`, `token`, `done`). Centralized `SseEvent` constants. Disconnect detection active. Alpine.js thinking panel with collapse/expand that survives 10 consecutive tool executions without state reset.
 
-### Phase 3: Intake Agent (ReAct + Evaluator Gate)
-**Rationale:** First agent node, simplest pattern, validates state flow end-to-end before building parallel agents. Intake is the MVP — all other agents consume its output. Uses ReAct pattern for user interaction and Evaluator Gate to determine submission readiness. Building this first enables iterative testing of LangGraph checkpointing, MCP tool integration, and Chainlit streaming before introducing parallelization complexity.
+**Features from FEATURES.md:** SSE-streamed AI responses (P1), visible AI thinking state (P1), thinking panel with named step labels (P2).
 
-**Delivers:**
-- Intake agent node implementing ReAct pattern (tool call + reasoning loop)
-- Evaluator Gate logic (determines if claim ready for submission vs needs clarification)
-- Integration with MCP RAG (policy requirements lookup)
-- Integration with MCP DBHub (validate employee, project codes)
-- Conditional edge logic (loop back for clarifications vs proceed to submission)
-- Chainlit streaming integration (real-time message display for Intake agent)
+**Stack from STACK.md:** FastAPI `EventSourceResponse`, HTMX `hx-ext="sse"` + `sse-connect` + `sse-swap`, Alpine.js `x-show`.
 
-**Addresses features:**
-- Real-time policy validation (table stakes — pre-submission feedback)
-- Conversational UI (table stakes — multi-turn clarification loop)
+**Pitfalls to avoid:** HTMX SSE attribute placement (Pitfall 3), thinking panel event taxonomy (Pitfall 5), Alpine/HTMX swap conflict (Pitfall 6), event name case sensitivity (Pitfall 12), SSE disconnect cleanup (Pitfall 2).
 
-**Avoids pitfalls:**
-- Multi-Agent Coordination (validates state schema works before adding parallel agents)
-- Chainlit + LangGraph Dependency Conflicts (resolve integration issues early)
+**Research flag:** SSE + LangGraph integration is moderately novel. Consider `/gsd:research-phase` if Playwright SSE testing strategy needs deeper investigation before finalizing the event taxonomy.
 
-**Research flag:** Standard patterns — ReAct and Evaluator Gate well-documented in LangGraph tutorials, skip research-phase.
+---
 
-### Phase 4: Parallel Agents (Compliance + Fraud)
-**Rationale:** Both agents are independent and can execute concurrently (same superstep), reducing latency. Compliance validates against org-level policies via RAG. Fraud queries historical claims for duplicates and anomalies via DBHub. Building these together validates LangGraph's automatic parallelization and superstep execution model. This phase implements the core value proposition: automated audit with specialized agents.
+### Phase 3: Chat Page — Upload, Interrupt, Summary Panel
 
-**Delivers:**
-- Compliance Agent node implementing Evaluator pattern (policy auditing)
-- Fraud Agent node implementing Tool Call pattern (historical data queries)
-- Integration with MCP RAG for policy documents (Compliance)
-- Integration with MCP DBHub for duplicate/anomaly detection (Fraud)
-- Parallel execution configuration (both agents in same superstep)
-- Risk scoring logic (Fraud outputs 0-100 risk score)
+**Rationale:** With SSE streaming proven, the full Page 1 feature set can be completed. This phase adds receipt upload (multipart form), interrupt/resume (clarification flow), and the submission summary panel. Pitfalls 4 and 10 must be addressed here.
 
-**Addresses features:**
-- Duplicate detection (table stakes fraud prevention)
-- 100% automated audit (competitive differentiator)
+**Delivers:** Drag-and-drop receipt upload with inline image preview, multipart `Form()` + `File()` endpoint (no JSON body mixing), interrupt detection via `graph.aget_state()`, clarification prompt display in chat, confirm/edit quick-reply buttons, submission summary right panel with item count/total/warnings, batch details list.
 
-**Avoids pitfalls:**
-- Multi-Agent Coordination (parallel execution tests superstep execution model)
+**Features from FEATURES.md:** Drag-and-drop upload (P1), clarification interrupt/resume (P1), submission summary panel (P1), inline field confidence scores (P2), policy citation in chat response (P2).
 
-**Research flag:** Standard patterns — Evaluator and Tool Call patterns documented, skip research-phase.
+**Pitfalls to avoid:** Interrupt/resume state lost (Pitfall 4), multipart form + file mixing (Pitfall 10).
 
-### Phase 5: Advisor Agent (Reflection + Routing)
-**Rationale:** Terminal node that synthesizes all previous agent outputs (Compliance status, Fraud score) and makes routing decision (auto-approve/return/escalate). Implements Reflection pattern to generate explainable recommendations, then routes based on synthesis. Must wait for both Compliance and Fraud to complete before executing (separate superstep from Phase 4). This phase completes the core agent pipeline.
+**Research flag:** Standard patterns — skip `/gsd:research-phase`.
 
-**Delivers:**
-- Advisor Agent node implementing Reflection pattern (synthesizes findings)
-- Routing logic (conditional edges to approve/return/escalate end states)
-- Integration with MCP Email (notifications to claimants and reviewers)
-- Explainable AI decisions (reasoning for approval/rejection/escalation)
-- Final state updates (final_decision, recommendation_text written to ClaimState)
+---
 
-**Addresses features:**
-- Approval workflow (table stakes — human-in-the-loop for escalations)
-- Conversational advisor agent (competitive differentiator)
-- Explainable AI decisions (competitive differentiator)
+### Phase 4: Dashboard + Audit Log Pages (Pages 2 and 3)
 
-**Avoids pitfalls:**
-- Multi-Agent Coordination (validates full pipeline with all handoffs)
+**Rationale:** Page 2 (Dashboard) requires only database queries — no agent changes needed. Page 3 (Audit Log) can be built with data already available from the Intake Agent (extraction confidence, policy citations). Both pages share HTMX partial-swap patterns already established in Phase 2.
 
-**Research flag:** Standard patterns — Reflection documented in LangGraph multi-agent tutorials, skip research-phase.
+**Delivers:** Approver dashboard with 3 KPI cards, Recent Claims table with status filter and row navigation. Audit Log with claim list (status badges), decision pathway timeline (timestamps from `audit_log`), confidence score display, policy citation, Download Log as JSON.
 
-### Phase 6: Reviewer Interface and Full UI Integration
-**Rationale:** After complete agent pipeline is functional, build reviewer persona in Chainlit. Reviewer interface displays escalated claims with risk summary, compliance findings, fraud evidence, and allows approve/reject/return with comments. Completes the two-persona conversational UI (Claimant + Reviewer). This phase also implements session management (thread-based state persistence) and full Chainlit streaming with metadata filtering.
+**Features from FEATURES.md:** All P1 features for Pages 2 and 3; AI Efficiency trend chart deferred (P3 — needs historical data).
 
-**Delivers:**
-- Reviewer persona interface in Chainlit (view escalated claims)
-- Risk summary display (compliance status, fraud score, policy citations)
-- Reviewer actions (approve/reject/return with comments)
-- Session management (thread_id per user, persistent conversations)
-- Metadata-based event filtering (show only user-facing agent messages)
-- Email notification triggers (via MCP Email server)
+**Pitfalls to avoid:** Returning full page from HTMX partial routes (check `HX-Request` header), `astream_events` without event filtering.
 
-**Addresses features:**
-- Approval workflow (human reviewer capabilities)
-- Audit trail (reviewer actions logged to state)
+**Research flag:** Standard HTMX patterns for filtering/partial swaps — skip `/gsd:research-phase`.
 
-**Avoids pitfalls:**
-- Chainlit + LangGraph Dependency Conflicts (finalized in Phase 3, but full integration here)
+---
 
-**Research flag:** Needs research — Chainlit persona switching patterns, session management best practices for multi-user LangGraph applications.
+### Phase 5: Claim Review Page + Agent Completion (Page 4)
 
-### Phase 7: Production Hardening
-**Rationale:** Addresses production concerns spanning all layers after core functionality is validated. Implements monitoring for pitfall detection (checkpoint size, VLM extraction quality, MCP connection health, API rate limits). Adds error handling at node/graph/app levels. Implements cost monitoring to prevent OpenRouter quota exhaustion.
+**Rationale:** The Claim Review page is strictly blocked on Fraud Agent output (`matched_claim_id`, `risk_score`) and Advisor Agent output (`advisor_notes`, routing decision). This phase completes both the agent stubs AND the Claim Review UI together so they can be tested end-to-end.
 
-**Delivers:**
-- Checkpoint TTL configuration (7-day retention for completed, 1-day for abandoned)
-- Checkpoint size monitoring (alert if > 50KB)
-- VLM extraction quality tracking (monitor user edit rates per field)
-- MCP connection health checks (ping servers on startup)
-- OpenRouter API rate limit tracking (requests per claim, daily quota usage)
-- Recursion limits on graph invocation (prevent infinite loops)
-- Error handling and retry logic (node-level failures, MCP timeouts)
-- Observability (tracing, logging, metrics for agent execution)
+**Delivers:** Receipt image display, extracted fields panel, AI flag reason card with confidence score, Approve/Reject action buttons with reviewer notes and rejection reason radio buttons, claim navigation (Previous/Next), AI Insight card (Advisor Agent contextual note), linked duplicate reference. Compliance + Fraud + Advisor agents producing stored output. Likely requires migration `003_add_agent_output_columns.py`.
 
-**Addresses features:**
-- Audit trail completion (all monitoring data persisted)
+**Features from FEATURES.md:** All P1 and P2 features for Page 4; Return-to-Claimant deferred (P3 — requires Email MCP wiring).
 
-**Avoids pitfalls:**
-- All critical pitfalls monitored and alerted
+**Research flag:** Fraud + Advisor agent completion patterns and the required database schema for agent outputs are not yet fully researched. Recommend `/gsd:research-phase` before this phase.
 
-**Research flag:** Standard patterns — monitoring/observability well-documented, skip research-phase.
+---
+
+### Phase 6: E2E Tests + Production Polish
+
+**Rationale:** Playwright SSE testing requires a deliberate strategy (Pitfall 11: `page.route()` cannot intercept EventSource connections). All E2E tests must use sentinel elements + `waitForSelector`. HTTP/2 configuration for the 6-connection browser limit is deferred here — not a local dev concern.
+
+**Delivers:** Full Playwright E2E test suite covering the happy path and one escalation path. `data-testid` sentinel elements on all SSE completion points. Zero `waitForTimeout()` calls. HTTP/2 configuration documented for production.
+
+**Stack from STACK.md:** `pytest-playwright-asyncio 0.7.2`, `uvicorn` live server fixture.
+
+**Pitfalls to avoid:** Playwright EventSource interception limitation (Pitfall 11), HTTP/1.1 6-connection limit (Pitfall 9).
+
+**Research flag:** Playwright async SSE sentinel pattern is moderately uncommon. Keep `/gsd:research-phase` available if async fixture coordination with the live server proves complex.
+
+---
 
 ### Phase Ordering Rationale
 
-- **Foundation first (Phase 1)** — Shared state schema and checkpointing are prerequisites for all agents. MCP stubs enable parallel development. RAG chunking strategy affects all downstream policy validation.
-- **Entry point second (Phase 2-3)** — Receipt processing is where binary data enters, must implement external storage before agents multiply state size. Intake agent validates end-to-end flow before parallelization.
-- **Parallel agents together (Phase 4)** — Compliance and Fraud are independent, building together validates superstep execution.
-- **Terminal node after dependencies (Phase 5)** — Advisor depends on Compliance + Fraud outputs.
-- **UI after functional graph (Phase 6)** — Full streaming and session management require complete pipeline.
-- **Hardening last (Phase 7)** — Production concerns span all layers, address after core functionality proven.
-
-**Dependencies visualized:**
-```
-Phase 1 (Foundation)
-    ├── Phase 2 (Receipt Processing) ──┐
-    │                                   │
-    └── Phase 3 (Intake Agent) ─────────┤
-                                        │
-        Phase 4 (Parallel Agents) ──────┤
-                                        │
-        Phase 5 (Advisor Agent) ────────┤
-                                        │
-        Phase 6 (Reviewer UI) ──────────┤
-                                        │
-        Phase 7 (Production Hardening) ─┘
-```
-
-**Pitfall prevention by phase:**
-- Phase 1: Addresses Pitfalls #1, #4, #5 (coordination, RAG, rate limits)
-- Phase 2: Addresses Pitfalls #2, #3 (state explosion, VLM hallucinations)
-- Phase 4: Validates Pitfall #1 prevention (parallel coordination)
-- Phase 7: Monitors all pitfalls with alerting
+- **Infrastructure first:** The checkpointer lifecycle pitfall (Pitfall 1) has HIGH recovery cost. Resolving it in Phase 1 protects all subsequent phases from a rewrite-level failure.
+- **SSE event taxonomy before features:** The event names, swap targets, and Alpine state boundaries affect every streaming feature in Phases 3–5. Designing them wrong requires rework across multiple pages.
+- **Page 1 before Pages 2–4:** Chat is the only page fully independent of Compliance/Fraud/Advisor agents. Delivering it first produces a demonstrable vertical slice.
+- **Dashboard before Audit Log:** Dashboard requires only `claims.status` queries (simplest path). Audit Log needs `audit_log` events but no agent dependency beyond Intake.
+- **Claim Review last:** Strictly blocked on Fraud + Advisor agents producing stored output. No workaround exists.
+- **E2E tests in final phase:** Sentinel elements should be added to templates as pages are built in Phases 2–5, so Phase 6 is purely test authoring against a complete system.
 
 ### Research Flags
 
-**Phases needing deeper research during planning:**
-- **Phase 2 (Receipt Processing):** VLM prompt engineering for structured extraction with confidence scoring; testing OpenRouter free models (Qwen3 VL vs Nemotron Nano) for accuracy/refusal rates; image quality preprocessing techniques.
-- **Phase 6 (Reviewer UI):** Chainlit persona switching patterns (same app, different views); session management best practices for multi-user LangGraph applications with shared thread_id namespace.
+Phases needing `/gsd:research-phase` during planning:
+- **Phase 5:** Fraud + Advisor agent patterns, multi-agent data flow, and database schema for agent outputs (new fields not yet researched)
+- **Phase 6 (conditional):** Playwright async SSE test fixtures if the sentinel approach proves insufficient for LangGraph multi-step streaming
 
-**Phases with standard patterns (skip research-phase):**
-- **Phase 1 (Foundation):** LangGraph state schemas, PostgreSQL checkpointing, MCP server implementation — all well-documented in official docs.
-- **Phase 3 (Intake Agent):** ReAct + Evaluator Gate patterns — covered in LangGraph multi-agent tutorials.
-- **Phase 4 (Parallel Agents):** Evaluator + Tool Call patterns, parallel execution — standard LangGraph examples.
-- **Phase 5 (Advisor Agent):** Reflection pattern — documented in LangGraph multi-agent tutorials.
-- **Phase 7 (Production Hardening):** Monitoring, observability, error handling — general best practices, not domain-specific.
+Phases with well-documented patterns (skip research-phase):
+- **Phase 1:** FastAPI lifespan, SessionMiddleware, StaticFiles — all from official docs, fully verified
+- **Phase 2:** SSE streaming patterns fully researched in STACK.md and PITFALLS.md
+- **Phase 3:** HTMX multipart upload, interrupt/resume — patterns documented in ARCHITECTURE.md
+- **Phase 4:** HTMX partial swap patterns, dashboard queries — established patterns
+
+---
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All technologies verified via official releases, PyPI, GitHub as of March 2026. LangGraph production-ready (Klarna, Replit). Chainlit community-maintained but active (March 5, 2026 release). OpenRouter free tier confirmed (29 models, March 2026 listings). |
-| Features | HIGH | Feature landscape well-established via industry sources (Navan, Ramp, Brex, SAP Concur comparisons). Multi-agent trend validated by Allianz Nemo case study. Table stakes vs differentiators clearly delineated. |
-| Architecture | HIGH | Patterns validated via LangGraph official docs, LangChain blog posts, and 2026 community tutorials. Shared state with TypedDict, PostgreSQL checkpointing, MCP adapters, parallel execution all confirmed best practices. |
-| Pitfalls | HIGH | Backed by peer-reviewed research (ICLR 2026, arXiv), production incident reports, and 2026 technical guides. Multi-agent failure rates (41-86.7%) from academic study. CVE in langgraph-checkpoint confirmed. VLM hallucination rates from benchmark comparisons. |
+| Stack | HIGH | All versions verified via PyPI and official docs. Tailwind v3 vs v4 decision based on direct inspection of Stitch design files. |
+| Features | HIGH | Primary source is the Stitch HTML designs (first-party). Industry benchmarks from web search (MEDIUM) only influenced prioritization, not the core feature list. |
+| Architecture | HIGH | FastAPI/Starlette/HTMX patterns from official docs. LangGraph integration verified from working code in the existing codebase. Queue-based POST→SSE decoupling is a well-established pattern. |
+| Pitfalls | HIGH | Pitfalls 1–2 sourced from a production migration post and FastAPI official docs. Pitfalls 3 and 6 from official HTMX/Alpine repos and confirmed GitHub issues. All 12 pitfalls have documented prevention patterns. |
 
-**Overall confidence:** HIGH
+**Overall confidence: HIGH**
 
 ### Gaps to Address
 
-- **OpenRouter free model performance variability** — Research confirms Qwen3 VL and Nemotron Nano VL exist as free VLMs, but no benchmarks comparing their receipt extraction accuracy. Mitigation: Phase 2 planning should include A/B testing across available free models to select best performer. Fallback: If free models inadequate, budget $10/month for paid tier (GPT-4o or Gemini 2.0 Flash with documented 15-25% CER).
+- **Fraud + Advisor agent data storage schema:** The Claim Review page requires `matched_claim_id`, `risk_score`, and `advisor_notes` stored in either the `claims` table or `audit_log`. The exact schema is not yet defined. Resolve in Phase 5 planning — likely requires migration `003_add_agent_output_columns.py`.
+- **Auto-Approval Threshold storage:** Where this value lives (env config, database config table, or Advisor Agent logic) is not yet decided. Low risk for Phase 4 (display read-only), but must be resolved before Phase 5 (Advisor Agent needs to read it).
+- **Tailwind production build integration:** The current Dockerfile uses Tailwind CDN (from Stitch designs). Integrating `pytailwindcss` into the Docker build step requires a Dockerfile change. Not blocking for development phases, but must happen before any production deployment.
 
-- **Chainlit maintainership stability** — Original team stepped back May 2025, now community-maintained with latest release March 5, 2026. Active but risk of stagnation. Mitigation: Monitor release cadence during Phase 6 planning. Have contingency plan (migrate to Streamlit or custom FastAPI+React) if Chainlit development stops. For course project timeline (3 months), current version is sufficient.
-
-- **MCP server production deployment patterns** — MCP protocol is relatively new (2026), Docker deployment best practices still emerging. Mitigation: Phase 1 planning should reference recent guides (Docker Compose for MCP servers, MCP troubleshooting guides). Implement health checks and connection validation early to catch protocol issues.
-
-- **Multi-agent system testing strategies** — Multi-agent coordination testing is under-documented. Unclear how to write unit tests for superstep execution, validate parallel agent isolation, and test conditional routing logic. Mitigation: Phase 4 planning should research LangGraph testing patterns (likely need integration tests that exercise full graph, not just unit tests per agent).
-
-- **LangGraph + Chainlit streaming event filtering** — Research confirms streaming is possible but examples show performance issues (LangGraph produces events faster than Chainlit renders). Mitigation: Phase 3 planning should implement event throttling (buffer events, render every 500ms) and metadata-based filtering (only stream user-facing messages, suppress internal coordination).
+---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- **LangGraph Official Docs** — Application structure, graph API, memory, checkpointing, multi-agent workflows
-- **LangChain Blog** — Multi-agent architectures, choosing the right pattern, LangGraph workflows
-- **Chainlit Official Docs** — LangChain/LangGraph integration, streaming support
-- **OpenRouter Official Site** — Free models collection (March 2026), multimodal documentation, rate limits
-- **PostgreSQL Release Notes** — Version 16.13 (Feb 26, 2026)
-- **Qdrant Official Docs** — Python client releases, FastEmbed integration, hybrid search
-- **MCP Python SDK GitHub** — Official Python SDK for Model Context Protocol
-- **Pydantic Official Docs** — v2 validation guide, complete guide 2026
+
+- `fastapi.tiangolo.com/tutorial/server-sent-events/` — FastAPI native SSE, `EventSourceResponse`, `ServerSentEvent` API
+- `pypi.org/project/fastapi/` — FastAPI version 0.135.2, release date March 23, 2026
+- `htmx.org/extensions/sse/` — HTMX SSE extension v2.2.4, attribute placement constraints, event matching
+- `alpinejs.dev/start-here` — Alpine.js v3 CDN, `x-data`, `x-on`, `x-show`
+- `pypi.org/project/playwright/` — Playwright 1.58.0
+- `pypi.org/project/pytest-playwright-asyncio/` — pytest-playwright-asyncio 0.7.2
+- `pypi.org/project/pytailwindcss/` — pytailwindcss 0.3.0
+- `tailwindcss.com/docs/upgrade-guide` — v3→v4 breaking changes (JS config → CSS `@theme`)
+- `starlette.dev/middleware/` — SessionMiddleware, StaticFiles
+- `docs/ux/01_ai_chat_submission.html` (project file) — Confirms Tailwind v3 JS config format in Stitch designs
+- `medium.com/@termtrix/i-built-a-langgraph-fastapi-agent-and-spent-days-fighting-postgres` — Checkpointer lifecycle pitfall from real production migration
+- `jasoncameron.dev/posts/fastapi-cancel-on-disconnect` — SSE disconnect detection pattern
+- `github.com/alpinejs/alpine/discussions/4478` — Alpine state loss on HTMX swaps
+- `github.com/microsoft/playwright/issues/15353` — Playwright EventSource interception limitation (documented)
+- `github.com/bigskysoftware/htmx/issues/3467` — HTMX SSE attribute placement constraint (confirmed)
 
 ### Secondary (MEDIUM confidence)
-- **LateNode Blog** — LangGraph multi-agent orchestration guide 2025 (comprehensive architecture analysis)
-- **Mager.co Blog** — LangGraph deep dive 2026 (stateful multi-agent systems)
-- **MarkTechPost** — Production-grade multi-agent communication system design 2026
-- **Towards AI** — Persistence in LangGraph practical guide 2026
-- **Generect Blog** — LangGraph MCP client setup 2026 guide
-- **Neo4j Blog** — Building ReAct agent with LangGraph and MCP
-- **Navan, Ramp, Brex, SAP Concur** — AI expense management guides, feature comparisons (2026)
-- **Emburse, AppZen** — AI expense compliance and fraud detection (2026)
-- **Klippa, Doxbox** — Receipt OCR/VLM best practices (2026)
-- **TRM Labs, Vellum, Nanonets** — VLM for document extraction (2026)
-- **Unstructured, Firecrawl, PremAI** — RAG chunking strategies benchmarks (2026)
-- **MCP Servers, Stainless** — MCP troubleshooting, error codes, debugging (2026)
 
-### Tertiary (LOW confidence)
-- **arXiv, ICLR 2026** — Academic research on multi-agent failures (peer-reviewed but pre-production)
-- **Medium, DEV.to posts** — Community tutorials on LangGraph state management, Chainlit integration (individual experiences, not official patterns)
-- **GitHub issues** — Chainlit dependency conflicts, LangGraph streaming issues (anecdotal but confirmed by multiple users)
+- Stitch HTML designs: `docs/ux/02_audit_transparency_log.html`, `03_claim_review_escalation.html`, `04_approver_dashboard.html` — Feature specification (first-party design intent)
+- Expensify, Ramp, AppZen feature benchmarks — industry norm validation for P1/P2/P3 feature prioritization
+- `shaveen12.medium.com/langgraph-human-in-the-loop-hitl-deployment-with-fastapi` — interrupt/resume thread_id consistency pattern
+- `sparkco.ai/blog/mastering-langgraph-checkpointing-best-practices-for-2025` — connection pool patterns, lifespan recommendation
 
 ---
-*Research completed: 2026-03-23*
+
+*Research completed: 2026-03-30*
 *Ready for roadmap: yes*

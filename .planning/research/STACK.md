@@ -1,363 +1,342 @@
 # Technology Stack
 
-**Project:** Agentic Expense Claims Processing System
-**Researched:** 2026-03-23
-**Constraint:** Zero-cost (free-tier services and models only)
+**Project:** Agentic Expense Claims — v2.0 UX Redesign (FastAPI + HTMX UI Layer)
+**Researched:** 2026-03-30
+**Scope:** NEW UI layer only. Existing backend stack (LangGraph, PostgreSQL, Qdrant, MCP servers, OpenRouter) is validated and unchanged.
+**Overall Confidence:** HIGH (all critical choices verified via official docs or PyPI)
+
+---
+
+## Context: What Is Being Added
+
+This milestone replaces Chainlit with a custom multi-page FastAPI web application. The backend (LangGraph graph, MCP servers, Postgres, Qdrant) is **not changing**. The research scope covers only:
+
+1. FastAPI + Jinja2 (server-side rendering)
+2. HTMX (dynamic page updates, SSE streaming)
+3. Alpine.js (client-side local state)
+4. Tailwind CSS (production build pipeline)
+5. Playwright (browser E2E testing)
+6. Middleware (sessions, static files)
+
+---
 
 ## Recommended Stack
 
-### Multi-Agent Orchestration
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| LangGraph | Latest (2026) | Multi-agent workflow orchestration, state management | CONFIRMED: Best choice for 4-agent pipeline with precise control flow. Graph-based architecture handles conditional routing (auto-approve/return/escalate), stateful execution, and agent coordination. LangGraph is trusted by Klarna, Replit, Elastic for production multi-agent systems. Supports parallel execution, error recovery, and durable state persistence. |
-| FastMCP (mcp Python SDK) | Latest | MCP server implementation | For building MCP servers (RAG, DBHub, Frankfurter, Email) as Docker services. FastMCP is the official Python SDK for Model Context Protocol, supporting tools, resources, and prompts with async support. |
+### Core Web Framework
 
-**Confidence:** HIGH (verified via WebSearch with current 2026 sources)
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| FastAPI | 0.135.2 | ASGI web framework, SSE streaming, route handling | Already in the stack. v0.135.0 added **native SSE support** (`EventSourceResponse` from `fastapi.sse`) — no external SSE library needed. Async-first, matches LangGraph async patterns. Latest: 0.135.2 (March 23, 2026). |
+| Jinja2 | 3.1.6 | Server-side HTML templating | Starlette's built-in template engine; `Jinja2Templates` is part of FastAPI's standard toolkit. Template inheritance enables shared layout (sidebar, status bar) without duplication. Latest: 3.1.6 (March 5, 2025). |
+| python-multipart | 0.0.20+ | Multipart form parsing (file uploads) | Required by FastAPI for `UploadFile` / `Form` endpoints. Without it, file upload endpoints silently fail. FastAPI docs flag this as a mandatory companion. |
 
-**Alternatives considered:**
-- CrewAI: Role-based agent orchestration. Larger community, simpler API. Not chosen because graph-based control flow fits the intake→compliance→fraud→advisor pipeline better than conversational teams.
-- AutoGen/AG2: Conversational multi-agent. Not chosen because the workflow is structured (not multi-turn dialogue).
-- OpenAI Agents SDK: Locked to OpenAI models, violates free-tier constraint.
-
-**Sources:**
-- [LangGraph: Agent Orchestration Framework](https://www.langchain.com/langgraph)
-- [LangGraph Multi-Agent Orchestration Guide 2025](https://latenode.com/blog/ai-frameworks-technical-infrastructure/langgraph-multi-agent-orchestration/langgraph-multi-agent-orchestration-complete-framework-guide-architecture-analysis-2025)
-- [LangGraph Deep Dive 2026](https://www.mager.co/blog/2026-03-12-langgraph-deep-dive/)
-- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)
+**Confidence:** HIGH — FastAPI 0.135.2 and Jinja2 3.1.6 verified via PyPI.
 
 ---
 
-### UI Framework
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Chainlit | 2.10.0+ | Conversational AI UI, chat interface | CONFIRMED: Purpose-built for LLM chat apps. Automatically handles message history, real-time streaming, file uploads (receipt images), user session management. Native integrations with LangGraph, async support via `@cl.on_message` decorators. Open-source (Apache 2.0), zero cost. Note: Original team stepped back May 2025, now maintained by community under formal agreement. |
+### SSE Streaming
 
-**Confidence:** HIGH (verified via official releases, GitHub changelog dated March 5, 2026)
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| `fastapi.sse` (built-in) | FastAPI 0.135.2 | Server-Sent Events for streaming LLM tokens | Native to FastAPI since 0.135.0. `EventSourceResponse` + `ServerSentEvent` cover all required use cases: token streaming, event naming, resume with `Last-Event-ID`. Automatically sets `X-Accel-Buffering: no` (Nginx fix) and sends keep-alive pings every 15s. No extra dependency. |
 
-**Alternatives considered:**
-- Streamlit: General-purpose UI, not optimized for chat workflows.
-- Gradio: Similar to Chainlit but less LangGraph integration.
-- Custom FastAPI + React: Higher development cost, defeats "zero cost" time constraint.
+**Pattern for LangGraph streaming:**
+```python
+from fastapi.sse import EventSourceResponse, ServerSentEvent
 
-**Sources:**
-- [Chainlit PyPI](https://pypi.org/project/chainlit/)
-- [Chainlit Releases](https://github.com/Chainlit/chainlit/releases)
-- [Chainlit LangGraph Integration](https://docs.chainlit.io/integrations/langchain)
+@app.post("/chat/stream", response_class=EventSourceResponse)
+async def stream_chat(request: ChatRequest) -> AsyncIterable[ServerSentEvent]:
+    async for event in graph.astream_events(input, version="v2"):
+        if event["event"] == "on_chat_model_stream":
+            chunk = event["data"]["chunk"].content
+            yield ServerSentEvent(data=chunk, event="token")
+    yield ServerSentEvent(data="[DONE]", event="done")
+```
 
----
+**Do NOT use** `sse-starlette` (3.3.4, March 29, 2026) — still maintained, but redundant now that FastAPI has native SSE. Adding it introduces a dependency with no benefit for this project's use case.
 
-### LLM & Vision Models
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| OpenRouter API | Latest (2026) | Unified access to free LLM and VLM models | CONFIRMED: 29 free models as of March 2026 (zero cost, zero credit card). Free vision models include Qwen3 VL 235B Thinking, NVIDIA Nemotron Nano 12B VL, Mistral Small 3.1 24B Instruct (multimodal). Rate limits: 20 req/min, 200 req/day (sufficient for expense claims use case). Supports text, images, PDFs, audio, video inputs. Free models subsidized by OpenRouter. |
-
-**Confidence:** HIGH (verified via official OpenRouter collections page, March 2026 listings)
-
-**Receipt OCR approach:**
-- Use free VLM models (Qwen3 VL, NVIDIA Nemotron Nano VL) via OpenRouter for receipt text extraction
-- VLM-based OCR performs end-to-end processing (image → structured data) in single pass
-- No separate OCR library needed (DeepSeek-OCR, PaddleOCR, EasyOCR are alternatives if VLM quality insufficient)
-
-**Sources:**
-- [OpenRouter Free Models (March 2026)](https://openrouter.ai/collections/free-models)
-- [29 Free AI Models on OpenRouter (March 2026)](https://www.teamday.ai/blog/best-free-ai-models-openrouter-2026)
-- [OpenRouter Multimodal Documentation](https://openrouter.ai/docs/guides/overview/multimodal/overview)
+**Confidence:** HIGH — verified via FastAPI official docs at `fastapi.tiangolo.com/tutorial/server-sent-events/`.
 
 ---
 
-### Database & Vector Store
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| PostgreSQL | 16.13 (latest patch, Feb 26, 2026) | Relational database for claims, history, metadata | Industry-standard, mature, excellent Python support via psycopg. Docker image free. PostgreSQL 16 stable with full async support (via psycopg3). |
-| Qdrant | Latest (Python client 1.13.4, March 13, 2026) | Vector database for policy embeddings (RAG) | Lightweight, runs in Docker, zero cost. Python client supports async, local mode (no server for tests), and FastEmbed integration for one-line embedding creation. Ideal for policy document retrieval (RAG MCP server). |
+### Frontend: HTMX
 
-**Confidence:** HIGH (verified via PyPI releases, official PostgreSQL release notes)
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| HTMX | 2.0.8 | Hypermedia: dynamic page updates, form submissions, SSE connection | Current stable release. Eliminates JavaScript for server round-trips. Declarative via `hx-get`, `hx-post`, `hx-swap` attributes. Directly compatible with Jinja2 fragments (server returns partial HTML). |
+| htmx-ext-sse | 2.2.4 | SSE extension for HTMX | Separate from core HTMX since v2. Installs with `hx-ext="sse"`. Provides `sse-connect` and `sse-swap` attributes for declarative SSE streaming into DOM elements. Has exponential-backoff reconnection built in. |
 
-**Database migration:**
-| Library | Version | Purpose | Why |
-|---------|---------|---------|-----|
-| Alembic | Latest | Database schema migrations | De facto standard for SQLAlchemy migrations. Auto-generates migration scripts, supports Postgres transactions, rollback support. |
+**CDN (development / fallback):**
+```html
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/htmx-ext-sse@2.2.4/sse.js"></script>
+```
 
-**Database adapter:**
-| Library | Version | Purpose | Why |
-|---------|---------|---------|-----|
-| psycopg3 | Latest | PostgreSQL Python driver (async) | Modern async-first driver. psycopg2 remains viable (2.9.11, Oct 2025) but psycopg3 recommended for new projects requiring async support (matches LangGraph/Chainlit async patterns). |
-| SQLAlchemy | 2.x | ORM and query builder | Industry standard, supports async (with psycopg3), works seamlessly with Alembic. Provides ORM abstraction while allowing raw SQL when needed. |
+**File upload pattern** (receipt images):
+```html
+<form hx-post="/chat/upload"
+      hx-encoding="multipart/form-data"
+      hx-target="#chat-messages"
+      hx-swap="beforeend">
+  <input type="file" name="receipt" accept="image/*">
+  <button type="submit">Upload Receipt</button>
+</form>
+```
 
-**Sources:**
-- [PostgreSQL 16.13 Release](https://www.postgresql.org/docs/current/index.html)
-- [Qdrant Python Client PyPI](https://pypi.org/project/qdrant-client/)
-- [Qdrant Client GitHub](https://github.com/qdrant/qdrant-client)
-- [Alembic GitHub](https://github.com/sqlalchemy/alembic)
-- [Psycopg3 vs psycopg2 (2026 Guide)](https://leapcell.io/blog/python-postgres-psycopg-orm-guide)
+`hx-encoding="multipart/form-data"` is required for file uploads — HTMX defaults to `application/x-www-form-urlencoded` which drops binary data.
 
----
+**Drag-and-drop:** Alpine.js handles the drag-over/drop state management; HTMX handles the server submission. They operate at different layers and do not conflict.
 
-### Embeddings
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| FastEmbed (via Qdrant) | Latest | Generate embeddings for policy documents | Native Qdrant integration, one-line embedding creation, runs locally (zero cost). Default model: sentence-transformers/all-MiniLM-L6-v2 (384-dim vectors, fast inference, small size, strong semantic similarity performance). |
-
-**Confidence:** HIGH (verified via Qdrant documentation)
-
-**Alternative:** sentence-transformers library directly (10,000+ models on Hugging Face Hub, maintained by Hugging Face). FastEmbed preferred for tighter Qdrant integration.
-
-**Sources:**
-- [Qdrant FastEmbed](https://github.com/qdrant/fastembed)
-- [Qdrant Hybrid Search with FastEmbed](https://qdrant.tech/documentation/beginner-tutorials/hybrid-search-fastembed/)
-- [sentence-transformers PyPI](https://pypi.org/project/sentence-transformers/)
+**Confidence:** HIGH — verified via `htmx.org/extensions/sse/` official docs.
 
 ---
 
-### External APIs
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Frankfurter API | Latest (2026) | Currency conversion | CONFIRMED: Completely free, no API key, no rate limits, no authentication. Provides ECB exchange rates for 30+ currencies. Updated daily at 16:00 CET. Can self-host with Docker if needed. API endpoint: api.frankfurter.dev |
+### Frontend: Alpine.js
 
-**Confidence:** HIGH (verified via official Frankfurter site)
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Alpine.js | 3.x (3.14.x) | Client-side local state: upload drag-and-drop, thinking panel toggle, UI state | No build step. Loads via CDN. `x-data`, `x-show`, `x-on:drop` cover all required local interactivity. Works via MutationObserver — automatically picks up DOM elements injected by HTMX swaps. |
 
-**Sources:**
-- [Frankfurter Official Site](https://frankfurter.dev/)
-- [Frankfurter GitHub](https://github.com/lineofflight/frankfurter)
-- [Frankfurter API 2026](https://publicapis.io/frankfurter-api)
+**CDN:**
+```html
+<script defer src="https://cdn.jsdelivr.net/npm/[email protected]/dist/cdn.min.js"></script>
+```
 
----
+**Division of responsibilities:**
+- **Alpine.js owns:** Upload drag-over highlight, file preview, thinking panel expand/collapse, button loading states, tab switching within a page section.
+- **HTMX owns:** All server round-trips — submitting receipts, loading claim lists, SSE token streaming.
+- **They do not overlap.** Alpine manages `x-data` state; HTMX manages `hx-*` HTTP requests. Different attribute prefixes, different DOM layers.
 
-### MCP Servers (Docker Services)
-| Service | Technology | Purpose | Why |
-|---------|-----------|---------|-----|
-| RAG Server | FastMCP + Qdrant + FastEmbed | Policy document retrieval | Implements RAG for compliance validation. FastMCP provides MCP protocol, Qdrant stores policy embeddings, FastEmbed generates query embeddings. |
-| DBHub Server | FastMCP + psycopg3 | Historical claim queries (fraud detection) | Provides MCP interface to PostgreSQL for duplicate/anomaly detection against historical data. |
-| Frankfurter Server | FastMCP + httpx | Currency conversion | MCP wrapper for Frankfurter API. httpx chosen for async HTTP client (matches LangGraph async patterns). |
-| Email Server | mcp-email-server (0.6.2, March 18, 2026) | Email sending (claim submission, notifications) | Pre-built MCP server with IMAP/SMTP support. Supports Gmail (smtp.gmail.com:587), Outlook, Yahoo. TLS encryption. Python >=3.10. |
+**Critical integration note:** Alpine.js sets up a MutationObserver on `document`. When HTMX swaps new HTML into the page, Alpine automatically initializes `x-data` on new elements — no manual re-initialization needed for simple cases. However, if HTMX **replaces** an element that contains Alpine state, that state is destroyed. Use `hx-swap="beforeend"` (append) for chat messages to preserve existing Alpine state.
 
-**Confidence:** HIGH for RAG/DBHub/Frankfurter (standard pattern), HIGH for Email (verified via PyPI release)
-
-**Email server alternatives:**
-- ptbsare/email-mcp-server (FastMCP-based, POP3+SMTP with TLS)
-- mcp-server-email (supports Gmail, Outlook, Yahoo preconfigured)
-- gmail-mcp-server (Gmail-specific IMAP+SMTP)
-
-**Recommendation:** Use ai-zerolab/mcp-email-server (0.6.2) - most actively maintained, latest release March 18, 2026, supports multiple providers.
-
-**Sources:**
-- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)
-- [mcp-email-server PyPI](https://pypi.org/project/mcp-email-server/)
-- [MCP Email Server Implementations](https://mcpservers.org/servers/ai-zerolab/mcp-email-server)
+**Confidence:** HIGH — verified via `alpinejs.dev/start-here` official docs.
 
 ---
 
-### Validation & Data Modeling
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Pydantic | v2 (latest) | Data validation, serialization | 5-50x faster than v1 (Rust core). Native type hints, JSON Schema emission. Used throughout: agent inputs/outputs, LangGraph state, API payloads, database models (via SQLAlchemy integration). Industry standard for Python data validation. |
+### CSS: Tailwind
 
-**Confidence:** HIGH (verified via official docs, 2026 guides)
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| pytailwindcss | 0.3.0 (wraps Tailwind v3.x) | Production CSS build from Jinja2 templates | No Node.js required. Installs Tailwind standalone CLI via pip. Scans Jinja2 templates, generates purged CSS. Supports `TAILWINDCSS_VERSION` env var for pinning. Latest: 0.3.0 (October 29, 2025). |
 
-**Sources:**
-- [Pydantic v2 Documentation](https://docs.pydantic.dev/latest/)
-- [Pydantic v2 Validation Guide (Jan 2026)](https://oneuptime.com/blog/post/2026-01-21-python-pydantic-v2-validation/view)
-- [Pydantic Complete Guide 2026](https://devtoolbox.dedyn.io/blog/pydantic-complete-guide)
+**Why Tailwind v3, not v4:**
+The Stitch HTML designs (`docs/ux/`) use `cdn.tailwindcss.com` with inline JS config (`tailwind.config = { theme: { extend: { colors: {...} } } }`). This is the **Tailwind v3 CDN format** — the `theme.extend.colors` pattern with hex values. Tailwind v4 changed to CSS-first config with `@theme { --color-*: oklch(...) }`. Migrating 60+ design tokens from v3 hex format to v4 OKLCH CSS variables adds risk with zero value for this course project. Stay on v3 to match the designs exactly.
 
----
+**Build configuration:**
+```bash
+# Install
+pip install pytailwindcss
 
-### HTTP Client (Async)
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| httpx | Latest | Async HTTP client for external APIs | Supports both sync and async (unlike aiohttp which is async-only). HTTP/2 support. Slightly slower than aiohttp in pure async benchmarks but more flexible (can mix sync/async). Recent 2026 tests show comparable performance (1.4s vs <2s for aiohttp). Matches LangGraph/Chainlit async patterns. |
+# One-time: init config from Stitch design tokens
+npx tailwindcss init  # OR extract from docs/ux/ inline config
 
-**Confidence:** MEDIUM (performance claims vary by benchmark, both httpx and aiohttp viable)
+# Development watch
+pytailwindcss -i src/agentic_claims/static/css/input.css \
+              -o src/agentic_claims/static/css/output.css \
+              --watch
 
-**Alternative:** aiohttp (async-only, generally faster for pure async workloads, WebSocket support). Choose aiohttp if performance bottleneck emerges or WebSocket needed.
+# Production build
+pytailwindcss -i src/agentic_claims/static/css/input.css \
+              -o src/agentic_claims/static/css/output.css \
+              --minify
+```
 
-**Sources:**
-- [httpx vs aiohttp Comparison](https://leapcell.medium.com/comparing-requests-aiohttp-and-httpx-which-http-client-should-you-use-6e3d9ff47b0e)
-- [10 Best Python HTTP Clients 2026](https://iproyal.com/blog/best-python-http-clients/)
-- [httpx vs aiohttp Performance](https://apidog.com/blog/aiohttp-vs-httpx/)
+`tailwind.config.js` needs `content` pointing at Jinja2 templates:
+```js
+module.exports = {
+  darkMode: "class",
+  content: ["./src/agentic_claims/templates/**/*.html"],
+  theme: {
+    extend: {
+      colors: { /* extracted from docs/ux/ Stitch designs */ }
+    }
+  }
+}
+```
 
----
+**The design HTML files reference `cdn.tailwindcss.com` — do not ship CDN in production.** Replace with the built `output.css` link in the base template.
 
-### Testing
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| pytest | Latest | Test framework | Industry standard. |
-| pytest-asyncio | Latest (docs updated March 23, 2026) | Async test support | Handles event loop, supports async fixtures, `@pytest.mark.asyncio` decorator. Auto mode for asyncio-only projects. Matches async-first architecture (LangGraph, Chainlit, psycopg3, httpx). |
-| pytest-docker | Latest | Docker fixture management | For integration tests with Postgres, Qdrant, MCP servers running in Docker. |
-
-**Confidence:** HIGH (pytest-asyncio docs updated today)
-
-**Sources:**
-- [pytest-asyncio PyPI](https://pypi.org/project/pytest-asyncio/)
-- [pytest-asyncio Documentation](https://pytest-asyncio.readthedocs.io/)
-- [pytest-asyncio Practical Guide](https://pytest-with-eric.com/pytest-advanced/pytest-asyncio/)
-
----
-
-### Infrastructure
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Docker | Latest | Service containerization | For MCP servers (RAG, DBHub, Frankfurter, Email), Postgres, Qdrant. |
-| Docker Compose | Latest | Multi-service orchestration | 2026 best practices: use profiles for selective services, named volumes for Postgres/Qdrant persistence, secrets via environment files (not hardcoded), health checks with `--interval=30s --timeout=3s --start-period=40s`, network isolation for service pairs. |
-
-**Confidence:** HIGH (Docker Compose best practices verified via 2026 guides)
-
-**Sources:**
-- [Docker Compose Best Practices 2026](https://hackmamba.io/engineering/best-practices-when-using-docker-compose/)
-- [Mastering Docker Compose 2026](https://medium.com/@adriansyah1230/mastering-docker-compose-a-practical-guide-to-multi-container-applications-c76811010131)
-- [Docker Compose Python Multi-Service Guide](https://www.geeksforgeeks.org/devops/docker-compose-for-python-applications/)
+**Confidence:** HIGH for approach (pytailwindcss verified via PyPI, Tailwind v3 vs v4 analysis based on Stitch design files inspection). MEDIUM for pytailwindcss v4 compatibility claim in search results (source is indirect; pinning to v3 avoids this risk entirely).
 
 ---
 
-### Language & Runtime
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Python | 3.10-3.13 | All services | Chainlit requires Python <4.0, >=3.10. Qdrant client supports 3.10-3.14. LangGraph, FastMCP, pytest-asyncio all support 3.10+. Use Python 3.12 or 3.13 for latest performance improvements. |
+### Browser E2E Testing: Playwright
 
-**Confidence:** HIGH
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| playwright | 1.58.0 | Browser automation, E2E test driver | Latest Python release (January 30, 2026). Supports Chromium, Firefox, WebKit. Headless mode for CI. Auto-waits for elements, handles async content (important for SSE streaming). |
+| pytest-playwright | 0.7.2 | pytest plugin for synchronous Playwright tests | Standard pytest integration. Provides `page`, `browser`, `browser_context` fixtures. Latest: 0.7.2 (November 24, 2025). |
+| pytest-playwright-asyncio | 0.7.2 | pytest plugin for async Playwright tests | Required if writing tests as `async def`. Same version as pytest-playwright. Provides async-native fixtures. Use this instead of the sync version given the project's async-first stance (pytest-asyncio already in use). |
+
+**FastAPI live server fixture pattern** (required for E2E tests):
+```python
+# tests/conftest.py
+import threading
+import uvicorn
+import pytest
+from agentic_claims.app import app
+
+@pytest.fixture(scope="session")
+def live_server():
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=8001))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    # Wait for server ready
+    import time, httpx
+    for _ in range(30):
+        try:
+            httpx.get("http://127.0.0.1:8001/health")
+            break
+        except Exception:
+            time.sleep(0.1)
+    yield "http://127.0.0.1:8001"
+    server.should_exit = True
+```
+
+**Confidence:** HIGH — playwright 1.58.0 and pytest-playwright 0.7.2 verified via PyPI. pytest-playwright-asyncio 0.7.2 confirmed separate async variant.
 
 ---
 
-## Missing Libraries Identified
+### Middleware
 
-These were missing from the confirmed stack but are required:
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Starlette `SessionMiddleware` (built-in) | bundled with FastAPI | Cookie-based session state (thread_id, claim_id per browser session) | Already part of Starlette which FastAPI depends on. Signed cookie sessions. Stores `thread_id` and `claim_id` so each browser tab gets isolated LangGraph state. No extra dependency. |
+| Starlette `StaticFiles` (built-in) | bundled with FastAPI | Serve CSS, JS, images from `/static` | Already part of Starlette. Mount at `/static` in FastAPI app. Serves the built Tailwind CSS, HTMX, Alpine.js (downloaded/vendored), and any font assets. |
 
-| Category | Library | Version | Purpose |
-|----------|---------|---------|---------|
-| Database | SQLAlchemy | 2.x | ORM and query builder |
-| Database | Alembic | Latest | Schema migrations |
-| Database | psycopg3 (or psycopg2-binary) | Latest | PostgreSQL driver |
-| Embeddings | FastEmbed (or sentence-transformers) | Latest | Generate policy embeddings |
-| HTTP | httpx | Latest | Async HTTP client (Frankfurter API, external calls) |
-| Validation | Pydantic | v2 | Data modeling and validation |
-| Testing | pytest | Latest | Test framework |
-| Testing | pytest-asyncio | Latest | Async test support |
-| Testing | pytest-docker | Latest | Docker integration tests |
+**No CORS middleware needed** — this is a server-rendered app, not an API consumed from external origins.
+
+**Session key management:** `SESSION_SECRET_KEY` must be in `.env.local` (not hardcoded). Starlette's `SessionMiddleware` requires a secret key for cookie signing.
+
+**Confidence:** HIGH — verified via FastAPI and Starlette official documentation.
+
+---
+
+## Supporting Libraries
+
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| `python-multipart` | 0.0.20+ | Multipart form parsing for file uploads | Required for any `UploadFile` or `Form` parameter in FastAPI routes |
+| `aiofiles` | 24.x | Async file I/O | If receipt images need to be written to disk (currently base64 in memory — only needed if storage strategy changes) |
+| `httpx` | Latest | Async HTTP client | Already in stack. Used in live-server health check fixture |
+
+---
+
+## What NOT to Use
+
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| `sse-starlette` | Redundant — FastAPI 0.135.0 has native `EventSourceResponse` with all required features | `fastapi.sse.EventSourceResponse` (built-in) |
+| Tailwind CSS v4 CDN (`cdn.jsdelivr.net/npm/@tailwindcss/browser@4`) | Stitch designs use v3 token format. v4 breaks `theme.extend.colors` JS config pattern; migration adds scope without value | `pytailwindcss` (v3 standalone CLI) |
+| `cdn.tailwindcss.com` in production | CDN processes CSS in-browser at runtime: slow, unoptimized, no purging. Official Tailwind docs explicitly say "not intended for production" | `pytailwindcss` build + serve via `StaticFiles` |
+| React / Vue / any SPA framework | Adds Node.js build pipeline and increases JS bundle size. Project constraint explicitly excludes SPAs. HTMX + Alpine.js achieves all required interactivity | HTMX + Alpine.js |
+| WebSocket | Adds bidirectional complexity not needed here. SSE is one-directional (server → client) which is all that's needed for token streaming | FastAPI native SSE |
+| `fastapi-jinja` (third-party) | Abandoned library (last commit 2022). FastAPI ships `Jinja2Templates` natively via Starlette | `from fastapi.templating import Jinja2Templates` (built-in) |
+| pytest-playwright sync version alone | Project uses pytest-asyncio throughout. Mixing sync and async test fixtures causes event loop conflicts | `pytest-playwright-asyncio` (async variant) |
+
+---
+
+## Version Compatibility
+
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| FastAPI 0.135.2 | Starlette 0.46.x | FastAPI depends on specific Starlette version; pip resolves automatically |
+| HTMX 2.0.8 | htmx-ext-sse 2.2.4 | SSE extension must match HTMX major version. v1.x extension is incompatible with HTMX 2.x |
+| Alpine.js 3.x | HTMX 2.0.8 | No known conflicts. Use `defer` on Alpine script tag to load after DOM. Alpine MutationObserver picks up HTMX swaps automatically |
+| pytailwindcss 0.3.0 | Tailwind v3.x | Wraps v3 standalone CLI. Do not use with v4 config syntax (`@theme`) |
+| playwright 1.58.0 | pytest-playwright-asyncio 0.7.2 | Same release cycle; both from January–November 2025 |
+| python-multipart | FastAPI 0.135.2 | FastAPI docs list it as required companion for form/file endpoints; any recent version works |
 
 ---
 
 ## Installation
 
 ```bash
-# Core orchestration
-pip install langgraph mcp
+# Web framework (FastAPI already in stack — verify version is 0.135.2+)
+poetry add "fastapi>=0.135.2"
+poetry add jinja2 python-multipart
 
-# UI
-pip install chainlit
+# CSS build (dev dependency — not needed at runtime)
+poetry add --group dev pytailwindcss
 
-# Database
-pip install sqlalchemy alembic psycopg[binary]  # psycopg3 with binary
-# OR for psycopg2 (if needed):
-# pip install psycopg2-binary
+# E2E testing (dev dependency)
+poetry add --group dev playwright pytest-playwright-asyncio
+poetry run playwright install chromium  # download browser binaries
 
-# Vector store & embeddings
-pip install qdrant-client[fastembed]
-
-# Validation
-pip install pydantic
-
-# HTTP client
-pip install httpx
-
-# Testing
-pip install pytest pytest-asyncio pytest-docker
-
-# MCP servers
-pip install mcp-email-server
-
-# Infrastructure
-# Docker and Docker Compose (install separately, not via pip)
+# HTMX and Alpine.js — vendor or CDN
+# Option A: Vendor into static/ (recommended for reproducibility)
+# Download htmx.min.js and sse.js into src/agentic_claims/static/js/
+# Option B: CDN links in base template (simpler, requires internet at runtime)
 ```
+
+**Note:** `aiofiles` is optional — only add if receipt images move from in-memory to disk storage.
 
 ---
 
 ## Alternatives Considered
 
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| Orchestration | LangGraph | CrewAI | Role-based teams don't fit structured pipeline as well as graph-based control flow |
-| Orchestration | LangGraph | AutoGen/AG2 | Conversational paradigm doesn't match intake→compliance→fraud→advisor workflow |
-| Orchestration | LangGraph | OpenAI Agents SDK | Locked to OpenAI models, violates zero-cost constraint |
-| UI | Chainlit | Streamlit | Not optimized for chat workflows, no native LangGraph integration |
-| UI | Chainlit | Gradio | Less LangGraph integration than Chainlit |
-| Database | PostgreSQL 16 | MySQL | PostgreSQL better JSON support, async driver maturity |
-| Database | PostgreSQL 16 | SQLite | No network access (can't run in separate Docker service) |
-| Vector Store | Qdrant | Chroma | Qdrant has better async support and FastEmbed integration |
-| Vector Store | Qdrant | Pinecone | Not free-tier compatible, cloud-only |
-| Embeddings | FastEmbed | OpenAI Embeddings | OpenAI embeddings not free |
-| HTTP Client | httpx | aiohttp | httpx supports both sync/async, HTTP/2; aiohttp async-only but faster (use aiohttp if performance bottleneck emerges) |
-| Currency API | Frankfurter | exchangerate-api.com | Frankfurter has no rate limits, no API key |
-| OCR | VLM (Qwen3 VL, Nemotron Nano) | DeepSeek-OCR, PaddleOCR | VLM approach simpler (end-to-end), but can fallback to dedicated OCR if VLM quality insufficient |
+| Category | Recommended | Alternative | When Alternative Makes Sense |
+|----------|-------------|-------------|------------------------------|
+| SSE library | `fastapi.sse` (built-in) | `sse-starlette` 3.3.4 | If you need advanced connection pooling or multi-client broadcast patterns beyond what built-in provides |
+| CSS build | `pytailwindcss` (v3) | Tailwind v4 with `@config` | If you're starting a new project from scratch without existing v3 design tokens |
+| CSS build | `pytailwindcss` | Node.js + `npm run build` | If team already has Node.js toolchain in place |
+| Frontend interactivity | HTMX + Alpine.js | React / Next.js | If app has complex client-side state that can't be expressed as simple x-data objects |
+| E2E testing | `pytest-playwright-asyncio` | Selenium + `pytest-selenium` | If you need IE11 support (not relevant here) |
+| Session storage | Starlette `SessionMiddleware` (cookie) | Redis-backed sessions | If session data exceeds ~4KB cookie limit (thread_id + claim_id are tiny; this won't happen) |
 
 ---
 
-## Validation Against Confirmed Stack
+## Stack Patterns by Use Case
 
-| Confirmed Component | Status | Notes |
-|---------------------|--------|-------|
-| LangGraph | VALIDATED | Latest 2026 version, production-ready for multi-agent orchestration |
-| Chainlit | VALIDATED | v2.10.0 (March 5, 2026), maintained by community, async support confirmed |
-| OpenRouter API | VALIDATED | 29 free models (March 2026), free VLMs available (Qwen3 VL, NVIDIA Nemotron Nano) |
-| PostgreSQL 16 | VALIDATED | v16.13 (Feb 26, 2026), async support via psycopg3 |
-| Qdrant | VALIDATED | Python client 1.13.4 (March 13, 2026), Docker-ready |
-| MCP servers (4 Docker services) | VALIDATED | FastMCP for RAG/DBHub/Frankfurter, mcp-email-server 0.6.2 for Email |
-| Python | VALIDATED | Python 3.10-3.13 compatible across all libraries |
-| Docker Compose | VALIDATED | Standard for local multi-service orchestration |
-| Frankfurter API | VALIDATED | Free, no rate limits, ECB data, 30+ currencies |
+**Streaming LLM tokens to browser:**
+- FastAPI SSE endpoint (`EventSourceResponse`) wraps LangGraph `astream_events(version="v2")`
+- HTMX `hx-ext="sse"` + `sse-connect` + `sse-swap` renders tokens into chat div
+- Alpine.js handles scroll-to-bottom behavior on new token arrival
 
-**All confirmed stack components are current best practices as of March 2026.**
+**Receipt image upload with drag-and-drop:**
+- Alpine.js: `x-on:dragover.prevent`, `x-on:drop.prevent` manage drag state and file preview
+- HTMX: `hx-post="/chat/upload" hx-encoding="multipart/form-data"` submits file to FastAPI
+- FastAPI: `UploadFile` parameter receives file, base64-encodes, stores in `imageStore`
 
----
+**LangGraph interrupt/resume (clarification questions):**
+- SSE stream sends a `ServerSentEvent(event="interrupt", data=question)` when interrupt detected
+- HTMX: `sse-swap="interrupt"` injects the clarification prompt into the chat UI
+- User types response; HTMX `hx-post="/chat/resume"` sends it; backend calls `Command(resume=...)`
 
-## Architecture Alignment
+**Dynamic page navigation (sidebar):**
+- HTMX `hx-get="/dashboard" hx-target="#main-content" hx-push-url="true"` swaps page content
+- No full page reload; browser URL updates via `hx-push-url`
 
-This stack supports the confirmed 4-agent architecture:
-
-1. **Intake Agent (ReAct + Evaluator Gate):**
-   - VLM receipt extraction: OpenRouter free VLMs (Qwen3 VL, Nemotron Nano)
-   - Policy validation via RAG: RAG MCP server (FastMCP + Qdrant + FastEmbed)
-   - Currency conversion: Frankfurter MCP server (FastMCP + httpx)
-
-2. **Compliance Agent (Evaluator):**
-   - Org-level policy auditing: RAG MCP server
-
-3. **Fraud Agent (Tool Call):**
-   - Duplicate/anomaly detection: DBHub MCP server (FastMCP + psycopg3 + PostgreSQL)
-
-4. **Advisor Agent (Reflection + Routing):**
-   - Synthesizes findings, routes decisions (auto-approve/return/escalate)
-   - Email submission: Email MCP server (mcp-email-server)
-
-**LangGraph** orchestrates the 4-agent pipeline with state management and conditional routing.
-**Chainlit** provides the claimant-facing UI for receipt upload and status tracking.
-**PostgreSQL** stores claims history, metadata, and audit trail.
-**Qdrant** stores policy document embeddings for RAG retrieval.
-
----
-
-## Risk Assessment
-
-| Component | Risk Level | Mitigation |
-|-----------|-----------|------------|
-| Chainlit maintainership | LOW-MEDIUM | Original team stepped back May 2025, now community-maintained. Active releases (March 2026). Monitor for stagnation. Have contingency plan (migrate to Streamlit or custom FastAPI+React if abandoned). |
-| OpenRouter free tier rate limits | LOW | 20 req/min, 200 req/day sufficient for expense claims use case (not high-volume transactional system). If exceeded, implement request queuing or migrate to self-hosted Ollama. |
-| VLM receipt OCR quality | MEDIUM | Free VLMs may have lower accuracy than commercial (GPT-4V, Claude 3.5 Sonnet Vision). Mitigation: Implement fallback to dedicated OCR library (DeepSeek-OCR, PaddleOCR) if VLM extraction fails validation. |
-| Frankfurter API availability | LOW | Self-host option available via Docker if public API becomes unreliable. |
-| psycopg3 maturity | LOW | psycopg3 stable, actively maintained, but psycopg2 remains fallback option (2.9.11, Oct 2025) if issues emerge. |
+**Python ≥ 3.11 requirement for streaming:**
+- LangGraph `get_stream_writer()` uses `ContextVar` for propagation across async tasks
+- Python < 3.11 has ContextVar propagation bugs in async task trees
+- Project already on Python 3.12+ (confirmed in CLAUDE.md), so no action needed
 
 ---
 
 ## Sources
 
-All sources cited inline above. Key references:
+| Source | Topics Verified | Confidence |
+|--------|----------------|------------|
+| `fastapi.tiangolo.com/tutorial/server-sent-events/` | FastAPI native SSE, `EventSourceResponse`, `ServerSentEvent` API, caveats | HIGH |
+| `pypi.org/project/fastapi/` | FastAPI version 0.135.2, release date March 23, 2026 | HIGH |
+| `htmx.org/extensions/sse/` | HTMX SSE extension v2.2.4, attributes, CDN URL | HIGH |
+| `htmx.org/posts/2024-06-17-htmx-2-0-0-is-released/` | HTMX 2.0 release notes, extension separation | HIGH |
+| `alpinejs.dev/start-here` | Alpine.js v3 CDN URL, x-data, x-on, x-show, x-model | HIGH |
+| `pypi.org/project/playwright/` | Playwright 1.58.0, released January 30, 2026 | HIGH |
+| `pypi.org/project/pytest-playwright/` | pytest-playwright 0.7.2, sync-only, November 24, 2025 | HIGH |
+| `pypi.org/project/pytest-playwright-asyncio/` | pytest-playwright-asyncio 0.7.2, async fixtures | HIGH |
+| `pypi.org/project/pytailwindcss/` | pytailwindcss 0.3.0, supports Tailwind v3/v4, October 29, 2025 | HIGH |
+| `tailwindcss.com/docs/installation/play-cdn` | CDN is dev-only, not for production | HIGH |
+| `tailwindcss.com/docs/installation/tailwind-cli` | Standalone CLI (no Node.js), v4.2 current | HIGH |
+| `tailwindcss.com/docs/upgrade-guide` | v3→v4 breaking changes: JS config → CSS `@theme`, color token format | HIGH |
+| `docs/ux/01_ai_chat_submission.html` (project file) | Confirms designs use Tailwind v3 CDN + JS config format | HIGH (direct inspection) |
+| `starlette.dev/middleware/` | SessionMiddleware, StaticFiles built into Starlette | HIGH |
+| `pypi.org/project/jinja2/` | Jinja2 3.1.6, March 5, 2025 | HIGH |
+| `dev.to/kasi_viswanath/streaming-ai-agent-with-fastapi-langgraph-2025-26-guide-1nkn` | LangGraph astream_events + FastAPI SSE integration pattern | MEDIUM (community article, consistent with LangGraph docs) |
 
-- [LangGraph Multi-Agent Orchestration](https://latenode.com/blog/ai-frameworks-technical-infrastructure/langgraph-multi-agent-orchestration/langgraph-multi-agent-orchestration-complete-framework-guide-architecture-analysis-2025)
-- [Chainlit Releases](https://github.com/Chainlit/chainlit/releases)
-- [OpenRouter Free Models (March 2026)](https://openrouter.ai/collections/free-models)
-- [PostgreSQL 16.13 Documentation](https://www.postgresql.org/docs/current/index.html)
-- [Qdrant Python Client PyPI](https://pypi.org/project/qdrant-client/)
-- [FastEmbed GitHub](https://github.com/qdrant/fastembed)
-- [mcp-email-server PyPI](https://pypi.org/project/mcp-email-server/)
-- [Pydantic v2 Documentation](https://docs.pydantic.dev/latest/)
-- [pytest-asyncio PyPI](https://pypi.org/project/pytest-asyncio/)
-- [Docker Compose Best Practices 2026](https://hackmamba.io/engineering/best-practices-when-using-docker-compose/)
-- [Frankfurter API](https://frankfurter.dev/)
+---
+
+*Stack research for: FastAPI + HTMX multi-page AI chat application (v2.0 UX Redesign)*
+*Researched: 2026-03-30*
+*Scope: UI layer additions only. Backend stack unchanged from v1.0.*

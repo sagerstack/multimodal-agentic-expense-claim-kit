@@ -1,470 +1,849 @@
-# Architecture Patterns
+# Architecture Research
 
-**Domain:** Multi-Agent LangGraph Systems with MCP Integration
-**Researched:** 2026-03-23
-**Confidence:** HIGH
+**Domain:** FastAPI + Jinja2 + HTMX replacing Chainlit as the UI layer for a LangGraph multi-agent system
+**Researched:** 2026-03-30
+**Confidence:** HIGH (FastAPI/Starlette/HTMX patterns from official docs; LangGraph integration verified from working code)
 
-## Recommended Architecture
+---
 
-For a 4-agent expense claims pipeline using LangGraph orchestration with MCP tool integration and Chainlit UI, the recommended architecture follows a **Graph-Based Multi-Agent System with Shared State and Message Bus Communication**.
+## Context: What Changes, What Does Not
+
+This is a UI-layer replacement milestone. The LangGraph backend, MCP servers, PostgreSQL, and Qdrant are unchanged. Only the app service in docker-compose is being replaced.
+
+**Unchanged:**
+- `src/agentic_claims/core/graph.py` — StateGraph, `getCompiledGraph()`, `evaluatorGate`
+- `src/agentic_claims/core/state.py` — `ClaimState` TypedDict
+- `src/agentic_claims/core/imageStore.py` — In-memory `claimId -> base64`
+- All 4 MCP servers and their Docker services
+- `AsyncPostgresSaver` checkpointer pattern
+- `astream_events(version="v2")` streaming interface
+- All agent nodes (intake, compliance, fraud, advisor)
+
+**Replaced:**
+- `src/agentic_claims/app.py` (Chainlit handlers) → new `src/agentic_claims/web/` package
+- `Dockerfile` CMD → `uvicorn` instead of `chainlit run`
+- `chainlit` Python dependency → `fastapi`, `uvicorn`, `jinja2`, `python-multipart`
+- `.chainlit/` config directory → `templates/`, `static/` directories
+
+**Added:**
+- 4 Jinja2 templates (one per Stitch design)
+- SSE endpoint bridging `astream_events()` to `text/event-stream`
+- Starlette `SessionMiddleware` for `thread_id` / `claim_id` per browser session
+- REST endpoints for dashboard, audit log, claim review data
+- `static/` for any local assets (Tailwind stays on CDN)
+
+---
+
+## Standard Architecture
 
 ### System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ Chainlit UI Layer (Two Personas: Claimant, Reviewer)          │
-│ - Real-time message streaming                                  │
-│ - Session management                                           │
-│ - Token-by-token display                                       │
-└───────────────────┬─────────────────────────────────────────────┘
+Browser (Tailwind CDN + HTMX + Alpine.js)
+│
+│  Page navigation        → GET /  /dashboard  /audit  /review/{id}
+│  Chat message           → POST /chat/message  (multipart/form-data)
+│  SSE stream connection  → GET  /chat/stream
+│  Dashboard data         → GET  /api/claims
+│  Audit log data         → GET  /api/audit
+│  Claim review data      → GET  /api/claims/{id}
+│
+▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  FastAPI app  (replaces chainlit run)                               │
+│                                                                     │
+│  SessionMiddleware (Starlette)                                      │
+│    request.session["thread_id"]  — per browser tab                 │
+│    request.session["claim_id"]   — per submission                  │
+│                                                                     │
+│  Lifespan                                                           │
+│    compiled_graph = getCompiledGraph()   ← one instance, shared    │
+│    checkpointer_ctx  (async context manager, never closed)         │
+│                                                                     │
+│  Routers                                                            │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │  pages/      │  │  chat/       │  │  api/                    │  │
+│  │  router.py   │  │  router.py   │  │  router.py               │  │
+│  │              │  │              │  │                          │  │
+│  │  GET /       │  │  POST        │  │  GET /api/claims         │  │
+│  │  GET /dash   │  │  /chat/msg   │  │  GET /api/audit          │  │
+│  │  GET /audit  │  │              │  │  GET /api/claims/{id}    │  │
+│  │  GET /review │  │  GET         │  │                          │  │
+│  │  /{id}       │  │  /chat/      │  │  (serve data for HTMX    │  │
+│  │              │  │  stream      │  │   partial swaps on the   │  │
+│  │  Returns full│  │  (SSE)       │  │   3 non-chat pages)      │  │
+│  │  Jinja2 page │  │              │  │                          │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────────┘  │
+│                                                                     │
+│  Jinja2Templates  (templates/)                                      │
+│  StaticFiles      (static/)                                         │
+└─────────────────────────────────────────────────────────────────────┘
+                    │                           │
+          ┌─────────┘                           └──────────┐
+          ▼                                                ▼
+┌──────────────────────┐                    ┌─────────────────────────┐
+│  LangGraph Backend   │                    │  PostgreSQL             │
+│                      │                    │                         │
+│  getCompiledGraph()  │                    │  Claims, Receipts,      │
+│  ClaimState          │                    │  AuditLog tables        │
+│  astream_events()    │                    │  LangGraph checkpoints  │
+│  imageStore          │                    │                         │
+└──────────────────────┘                    └─────────────────────────┘
                     │
-                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ LangGraph Orchestration Layer                                  │
-│ ┌───────────────────────────────────────────────────────────┐  │
-│ │ ClaimState (TypedDict) - Shared Across All Nodes         │  │
-│ │ - claim_data, compliance_status, fraud_score, etc.        │  │
-│ │ - message_history (reducer: add_messages)                 │  │
-│ └───────────────────────────────────────────────────────────┘  │
-│                                                                 │
-│ ┌─────────┐    ┌──────────────┐    ┌──────────┐    ┌────────┐ │
-│ │ Intake  │───▶│ Compliance   │───▶│  Fraud   │───▶│Advisor │ │
-│ │ (ReAct) │    │ (Evaluator)  │    │(ToolCall)│    │(Reflect│ │
-│ │ Node    │    │ Node         │    │ Node     │    │+ Route)│ │
-│ └─────────┘    └──────────────┘    └──────────┘    └────────┘ │
-│      │                │                    │              │     │
-│      └────────────────┴────────────────────┴──────────────┘     │
-│                              │                                  │
-│                              ▼                                  │
-│                    PostgreSQL Checkpointer                      │
-│                    (State Persistence)                          │
-└─────────────────────────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ MCP Layer (4 Docker Services)                                  │
-│ ┌────────┐  ┌────────┐  ┌─────────────┐  ┌───────────┐        │
-│ │  RAG   │  │ DBHub  │  │ Frankfurter │  │   Email   │        │
-│ │(Qdrant)│  │(Postgres│  │  (Currency  │  │   SMTP    │        │
-│ │        │  │ Queries)│  │  Exchange)  │  │           │        │
-│ └────────┘  └────────┘  └─────────────┘  └───────────┘        │
-└─────────────────────────────────────────────────────────────────┘
+          ┌─────────┴──────────────────────────────────┐
+          ▼           ▼                ▼               ▼
+    mcp-rag:8001  mcp-db:8002  mcp-currency:8003  mcp-email:8004
 ```
 
-### Component Boundaries
+### Component Responsibilities
 
-| Component | Responsibility | Communicates With | State Access |
-|-----------|----------------|-------------------|--------------|
-| **Chainlit UI** | User interaction, message streaming, session management | LangGraph via async streaming | Read-only (displays state) |
-| **Intake Agent Node** | Receipt upload, pre-validation, user Q&A (ReAct pattern) | ClaimState (read/write), MCP RAG + DBHub | Full state read/write |
-| **Compliance Agent Node** | Policy evaluation, rule checking (Evaluator pattern) | ClaimState (read/write), MCP RAG (policy docs) | Full state read/write |
-| **Fraud Agent Node** | Anomaly detection, pattern analysis (Tool Call pattern) | ClaimState (read/write), MCP DBHub (historical data) | Full state read/write |
-| **Advisor Agent Node** | Synthesis, routing decisions (Reflection + Routing) | ClaimState (read/write), MCP Email | Full state read/write |
-| **PostgreSQL Checkpointer** | State persistence, crash recovery, time-travel debugging | LangGraph StateGraph | Manages checkpoint persistence |
-| **MCP Servers** | External tool access (RAG, DB, Currency, Email) | Agent nodes via langchain-mcp-adapters | Stateless tool providers |
+| Component | Responsibility | Communicates With |
+|-----------|----------------|-------------------|
+| `web/main.py` | FastAPI app, lifespan, middleware, router mounting | All routers, templates, static |
+| `web/routers/pages.py` | Full-page GET routes returning TemplateResponse | Jinja2Templates |
+| `web/routers/chat.py` | POST message handler, GET SSE stream endpoint | LangGraph graph, imageStore, SessionMiddleware |
+| `web/routers/api.py` | JSON API for dashboard/audit/review data | PostgreSQL via SQLAlchemy |
+| `web/session.py` | Session dependency injection helper | Starlette SessionMiddleware |
+| `templates/base.html` | Shared layout: sidebar nav, top nav, head section | All page templates via `{% extends %}` |
+| `templates/chat.html` | Chat interface with SSE listener div | base.html |
+| `templates/dashboard.html` | Approver dashboard with bento grid | base.html |
+| `templates/audit.html` | Audit log with claim detail panel | base.html |
+| `templates/review.html` | Claim review/escalation page | base.html |
+| `static/` | Local assets only (none required; Tailwind stays CDN) | Jinja2Templates via url_for |
 
-### Data Flow
+---
 
-**Execution Flow (Sequential + Conditional + Parallel):**
+## Recommended Project Structure
 
-1. **Pre-Submission Stage (Sequential)**
-   - User uploads receipt via Chainlit UI
-   - Intake Agent (ReAct) processes upload
-     - Tool call: MCP RAG (extract policy requirements)
-     - Tool call: MCP DBHub (validate employee, project codes)
-     - Updates ClaimState: `claim_data`, `validation_status`
-     - Checkpointed to Postgres after node execution
-   - Conditional edge: Is claim submission ready?
-     - NO → Loop back to Intake for user clarification
-     - YES → Proceed to Post-Submission Stage
+```
+src/agentic_claims/
+├── web/                            # NEW — replaces app.py
+│   ├── __init__.py
+│   ├── main.py                     # FastAPI app, lifespan, middleware, mount routers
+│   ├── session.py                  # Dependency: get/create thread_id + claim_id from session
+│   ├── dependencies.py             # Shared FastAPI dependencies (graph, templates)
+│   └── routers/
+│       ├── __init__.py
+│       ├── pages.py                # Full-page routes (GET / /dashboard /audit /review/{id})
+│       ├── chat.py                 # POST /chat/message, GET /chat/stream (SSE)
+│       └── api.py                  # GET /api/claims, /api/audit, /api/claims/{id}
+│
+├── core/                           # UNCHANGED
+│   ├── config.py
+│   ├── state.py
+│   ├── graph.py
+│   └── imageStore.py
+│
+├── agents/                         # UNCHANGED
+│   ├── intake/
+│   ├── compliance/
+│   ├── fraud/
+│   └── advisor/
+│
+└── infrastructure/                 # UNCHANGED
+    ├── database/models.py
+    └── openrouter/client.py
 
-2. **Post-Submission Stage (Parallel Execution)**
-   - Compliance Agent and Fraud Agent execute in parallel (same superstep)
-   - **Compliance Agent (Evaluator):**
-     - Reads ClaimState: `claim_data`
-     - Tool call: MCP RAG (policy document retrieval)
-     - Evaluates against compliance rules
-     - Writes ClaimState: `compliance_status`, `policy_violations`
-     - Checkpointed to Postgres
-   - **Fraud Agent (Tool Call):**
-     - Reads ClaimState: `claim_data`
-     - Tool call: MCP DBHub (query historical claims for patterns)
-     - Tool call: MCP Frankfurter (validate currency conversions)
-     - Computes fraud risk score
-     - Writes ClaimState: `fraud_score`, `anomaly_flags`
-     - Checkpointed to Postgres
+templates/                          # NEW — Jinja2 templates (at repo root, not in src)
+├── base.html                       # Shared layout: sidebar, topnav, head (Tailwind config inline)
+├── chat.html                       # Page 01 — AI chat + receipt upload + SSE streaming
+├── dashboard.html                  # Page 04 — Approver dashboard + bento grid
+├── audit.html                      # Page 02 — Audit log + claim detail panel
+└── review.html                     # Page 03 — Claim review/escalation
 
-3. **Synthesis Stage (Sequential)**
-   - Advisor Agent waits for both Compliance + Fraud to complete
-   - Reads ClaimState: `compliance_status`, `fraud_score`, `claim_data`
-   - Reflection pattern: Synthesizes findings, generates recommendation
-   - Routing decision:
-     - APPROVE → Tool call: MCP Email (notify approver)
-     - REJECT → Tool call: MCP Email (notify claimant with reasons)
-     - ESCALATE → Tool call: MCP Email (notify reviewer)
-   - Writes ClaimState: `final_decision`, `recommendation_text`
-   - Checkpointed to Postgres
-   - Returns final state to Chainlit for display
+static/                             # NEW — local assets (minimal; CDN preferred)
+└── (empty or icons/favicons only)
 
-**State Updates via Reducers:**
+Dockerfile                          # MODIFIED — CMD changed to uvicorn
+docker-compose.yml                  # MINIMAL CHANGE — healthcheck URL update only
+```
 
-- `message_history: Annotated[list, add_messages]` - All agents append messages without overwriting
-- `claim_data: dict` - Overwritten by each agent
-- `compliance_status: dict` - Written by Compliance Agent
-- `fraud_score: float` - Written by Fraud Agent
-- `final_decision: str` - Written by Advisor Agent
+**Rationale for `templates/` at repo root rather than inside `src/`:**
+FastAPI's `Jinja2Templates(directory="templates")` resolves relative to the process working directory. The Dockerfile sets `WORKDIR /app` and copies `src/` to `/app/src/`, so `templates/` at the repo root maps to `/app/templates/` in the container without any path gymnastics. This matches the FastAPI official docs pattern.
 
-**Checkpoint Persistence:**
+---
 
-- After **every node execution**, LangGraph automatically checkpoints state to PostgreSQL
-- On crash: Resume from last checkpoint using `thread_id`
-- Time-travel debugging: Access any historical checkpoint via `checkpoint_id`
+## Architectural Patterns
 
-## Patterns to Follow
+### Pattern 1: Graph as Application-Level Singleton (Lifespan)
 
-### Pattern 1: TypedDict Shared State with Reducers
-**What:** All agents read/write from a single TypedDict state object with reducer functions for multi-node coordination.
+The Chainlit app called `getCompiledGraph()` per chat session, creating a new checkpointer connection pool each time. This does not port to FastAPI cleanly because the checkpointer is a long-lived async context manager.
 
-**When:** Multi-agent systems where all agents need visibility into shared context.
+**Correct approach:** Initialize the compiled graph once at app startup using FastAPI's lifespan pattern and share it via `app.state`.
 
-**Example:**
 ```python
-from typing import TypedDict, Annotated
-from langgraph.graph.message import add_messages
+# web/main.py
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from agentic_claims.core.graph import getCompiledGraph
 
-class ClaimState(TypedDict):
-    claim_data: dict
-    message_history: Annotated[list, add_messages]  # Reducer
-    compliance_status: dict
-    fraud_score: float
-    final_decision: str
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    graph, checkpointerCtx = await getCompiledGraph()
+    app.state.graph = graph
+    app.state.checkpointerCtx = checkpointerCtx
+    yield
+    # Shutdown: close the checkpointer connection pool
+    await checkpointerCtx.__aexit__(None, None, None)
 
-# Each agent node signature
-def intakeAgent(state: ClaimState) -> ClaimState:
-    # Read state
-    existingData = state.get("claim_data", {})
+app = FastAPI(lifespan=lifespan)
+```
 
-    # Update state
+Per-request access via dependency:
+
+```python
+# web/dependencies.py
+from fastapi import Request
+from langgraph.graph.state import CompiledStateGraph
+
+def getGraph(request: Request) -> CompiledStateGraph:
+    return request.app.state.graph
+```
+
+**Why:** One checkpointer connection pool shared across all sessions is correct. The checkpointer is thread-safe for concurrent `astream_events()` calls because each call is scoped by `thread_id`. Creating one pool per session (Chainlit pattern) would exhaust database connections under load.
+
+### Pattern 2: Session-Based thread_id + claim_id via Starlette SessionMiddleware
+
+Chainlit used `cl.user_session` (per-websocket storage). FastAPI has no equivalent. Use Starlette's built-in `SessionMiddleware` (signed cookie) to persist `thread_id` and `claim_id` per browser session.
+
+```python
+# web/main.py
+from starlette.middleware.sessions import SessionMiddleware
+import secrets
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret_key,  # from env, not hardcoded
+    session_cookie="agentic_session",
+    max_age=None,  # browser session (tab-lifetime)
+    same_site="lax",
+    https_only=False,  # True in prod
+)
+```
+
+```python
+# web/session.py
+import uuid
+from fastapi import Request
+
+def getOrCreateSession(request: Request) -> dict:
+    """Return session dict with thread_id and claim_id, creating if absent."""
+    session = request.session
+    if "thread_id" not in session:
+        session["thread_id"] = str(uuid.uuid4())
+    if "claim_id" not in session:
+        session["claim_id"] = str(uuid.uuid4())
     return {
-        "claim_data": updatedData,
-        "message_history": [AIMessage(content="Receipt processed")]
+        "thread_id": session["thread_id"],
+        "claim_id": session["claim_id"],
     }
 ```
 
-**Why:** Eliminates message-ordering races, provides stronger consistency than message-passing, centralizes state management.
+**Session cookie contains:** Only the signed session dict (JSON). The actual LangGraph state lives in PostgreSQL (checkpointer), keyed by `thread_id`. The cookie just identifies which thread to resume.
 
-### Pattern 2: MCP Adapter for Tool Integration
-**What:** Use `langchain-mcp-adapters` to convert MCP tools into LangGraph-compatible tools.
+**Important:** The claim_id is mutable. When a claim is submitted (the `claimSubmitted` flag is set), the next chat session should reset claim_id. Add a `POST /chat/reset` endpoint that clears the session and redirects to `/`.
 
-**When:** Integrating external services (RAG, databases, APIs) as agent tools.
+### Pattern 3: LangGraph astream_events() to SSE Endpoint
 
-**Example:**
+This is the core replacement for Chainlit's `@cl.on_message` handler. The streaming bridge maps LangGraph's `astream_events(version="v2")` to `text/event-stream` for the browser.
+
+**Architecture:**
+1. Browser POSTs message to `POST /chat/message` (with optional image file)
+2. FastAPI handler stores image in `imageStore`, constructs `HumanMessage`, stores in a per-session `asyncio.Queue`
+3. SSE stream endpoint (`GET /chat/stream`) connects once per chat session, loops on the queue
+4. When queue yields a message, the SSE generator runs `graph.astream_events()` and forwards events
+
 ```python
-from langchain_mcp_adapters import MultiServerMCPClient
+# web/routers/chat.py
+import asyncio
+import json
+from fastapi import APIRouter, Request, UploadFile, File, Form
+from fastapi.sse import EventSourceResponse, ServerSentEvent
+from langchain_core.messages import HumanMessage
+from agentic_claims.core.imageStore import storeImage
 
-# Multi-server client configuration
-config = {
-    "rag": {
-        "transport": "stdio",
-        "command": "docker",
-        "args": ["exec", "-i", "mcp-rag", "python", "/app/server.py"]
-    },
-    "dbhub": {
-        "transport": "http",
-        "url": "http://localhost:8001/mcp"
-    }
+router = APIRouter(prefix="/chat")
+
+# Per-session message queues: thread_id -> asyncio.Queue
+_messageQueues: dict[str, asyncio.Queue] = {}
+
+def getQueue(threadId: str) -> asyncio.Queue:
+    if threadId not in _messageQueues:
+        _messageQueues[threadId] = asyncio.Queue()
+    return _messageQueues[threadId]
+
+
+@router.post("/message")
+async def postMessage(
+    request: Request,
+    message: str = Form(""),
+    image: UploadFile | None = File(None),
+):
+    """Accept user message + optional image. Enqueues for SSE stream."""
+    sessionData = getOrCreateSession(request)
+    threadId = sessionData["thread_id"]
+    claimId = sessionData["claim_id"]
+
+    imageB64 = None
+    if image and image.content_type.startswith("image/"):
+        imageBytes = await image.read()
+        imageB64 = base64.b64encode(imageBytes).decode("utf-8")
+        storeImage(claimId, imageB64)
+
+    if imageB64:
+        humanMsg = HumanMessage(
+            content=f"I've uploaded a receipt image for claim {claimId}. "
+                    "Please process it using extractReceiptFields."
+        )
+    else:
+        humanMsg = HumanMessage(content=message)
+
+    queue = getQueue(threadId)
+    await queue.put({"msg": humanMsg, "claimId": claimId})
+
+    # Return HTMX fragment: render the user message bubble immediately
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/user_message.html",
+        context={"content": message or "[receipt uploaded]"},
+    )
+
+
+@router.get("/stream", response_class=EventSourceResponse)
+async def streamEvents(request: Request):
+    """SSE endpoint: bridges LangGraph astream_events to text/event-stream."""
+    sessionData = getOrCreateSession(request)
+    threadId = sessionData["thread_id"]
+    graph = request.app.state.graph
+    queue = getQueue(threadId)
+
+    async def eventGenerator():
+        while True:
+            if await request.is_disconnected():
+                break
+
+            try:
+                item = await asyncio.wait_for(queue.get(), timeout=30.0)
+            except asyncio.TimeoutError:
+                # Keep-alive ping
+                yield ServerSentEvent(comment="ping")
+                continue
+
+            humanMsg = item["msg"]
+            claimId = item["claimId"]
+
+            graphInput = {
+                "claimId": claimId,
+                "status": "draft",
+                "messages": [humanMsg],
+            }
+            config = {"configurable": {"thread_id": threadId}}
+
+            # Signal thinking start
+            yield ServerSentEvent(
+                data=json.dumps({"type": "thinking_start"}),
+                event="status",
+            )
+
+            toolCount = 0
+            finalResponse = None
+            tokenBuffer = ""
+
+            async for event in graph.astream_events(graphInput, config=config, version="v2"):
+                eventKind = event.get("event")
+
+                if eventKind == "on_tool_start":
+                    toolName = event.get("name", "unknown")
+                    yield ServerSentEvent(
+                        data=json.dumps({"type": "tool_start", "tool": toolName}),
+                        event="status",
+                    )
+
+                elif eventKind == "on_tool_end":
+                    toolCount += 1
+                    yield ServerSentEvent(
+                        data=json.dumps({"type": "tool_end", "tool": event.get("name")}),
+                        event="status",
+                    )
+
+                elif eventKind == "on_chat_model_stream":
+                    chunk = event.get("data", {}).get("chunk")
+                    if chunk and hasattr(chunk, "content") and chunk.content:
+                        tokenBuffer += chunk.content
+
+                elif eventKind == "on_chat_model_end":
+                    output = event.get("data", {}).get("output")
+                    hasToolCalls = (
+                        output and hasattr(output, "tool_calls") and output.tool_calls
+                    )
+                    if not hasToolCalls and tokenBuffer.strip():
+                        finalResponse = tokenBuffer.strip()
+                    tokenBuffer = ""
+
+            # Send final AI message as HTML fragment
+            if finalResponse:
+                yield ServerSentEvent(
+                    data=finalResponse,
+                    event="ai_message",
+                )
+
+            yield ServerSentEvent(
+                data=json.dumps({"type": "done", "toolCount": toolCount}),
+                event="status",
+            )
+
+    return EventSourceResponse(eventGenerator())
+```
+
+**Why queue-based rather than direct streaming:** The POST and SSE GET are separate HTTP connections. The queue decouples them. This is the correct pattern for SSE + form submission with HTMX.
+
+### Pattern 4: Jinja2 Template Inheritance from Stitch HTML
+
+All 4 Stitch HTML files share identical structure: the same `<head>` with Tailwind CDN and config, same top nav, same side nav. Extract these into `base.html` blocks.
+
+**Extraction strategy:**
+
+```
+Stitch file           → Jinja2 mapping
+─────────────────────────────────────────────────────
+<head> section        → base.html entirely (same across all 4)
+<header> top nav      → base.html {% block topnav %}
+<aside> side nav      → base.html {% block sidenav %}
+                        with {% if active_page == 'chat' %}...{% endif %}
+                        for the active state highlight (rounded-r-full class)
+<main> content        → child template {% block content %}
+Page-specific <style> → child template {% block extra_styles %}
+```
+
+```html
+<!-- templates/base.html -->
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>{% block title %}Cognitive Atelier{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script id="tailwind-config">
+    tailwind.config = { darkMode: "class", theme: { extend: {
+      /* paste the shared color/font config here once */
+      colors: { /* ...identical across all 4 Stitch files... */ },
+      fontFamily: { /* ... */ },
+      borderRadius: { /* ... */ }
+    }}}
+  </script>
+  <style>
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+  {% block extra_styles %}{% endblock %}
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-secondary/30">
+
+<!-- Top Nav (identical across all 4 Stitch files) -->
+<header class="fixed top-0 w-full z-50 ...">
+  ...
+</header>
+
+<!-- Side Nav with active state driven by template variable -->
+<aside class="fixed left-0 top-0 h-full flex flex-col py-8 bg-[#091328] w-64 hidden md:flex z-40">
+  <nav class="flex-1 space-y-1">
+    <a class="flex items-center gap-3 {% if active_page == 'chat' %}bg-[#1f2b49] text-[#62fae3] rounded-r-full shadow-[0_0_15px_rgba(98,250,227,0.2)]{% else %}text-[#dee5ff] opacity-50 hover:bg-[#192540] hover:opacity-100{% endif %} ..."
+       href="/">
+      <span class="material-symbols-outlined">chat_spark</span> Chat AI
+    </a>
+    <a class="flex items-center gap-3 {% if active_page == 'dashboard' %}bg-[#1f2b49] text-[#62fae3] rounded-r-full...{% else %}text-[#dee5ff] opacity-50...{% endif %} ..."
+       href="/dashboard">
+      <span class="material-symbols-outlined">insert_chart</span> Analytics
+    </a>
+    <!-- repeat for audit, review -->
+  </nav>
+</aside>
+
+<!-- Page content -->
+<main class="md:ml-64 pt-16">
+  {% block content %}{% endblock %}
+</main>
+
+</body>
+</html>
+```
+
+```html
+<!-- templates/chat.html -->
+{% extends "base.html" %}
+{% block title %}Chat AI | Cognitive Atelier{% endblock %}
+{% block extra_styles %}
+  <style>
+    .intelligence-pulse { /* ... from Stitch file ... */ }
+  </style>
+{% endblock %}
+{% block content %}
+  <!-- Chat history container -->
+  <div id="chat-messages" class="flex-1 overflow-y-auto p-6 space-y-8 hide-scrollbar">
+    <!-- Welcome message rendered server-side -->
+    {% include "partials/ai_message.html" with context %}
+  </div>
+
+  <!-- SSE listener: connects on page load, listens for ai_message and status events -->
+  <div hx-ext="sse"
+       sse-connect="/chat/stream"
+       sse-swap="ai_message"
+       hx-target="#chat-messages"
+       hx-swap="beforeend scroll:#chat-messages:bottom">
+  </div>
+
+  <!-- Message input form -->
+  <form hx-post="/chat/message"
+        hx-target="#chat-messages"
+        hx-swap="beforeend scroll:#chat-messages:bottom"
+        hx-encoding="multipart/form-data"
+        hx-on::before-request="this.reset()"
+        class="...">
+    <!-- file upload + text input + submit -->
+  </form>
+{% endblock %}
+```
+
+**Key insight on sse-swap target:** The `sse-swap="ai_message"` attribute listens for `event: ai_message` events and swaps the data into `#chat-messages` using `beforeend`. The `hx-target` and `hx-swap` on the SSE div control where the content lands. This requires HTMX 2.x with the `htmx-ext-sse` extension (separate script tag).
+
+### Pattern 5: HTMX Partial Responses for Non-Chat Pages
+
+The dashboard, audit, and review pages contain data-driven sections (claim lists, stat cards, etc.) that need real data, not Stitch's hardcoded HTML. Use HTMX `hx-get` with `hx-trigger="load"` to fetch data after the page loads, keeping initial page render fast.
+
+```html
+<!-- templates/dashboard.html — bento grid stats section -->
+<section id="stats-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12"
+         hx-get="/api/dashboard/stats"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+  <!-- Skeleton placeholder while loading -->
+  <div class="animate-pulse bg-surface-container-low rounded-3xl h-48"></div>
+  <div class="animate-pulse bg-surface-container-low rounded-3xl h-48"></div>
+  <div class="animate-pulse bg-surface-container-low rounded-3xl h-48"></div>
+</section>
+```
+
+The `/api/dashboard/stats` endpoint returns an HTML fragment (not JSON), rendered from a partial template.
+
+---
+
+## Data Flow
+
+### Chat Turn: User Sends Message with Receipt Image
+
+```
+1. User fills form (text + image file)
+   ↓
+2. HTMX posts multipart/form-data to POST /chat/message
+   ↓
+3. FastAPI handler:
+   a. Reads image bytes → base64 encode → storeImage(claimId, b64)
+   b. Constructs HumanMessage referencing claimId
+   c. Enqueues into asyncio.Queue[threadId]
+   d. Returns HTML fragment (user message bubble) → HTMX appends to #chat-messages
+   ↓
+4. SSE stream (already connected via sse-connect="/chat/stream"):
+   a. Dequeues item from asyncio.Queue
+   b. Calls graph.astream_events(graphInput, config={"configurable": {"thread_id": threadId}})
+   c. For each on_tool_start → yields ServerSentEvent(event="status", data={"type":"tool_start"...})
+   d. For each on_chat_model_stream → buffers tokens
+   e. For on_chat_model_end (no tool calls) → yields ServerSentEvent(event="ai_message", data=html_fragment)
+   ↓
+5. HTMX SSE extension receives event="ai_message":
+   sse-swap="ai_message" fires → appends AI message bubble to #chat-messages
+   ↓
+6. Alpine.js handles status events (tool indicators, thinking spinner) via:
+   @htmx:sse-message.window="updateThinkingState($event.detail)"
+```
+
+### Chat Turn: Interrupt/Resume (Human-in-the-Loop)
+
+The existing `askHuman` tool triggers a LangGraph `interrupt()`. The astream_events stream pauses with an `__interrupt__` sentinel in the graph state. The FastAPI layer handles this identically to Chainlit's interrupt handling:
+
+```
+1. SSE stream detects interrupt during astream_events traversal
+   (no on_chat_model_end with final content; graph state has __interrupt__)
+   ↓
+2. Emit ServerSentEvent(event="ai_message", data=<clarification question html>)
+   Emit ServerSentEvent(event="status", data={"type":"awaiting_input"})
+   ↓
+3. Browser: HTMX renders clarification question, Alpine.js marks form as "resume mode"
+   ↓
+4. User types answer → HTMX posts to POST /chat/message
+   ↓
+5. FastAPI handler: detects "awaiting_input" flag in session → wraps message in
+   Command(resume=userAnswer) instead of HumanMessage → enqueues
+   ↓
+6. SSE stream: graph.astream_events(Command(resume=...), config) → continues execution
+```
+
+**Session flag for interrupt state:**
+```python
+request.session["awaiting_interrupt"] = True  # set when interrupt detected
+# Cleared after resume
+```
+
+### Page Navigation Flow (Non-Chat Pages)
+
+```
+User clicks "Approvals" in sidebar
+   ↓
+Browser GET /dashboard
+   ↓
+FastAPI pages.py returns TemplateResponse("dashboard.html", {"active_page": "dashboard", ...})
+   ↓
+Browser renders full page with sidebar (active item highlighted), skeleton stats
+   ↓
+HTMX hx-trigger="load" fires → GET /api/dashboard/stats
+   ↓
+FastAPI api.py queries PostgreSQL → returns HTML fragment via TemplateResponse("partials/stats_grid.html")
+   ↓
+HTMX swaps skeleton → real data
+```
+
+---
+
+## Integration Points
+
+### Existing Backend Integration
+
+| Integration Point | Chainlit Pattern | FastAPI Pattern |
+|-------------------|-----------------|-----------------|
+| Graph initialization | `getCompiledGraph()` per session in `@on_chat_start` | Once in lifespan → `app.state.graph` |
+| Session identity | `cl.user_session.set("thread_id", ...)` | `request.session["thread_id"]` via SessionMiddleware |
+| Streaming | `async for event in graph.astream_events(...)` in `@on_message` | Same call, inside SSE generator function |
+| Image storage | `storeImage(claimId, b64)` in `@on_message` | Same call, in `POST /chat/message` handler |
+| Tool indicators | `step.name = TOOL_LABELS[toolName]; await step.update()` | `ServerSentEvent(event="status", ...)` → Alpine.js updates DOM |
+| Thinking display | `cl.Step(...)` context manager | Alpine.js reactive state + status SSE events |
+| Final response | `await cl.Message(content=finalResponse).send()` | `ServerSentEvent(event="ai_message", data=html)` → HTMX swap |
+
+### New API Endpoints (Non-Chat Pages)
+
+| Endpoint | Method | Returns | Template Used |
+|----------|--------|---------|---------------|
+| `/` | GET | Full page | `chat.html` |
+| `/dashboard` | GET | Full page | `dashboard.html` |
+| `/audit` | GET | Full page | `audit.html` |
+| `/review/{claim_id}` | GET | Full page | `review.html` |
+| `/chat/message` | POST | HTML fragment | `partials/user_message.html` |
+| `/chat/stream` | GET | text/event-stream | (generator, no template) |
+| `/chat/reset` | POST | redirect to `/` | (resets session) |
+| `/api/dashboard/stats` | GET | HTML fragment | `partials/stats_grid.html` |
+| `/api/claims` | GET | HTML fragment | `partials/claims_list.html` |
+| `/api/claims/{id}` | GET | HTML fragment | `partials/claim_detail.html` |
+| `/api/audit` | GET | HTML fragment | `partials/audit_log.html` |
+
+**Critical design decision:** All API endpoints that serve UI data return HTML fragments (TemplateResponse with partial templates), not JSON. This is the HTMX-native pattern — the server sends markup, not data. Keeps JavaScript to zero for DOM manipulation.
+
+### External Services (Unchanged)
+
+| Service | Integration | Notes |
+|---------|-------------|-------|
+| mcp-rag:8001 | LangGraph tools via mcpClient.py | No change |
+| mcp-db:8002 | LangGraph tools + direct SQLAlchemy queries for review/audit pages | New: direct DB queries for non-agent pages |
+| mcp-currency:8003 | LangGraph tools | No change |
+| mcp-email:8004 | LangGraph tools | No change |
+| PostgreSQL | AsyncPostgresSaver (checkpointer) + SQLAlchemy (app queries) | Both pools co-exist |
+
+### Docker Compose Changes
+
+Minimal changes to `docker-compose.yml`:
+
+1. **`app` service CMD:** Dockerfile CMD changes from `chainlit run src/agentic_claims/app.py ...` to `uvicorn agentic_claims.web.main:app --host 0.0.0.0 --port 8000 --reload` (dev) or `--workers 1` (prod, single worker required because of in-process `asyncio.Queue` and `imageStore`).
+
+2. **Healthcheck:** `curl -f http://localhost:8000/` still works (FastAPI root route returns 200).
+
+3. **No new services required.** All 4 MCP servers unchanged. PostgreSQL and Qdrant unchanged.
+
+4. **`SESSION_SECRET_KEY`** environment variable added to `app` service env and `.env.local`.
+
+```yaml
+# docker-compose.yml — app service only changes
+app:
+  # ... same build, ports, depends_on ...
+  environment:
+    POSTGRES_HOST: postgres
+    QDRANT_HOST: qdrant
+    SESSION_SECRET_KEY: ${SESSION_SECRET_KEY}  # ADD THIS
+```
+
+---
+
+## Alpine.js Integration Pattern
+
+Alpine.js handles client-side state that cannot be done with pure HTMX:
+
+1. **Upload progress indicator** — show spinner during file read before POST
+2. **Thinking panel toggle** — expand/collapse tool call details
+3. **Status event handling** — receive `event: status` SSE events and update UI state
+
+```html
+<!-- In chat.html: Alpine component wrapping the chat UI -->
+<section x-data="{
+  thinking: false,
+  currentTool: '',
+  toolCount: 0,
+  awaitingInput: false
+}" x-on:htmx:sse-message.window="handleStatusEvent($event)">
+
+  <!-- Thinking indicator, shown while graph is running -->
+  <div x-show="thinking" class="flex items-center gap-2">
+    <div class="intelligence-pulse"></div>
+    <span x-text="currentTool || 'Analyzing...'" class="text-xs text-secondary"></span>
+  </div>
+
+  <!-- Chat messages (HTMX manages content) -->
+  <div id="chat-messages" ...></div>
+
+  <!-- SSE listener div -->
+  <div hx-ext="sse" sse-connect="/chat/stream"
+       sse-swap="ai_message"
+       hx-target="#chat-messages"
+       hx-swap="beforeend"
+       x-on:sse:status="handleStatus(JSON.parse($event.detail.data))">
+  </div>
+
+</section>
+
+<script>
+function handleStatus(payload) {
+  if (payload.type === 'thinking_start') { this.thinking = true; }
+  if (payload.type === 'tool_start') { this.currentTool = payload.tool; }
+  if (payload.type === 'done') { this.thinking = false; this.toolCount = payload.toolCount; }
 }
-
-client = MultiServerMCPClient(config)
-tools = await client.get_tools()  # Returns LangChain-compatible tools
-
-# Pass to agent node
-graph.add_node("intake", create_react_agent(model, tools))
+</script>
 ```
 
-**Why:** Standardized tool access across distributed services, automatic conversion to LangChain format, multi-server support.
+**Important:** When HTMX swaps new content via SSE, Alpine.js automatically initializes `x-data` on newly inserted elements because HTMX dispatches `htmx:afterSwap` and Alpine.js v3 observes DOM mutations. No manual re-initialization needed.
 
-### Pattern 3: Conditional Routing with Parallel Execution
-**What:** Use conditional edges for branching logic, automatic parallel execution for independent nodes.
+---
 
-**When:** Compliance and Fraud checks can run concurrently, but Advisor must wait for both.
+## Suggested Build Order
 
-**Example:**
-```python
-from langgraph.graph import StateGraph, END
+Dependencies determine this order. Each step is buildable and testable in isolation.
 
-graph = StateGraph(ClaimState)
+### Step 1 — FastAPI App Skeleton (no templates yet)
+**Deliverables:** `web/main.py`, `web/dependencies.py`, `web/session.py`, updated Dockerfile, `SESSION_SECRET_KEY` in env
+**Test:** `docker compose up app` — container starts, `GET /` returns 404 (no routes yet), graph initializes in lifespan log
 
-# Sequential: Intake
-graph.add_node("intake", intakeAgent)
+**Why first:** Validates that `getCompiledGraph()` works in a lifespan context, that the checkpointer connection pool stays alive, and that the Docker image builds. Catches import errors before any UI work.
 
-# Parallel: Compliance and Fraud (same superstep)
-graph.add_node("compliance", complianceAgent)
-graph.add_node("fraud", fraudAgent)
+### Step 2 — Base Template + Static Infrastructure
+**Deliverables:** `templates/base.html` (Tailwind config, nav, head), `static/` directory, `pages.py` router with GET routes returning TemplateResponse
+**Test:** `GET /` renders sidebar + topnav, correct page highlighted per `active_page`
 
-# Sequential: Advisor (next superstep, waits for both)
-graph.add_node("advisor", advisorAgent)
+**Why second:** Base template is the foundation for all 4 pages. Extracting shared layout first prevents duplicating Tailwind config 4 times.
 
-# Conditional edge from Intake
-def shouldSubmit(state: ClaimState) -> str:
-    return "submit" if state["validation_status"] == "ready" else "clarify"
+### Step 3 — Chat Page + SSE Streaming
+**Deliverables:** `templates/chat.html`, `routers/chat.py` (POST /chat/message + GET /chat/stream), `partials/user_message.html`, `partials/ai_message.html`
+**Test:** Upload receipt → user bubble appears → AI response streams in → thinking indicator shows tools
 
-graph.add_conditional_edges(
-    "intake",
-    shouldSubmit,
-    {
-        "submit": ["compliance", "fraud"],  # Both executed in parallel
-        "clarify": "intake"  # Loop back
-    }
-)
+**Why third:** This is the highest-risk integration. Validates the SSE bridge, queue pattern, session management, and image upload all working together. Catching issues here before building the other pages is critical.
 
-# Both Compliance and Fraud route to Advisor
-graph.add_edge("compliance", "advisor")
-graph.add_edge("fraud", "advisor")
-graph.add_edge("advisor", END)
+### Step 4 — Dashboard Page
+**Deliverables:** `templates/dashboard.html`, `routers/api.py` with `/api/dashboard/stats`, `partials/stats_grid.html`, `partials/claims_list.html`
+**Test:** `GET /dashboard` renders with skeleton → real data loads via HTMX
 
-graph.set_entry_point("intake")
-```
+**Why fourth:** Lowest risk (no streaming, no image handling). Validates the HTMX lazy-load pattern with real PostgreSQL data.
 
-**Why:** Automatic parallelization reduces latency, conditional logic enables loops and branching, explicit supersteps provide deterministic execution order.
+### Step 5 — Audit Log Page
+**Deliverables:** `templates/audit.html`, `/api/audit` endpoint, `/api/claims/{id}` endpoint for detail panel
+**Test:** `GET /audit` renders claim list → click claim → detail panel swaps in
 
-### Pattern 4: PostgreSQL Checkpointer for Production
-**What:** Use `PostgresSaver` for persistent state across crashes, restarts, and long-running conversations.
+**Why fifth:** The audit log has a list-detail split-panel pattern (from Stitch 02). The detail panel swap is an HTMX `hx-get + hx-target` pattern, slightly more complex than the dashboard.
 
-**When:** Production deployments requiring resilience, multi-instance scaling, or debugging.
+### Step 6 — Review Page + Interrupt Resume
+**Deliverables:** `templates/review.html`, interrupt detection in SSE generator, `awaiting_interrupt` session flag, resume via `Command(resume=...)`
+**Test:** Trigger an interrupt from intake agent → clarification question appears → user answers → graph resumes
 
-**Example:**
-```python
-from langgraph.checkpoint.postgres import PostgresSaver
+**Why last:** The interrupt/resume flow requires the full SSE pipeline (Step 3) and session state to be working. Most complex integration.
 
-checkpointer = PostgresSaver.from_conn_string(
-    "postgresql://user:pass@localhost:5432/claims_db"
-)
+---
 
-# Setup tables (first run only)
-await checkpointer.setup()
+## Anti-Patterns
 
-# Compile graph with checkpointer
-app = graph.compile(checkpointer=checkpointer)
+### Anti-Pattern 1: One Graph Instance Per Request
 
-# Invoke with thread_id for persistence
-config = {"configurable": {"thread_id": "claim-12345"}}
-result = await app.ainvoke(initialState, config)
+**What people do:** Call `getCompiledGraph()` inside the SSE endpoint handler, creating a new checkpointer pool per streaming call.
 
-# Resume after crash
-result = await app.ainvoke(None, config)  # Resumes from last checkpoint
-```
+**Why it's wrong:** The `AsyncPostgresSaver.from_conn_string()` context manager opens a new psycopg connection pool. Calling this per request exhausts Postgres connections quickly and adds ~500ms latency per call.
 
-**Why:** Automatic crash recovery, state survives server restarts, supports time-travel debugging, enables multi-threaded conversations.
+**Do this instead:** Lifespan pattern. One graph, one checkpointer pool, shared via `app.state.graph`.
 
-### Pattern 5: Chainlit Streaming Integration
-**What:** Stream LangGraph outputs to Chainlit UI in real-time with message filtering.
+### Anti-Pattern 2: Returning JSON from HTMX-Targeted Endpoints
 
-**When:** Building interactive UIs for LangGraph applications.
+**What people do:** Return `{"claims": [...]}` from `/api/claims` and handle it with Alpine.js or JavaScript.
 
-**Example:**
-```python
-import chainlit as cl
-from langgraph.graph import StateGraph
+**Why it's wrong:** Contradicts the HTMX philosophy. Requires JavaScript for DOM manipulation. Increases cognitive load. Alpine.js becomes a mini-framework with template strings.
 
-@cl.on_message
-async def onMessage(message: cl.Message):
-    thread_id = cl.context.session.id
-    config = {"configurable": {"thread_id": thread_id}}
+**Do this instead:** Return HTML fragments. The FastAPI endpoint calls `TemplateResponse("partials/claims_list.html", {"claims": claims_data})`. HTMX swaps it in. Zero JavaScript for data rendering.
 
-    # Stream graph execution
-    msg = cl.Message(content="")
-    async for event in app.astream_events(
-        {"message_history": [HumanMessage(content=message.content)]},
-        config,
-        version="v2"
-    ):
-        # Filter by node metadata
-        if event["event"] == "on_chat_model_stream":
-            if event["metadata"].get("langgraph_node") == "advisor":
-                await msg.stream_token(event["data"]["chunk"].content)
+### Anti-Pattern 3: Streaming Tokens to the DOM One at a Time
 
-    await msg.send()
-```
+**What people do:** Forward every `on_chat_model_stream` token as a separate SSE event, updating the DOM with each token.
 
-**Why:** Real-time user feedback, token-by-token streaming, session-based state management, metadata-based filtering.
+**Why it's wrong:** Causes hundreds of HTMX swaps per response. DOM thrashing, visible flicker, poor performance.
 
-## Anti-Patterns to Avoid
+**Do this instead:** Buffer tokens until `on_chat_model_end` (final response identified), then send one `event: ai_message` with the complete AI message rendered as an HTML fragment. Use Alpine.js typing animation locally if streaming effect is needed.
 
-### Anti-Pattern 1: Direct Agent-to-Agent Communication
-**What:** Agents calling each other's functions directly instead of using shared state.
+**Exception:** If a streaming typing effect is required for UX, buffer into a single Alpine.js reactive variable and let Alpine update the DOM smoothly — do not use HTMX for token-by-token swaps.
 
-**Why bad:** Creates tight coupling, breaks observability, loses checkpointing benefits, makes debugging impossible.
+### Anti-Pattern 4: Multiple Workers with In-Process State
 
-**Instead:** All communication through ClaimState updates. Agents are pure functions: `(state) -> state`.
+**What people do:** `uvicorn ... --workers 4` for performance.
 
-### Anti-Pattern 2: Stateful MCP Servers
-**What:** MCP servers maintaining session state between tool calls.
+**Why it's wrong:** `_messageQueues` (asyncio.Queue dict) and `imageStore` (module-level dict) are in-process memory. Multiple workers = multiple independent processes = queues and image store are not shared. A POST to worker 1 puts into worker 1's queue; the SSE stream on worker 2 never sees it.
 
-**Why bad:** Breaks parallelization, creates race conditions, complicates deployment.
+**Do this instead:** Run with `--workers 1`. For this course project, one async worker handles concurrent SSE streams efficiently (async I/O, not blocking). If scaling is needed post-demo, replace `_messageQueues` with Redis pub/sub and `imageStore` with Redis or S3.
 
-**Instead:** MCP servers should be stateless tools. All state belongs in ClaimState, persisted by LangGraph checkpointer.
+### Anti-Pattern 5: Mounting HTMX and Alpine.js via npm Build
 
-### Anti-Pattern 3: Nested Graph State Leakage
-**What:** Subgraphs modifying parent graph state directly.
+**What people do:** Add webpack/vite build step for HTMX and Alpine.js.
 
-**Why bad:** Violates encapsulation, makes state mutations unpredictable.
+**Why it's wrong:** Introduces a build pipeline that does not exist in this project. Over-engineering for a course project.
 
-**Instead:** Subgraphs have their own state schemas. Parent graph maps subgraph outputs to parent state explicitly.
+**Do this instead:** CDN for both. The Stitch HTML files already use Tailwind CDN. Adding `<script src="https://unpkg.com/htmx.org@2.0.4">` and `<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js">` in `base.html` is sufficient. Pin exact versions to avoid surprises.
 
-### Anti-Pattern 4: Ignoring Superstep Execution Model
-**What:** Assuming nodes execute in arbitrary order or that parallel nodes can block each other.
+---
 
-**Why bad:** Leads to deadlocks, race conditions, or incorrect assumptions about execution order.
+## Scaling Considerations
 
-**Instead:** Understand Pregel-inspired supersteps:
-- Parallel nodes = same superstep (isolated state copies, deterministic merge)
-- Sequential nodes = separate supersteps (ordered execution)
+This is a course project. Scaling notes are for awareness, not action.
 
-### Anti-Pattern 5: In-Memory Checkpointer in Production
-**What:** Using `MemorySaver` or `SqliteSaver` for production deployments.
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| 1-5 users (demo) | Single `--workers 1` uvicorn. In-memory queue and imageStore. All fine. |
+| 10-50 users | Add Redis for `_messageQueues` and `imageStore`. Multiple workers become possible. |
+| 50+ users | Replace AsyncPostgresSaver with LangGraph Cloud or a proper connection pool manager. Add CDN for static assets. |
 
-**Why bad:** State lost on server restart, doesn't scale across multiple instances, no crash recovery.
-
-**Instead:** Always use `PostgresSaver` in production for persistence, crash recovery, and multi-instance support.
-
-## Scalability Considerations
-
-| Concern | At 100 users | At 10K users | At 1M users |
-|---------|--------------|--------------|-------------|
-| **State Persistence** | PostgreSQL single instance | PostgreSQL with connection pooling | PostgreSQL with read replicas, write leader |
-| **MCP Servers** | Single Docker container per service | Horizontal scaling with load balancer | Kubernetes with auto-scaling, service mesh |
-| **Checkpointing** | Checkpoint after every node | Selective checkpointing (critical nodes only) | Async checkpointing, batch writes |
-| **Graph Execution** | Single process | Multi-process with thread-based routing | Distributed execution with LangGraph Cloud |
-| **Message History** | Store all messages in state | Prune old messages (keep last N) | External message store, reference in state |
-
-## Build Order Recommendations
-
-Based on dependency analysis, the recommended build order is:
-
-### Phase 1: Foundation (No Dependencies)
-1. **Define ClaimState TypedDict** - Central contract for all agents
-2. **Setup PostgreSQL Checkpointer** - State persistence infrastructure
-3. **Configure MCP Server Stubs** - Placeholder implementations for development
-
-**Rationale:** Shared state schema is the foundational contract. All agents depend on it. Checkpointer enables testing with state persistence from day one.
-
-### Phase 2: MCP Integration (Depends on Phase 1)
-4. **Implement MCP Servers** - RAG, DBHub, Frankfurter, Email as Docker services
-5. **Test MCP Adapters** - Verify `langchain-mcp-adapters` tool conversion
-6. **Create Tool Registry** - Centralized tool management
-
-**Rationale:** Tools must exist before agents can use them. Testing MCP integration in isolation prevents compounding errors.
-
-### Phase 3: Agent Nodes (Depends on Phase 1, 2)
-7. **Intake Agent (ReAct)** - First node, simplest pattern, validates state flow
-8. **Compliance Agent (Evaluator)** - Parallel execution candidate
-9. **Fraud Agent (Tool Call)** - Parallel execution candidate
-10. **Advisor Agent (Reflection + Routing)** - Terminal node, depends on all previous
-
-**Rationale:** Build intake first to validate end-to-end flow. Then build parallel agents (Compliance, Fraud) to test superstep execution. Build Advisor last as it synthesizes outputs from all other agents.
-
-### Phase 4: Graph Orchestration (Depends on Phase 3)
-11. **Construct StateGraph** - Wire nodes with conditional edges
-12. **Implement Conditional Routing** - Intake loop, Advisor routing logic
-13. **Test Parallel Execution** - Verify Compliance || Fraud superstep
-
-**Rationale:** Graph construction requires all nodes to exist. Conditional logic is the most complex part, test iteratively.
-
-### Phase 5: UI Integration (Depends on Phase 4)
-14. **Chainlit Streaming** - Real-time message display
-15. **Session Management** - Thread-based state persistence
-16. **Persona Switching** - Claimant vs. Reviewer views
-
-**Rationale:** UI is the final layer. Requires fully functional graph to test streaming and session management.
-
-### Phase 6: Production Hardening (Depends on All)
-17. **Error Handling** - Node-level, graph-level, app-level
-18. **Observability** - Tracing, logging, metrics
-19. **Cost Monitoring** - Token usage, MCP call tracking
-20. **Docker Compose Orchestration** - Local development parity with production
-
-**Rationale:** Production concerns span all layers. Address after core functionality is validated.
-
-## Project Structure Conventions
-
-**Standard LangGraph Project Layout (2026):**
-
-```
-expense-claims/
-├── src/
-│   ├── agents/
-│   │   ├── __init__.py
-│   │   ├── intake.py           # Intake agent node
-│   │   ├── compliance.py       # Compliance agent node
-│   │   ├── fraud.py            # Fraud agent node
-│   │   └── advisor.py          # Advisor agent node
-│   ├── state/
-│   │   ├── __init__.py
-│   │   └── claim_state.py      # ClaimState TypedDict definition
-│   ├── tools/
-│   │   ├── __init__.py
-│   │   └── mcp_registry.py     # MCP tool registration
-│   ├── graph/
-│   │   ├── __init__.py
-│   │   └── claim_graph.py      # StateGraph construction
-│   └── app.py                  # Chainlit application entry
-├── mcp_servers/
-│   ├── rag/
-│   │   ├── Dockerfile
-│   │   └── server.py
-│   ├── dbhub/
-│   │   ├── Dockerfile
-│   │   └── server.py
-│   ├── frankfurter/
-│   │   ├── Dockerfile
-│   │   └── server.py
-│   └── email/
-│       ├── Dockerfile
-│       └── server.py
-├── tests/
-│   ├── unit/
-│   │   ├── test_agents.py
-│   │   ├── test_tools.py
-│   │   └── test_state.py
-│   ├── integration/
-│   │   ├── test_graph.py
-│   │   └── test_mcp.py
-│   └── e2e/
-│       └── test_claim_flow.py
-├── .env                        # Environment variables
-├── docker-compose.yml          # MCP servers orchestration
-├── langgraph.json             # LangGraph deployment config
-├── pyproject.toml             # Python dependencies
-└── README.md
-```
+---
 
 ## Sources
 
-**Official Documentation (HIGH Confidence):**
-- [LangGraph Application Structure - LangChain Docs](https://docs.langchain.com/oss/python/langgraph/application-structure)
-- [Model Context Protocol (MCP) - LangChain Docs](https://docs.langchain.com/oss/python/langchain/mcp)
-- [LangChain/LangGraph - Chainlit Integration](https://docs.chainlit.io/integrations/langchain)
-- [LangGraph Multi-Agent Workflows - LangChain Blog](https://blog.langchain.com/langgraph-multi-agent-workflows/)
-- [Choosing the Right Multi-Agent Architecture - LangChain Blog](https://blog.langchain.com/choosing-the-right-multi-agent-architecture/)
-- [LangGraph Graph API Overview - LangChain Docs](https://docs.langchain.com/oss/python/langgraph/graph-api)
-- [Memory - LangChain Docs](https://docs.langchain.com/oss/python/langgraph/add-memory)
+**Official Documentation (HIGH confidence):**
+- [FastAPI Server-Sent Events](https://fastapi.tiangolo.com/tutorial/server-sent-events/) — `EventSourceResponse`, `ServerSentEvent`, native SSE support added in FastAPI 0.135.0
+- [FastAPI Templates](https://fastapi.tiangolo.com/advanced/templates/) — `Jinja2Templates`, `TemplateResponse`, `StaticFiles` pattern
+- [FastAPI Lifespan Events](https://fastapi.tiangolo.com/advanced/events/) — `@asynccontextmanager`, `app.state`, startup/shutdown
+- [Starlette SessionMiddleware](https://www.starlette.dev/middleware/) — `request.session`, signed cookie, `HttpOnly` flag, parameters
+- [HTMX SSE Extension](https://htmx.org/extensions/sse/) — `hx-ext="sse"`, `sse-connect`, `sse-swap`, HTMX 2.x
 
-**Community Resources (MEDIUM Confidence):**
-- [How to Design Production-Grade Multi-Agent Communication System - MarkTechPost (2026)](https://www.marktechpost.com/2026/03/01/how-to-design-a-production-grade-multi-agent-communication-system-using-langgraph-structured-message-bus-acp-logging-and-persistent-shared-state-architecture/)
-- [LangGraph Multi-Agent Systems Tutorial 2026 - LangChain Tutorials](https://langchain-tutorials.github.io/langgraph-multi-agent-systems-2026/)
-- [LangGraph: Build Stateful Multi-Agent Systems That Don't Crash - Mager.co (2026-03-12)](https://www.mager.co/blog/2026-03-12-langgraph-deep-dive/)
-- [LangGraph Explained (2026 Edition) - Medium](https://medium.com/@dewasheesh.rana/langgraph-explained-2026-edition-ea8f725abff3)
-- [LangGraph Best Practices - Swarnendu De](https://www.swarnendu.de/blog/langgraph-best-practices/)
-- [LangGraph MCP Client Setup Made Easy [2026 Guide] - Generect](https://generect.com/blog/langgraph-mcp/)
-- [Quickly Build a ReAct Agent With LangGraph and MCP - Neo4j](https://neo4j.com/blog/developer/react-agent-langgraph-mcp/)
-- [Building Parallel Workflows with LangGraph - GoPenAI](https://blog.gopenai.com/building-parallel-workflows-with-langgraph-a-practical-guide-3fe38add9c60)
-- [Unlocking AI Resilience: State Persistence with LangGraph and PostgreSQL - DEV](https://dev.to/programmingcentral/unlocking-ai-resilience-mastering-state-persistence-with-langgraph-and-postgresql-50h0)
-- [Persistence in LangGraph — Deep, Practical Guide - Towards AI (2026)](https://pub.towardsai.net/persistence-in-langgraph-deep-practical-guide-36dc4c452c3b)
-- [Docker Compose - MCP Server with LangGraph](https://mcp-server-langgraph.mintlify.app/deployment/docker)
-- [Build AI Agents with Docker Compose - Docker Blog](https://www.docker.com/blog/build-ai-agents-with-docker-compose/)
+**Community (MEDIUM confidence, verified against official patterns):**
+- [Agentic Chatbot with HTMX (Dec 2025)](https://medium.com/data-science-collective/javascript-fatigued-build-an-agentic-chatbot-with-htmx-503569adf2f9) — queue-based POST/SSE decoupling pattern, message append pattern
+- [Streaming AI Agent with FastAPI + LangGraph (2025-26)](https://dev.to/kasi_viswanath/streaming-ai-agent-with-fastapi-langgraph-2025-26-guide-1nkn) — `astream_events()` to SSE bridge, nginx headers, `get_stream_writer()`
 
-**GitHub Projects (MEDIUM Confidence):**
-- [langchain-ai/langchain-mcp-adapters - GitHub](https://github.com/langchain-ai/langchain-mcp-adapters)
-- [teddynote-lab/langgraph-mcp-agents - GitHub](https://github.com/teddynote-lab/langgraph-mcp-agents)
-- [brucechou1983/chainlit_langgraph - GitHub](https://github.com/brucechou1983/chainlit_langgraph)
+**Codebase (HIGH confidence — directly verified):**
+- `src/agentic_claims/app.py` — Chainlit handler logic being ported; streaming event handling patterns
+- `src/agentic_claims/core/graph.py` — `getCompiledGraph()`, checkpointer context manager lifecycle
+- `docker-compose.yml` — service topology, port assignments, health check patterns
+
+---
+
+*Architecture research for: FastAPI + Jinja2 + HTMX UI layer replacing Chainlit*
+*Researched: 2026-03-30*
