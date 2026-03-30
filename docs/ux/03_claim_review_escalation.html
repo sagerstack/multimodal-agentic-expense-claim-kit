@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Claim Review - Cognitive Atelier</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-container": "#fd81a8",
+              "inverse-surface": "#faf8ff",
+              "on-error": "#490013",
+              "on-primary-fixed-variant": "#430076",
+              "secondary-dim": "#50ebd5",
+              "tertiary-fixed": "#ff8eb0",
+              "inverse-primary": "#842cd3",
+              "on-secondary-fixed": "#004840",
+              "inverse-on-surface": "#4d556b",
+              "surface-container-high": "#141f38",
+              "primary-fixed": "#c284ff",
+              "surface": "#060e20",
+              "secondary": "#62fae3",
+              "surface-bright": "#1f2b49",
+              "surface-dim": "#060e20",
+              "on-background": "#dee5ff",
+              "on-primary-container": "#360061",
+              "on-secondary-container": "#dcfff7",
+              "surface-container-highest": "#192540",
+              "tertiary-dim": "#f0779d",
+              "surface-container": "#0f1930",
+              "background": "#060e20",
+              "outline": "#6d758c",
+              "on-secondary-fixed-variant": "#00675c",
+              "on-tertiary-fixed": "#380018",
+              "primary-container": "#c284ff",
+              "error-container": "#a70138",
+              "surface-container-low": "#091328",
+              "on-tertiary-fixed-variant": "#701039",
+              "outline-variant": "#40485d",
+              "on-tertiary-container": "#59002a",
+              "on-secondary": "#005c52",
+              "on-tertiary": "#6a0934",
+              "on-primary-fixed": "#000000",
+              "primary-dim": "#9c48ea",
+              "surface-tint": "#cc97ff",
+              "secondary-fixed": "#62fae3",
+              "on-surface": "#dee5ff",
+              "primary-fixed-dim": "#b971ff",
+              "primary": "#cc97ff",
+              "surface-container-lowest": "#000000",
+              "on-primary": "#47007c",
+              "on-error-container": "#ffb2b9",
+              "error": "#ff6e84",
+              "secondary-container": "#006b5f",
+              "tertiary": "#ff97b5",
+              "tertiary-fixed-dim": "#f67ca3",
+              "surface-variant": "#192540",
+              "on-surface-variant": "#a3aac4",
+              "error-dim": "#d73357",
+              "secondary-fixed-dim": "#50ebd5"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-card {
+        background: rgba(25, 37, 64, 0.2);
+        backdrop-filter: blur(20px);
+      }
+    </style>
+</head>
+<body class="bg-surface text-on-background font-body selection:bg-secondary/30">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-8 h-16 bg-[#060e20] shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold bg-gradient-to-r from-[#cc97ff] to-[#62fae3] bg-clip-text text-transparent font-headline tracking-tight">Cognitive Atelier</span>
+<div class="hidden md:flex gap-6">
+<a class="text-[#dee5ff] opacity-70 hover:text-[#62fae3] transition-colors duration-300 font-manrope tracking-tight font-bold" href="#">Dashboard</a>
+<a class="text-[#dee5ff] opacity-70 hover:text-[#62fae3] transition-colors duration-300 font-manrope tracking-tight font-bold" href="#">Audit Log</a>
+<a class="text-[#cc97ff] border-b-2 border-[#cc97ff] pb-1 font-manrope tracking-tight font-bold" href="#">Escalations</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-[#dee5ff] opacity-70 hover:text-[#62fae3] transition-colors duration-300 p-2 scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-[#dee5ff] opacity-70 hover:text-[#62fae3] transition-colors duration-300 p-2 scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant/30">
+<img alt="User profile with active AI status" class="w-full h-full object-cover" data-alt="close-up portrait of a professional man in a dark studio with subtle cyan and purple ambient lighting on his face" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBx4iTfTL93l8arT8QZZOoV28ao_-up_N_wxoaLP2X8ffO2TTNG72-Fx32xY96hZ_6Sa7C-XLlKawE5HTJNdGdTlVe65H9xPo9EaRSbUzsOOIhkXGRf5zMzeaqfC9uHMtTKRUSQ9UhYv6yotdQ6H9Rbddp23pbAdfoshZN76XJBOF9djsZ16L8HbOmpJgYo5BFIwjpSdec7rsjTEw3TFH0N0GslvkIYYxDv9BycYB6IoDDcatPMhE7zonLzAk81yZovxgdivT9Qzw5w"/>
+</div>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-64 bg-[#091328] flex flex-col py-8 z-40 hidden lg:flex">
+<div class="px-6 mb-10 mt-16">
+<div class="flex items-center gap-3 mb-8">
+<div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-dim flex items-center justify-center shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-on-primary-fixed" data-icon="smart_toy" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+</div>
+<div>
+<h3 class="font-inter text-sm font-bold tracking-wide text-secondary uppercase">Luminous Intelligence</h3>
+<p class="text-[10px] text-on-surface-variant/60 font-medium">Expense Engine Active</p>
+</div>
+</div>
+<button class="w-full py-3 bg-primary text-on-primary-fixed font-bold rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+                New Expense
+            </button>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 text-[#dee5ff] opacity-50 py-3 px-6 hover:bg-[#192540] hover:opacity-100 transition-all duration-200 font-inter text-sm font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined" data-icon="chat_spark">chat_spark</span>
+                Chat AI
+            </a>
+<a class="flex items-center gap-3 text-[#dee5ff] opacity-50 py-3 px-6 hover:bg-[#192540] hover:opacity-100 transition-all duration-200 font-inter text-sm font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined" data-icon="insert_chart">insert_chart</span>
+                Analytics
+            </a>
+<a class="flex items-center gap-3 bg-[#1f2b49] text-[#62fae3] rounded-r-full py-3 px-6 shadow-[0_0_15px_rgba(98,250,227,0.2)] font-inter text-sm font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined" data-icon="verified_user" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+                Approvals
+            </a>
+<a class="flex items-center gap-3 text-[#dee5ff] opacity-50 py-3 px-6 hover:bg-[#192540] hover:opacity-100 transition-all duration-200 font-inter text-sm font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined" data-icon="Receipt_long">receipt_long</span>
+                History
+            </a>
+<a class="flex items-center gap-3 text-[#dee5ff] opacity-50 py-3 px-6 hover:bg-[#192540] hover:opacity-100 transition-all duration-200 font-inter text-sm font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined" data-icon="help_center">help_center</span>
+                Support
+            </a>
+</nav>
+<div class="px-6 mt-auto">
+<a class="flex items-center gap-3 text-[#dee5ff] opacity-50 py-3 px-6 hover:bg-[#192540] hover:opacity-100 transition-all duration-200 font-inter text-sm font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined text-secondary" data-icon="sensors">sensors</span>
+                System Status
+            </a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="lg:ml-64 pt-24 pb-12 px-8 min-h-screen">
+<!-- Page Header -->
+<header class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div>
+<div class="flex items-center gap-3 mb-2">
+<span class="bg-error/10 text-error text-[10px] font-bold px-2 py-0.5 rounded-full border border-error/20 flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span>
+                        HIGH RISK ESCALATION
+                    </span>
+<span class="text-on-surface-variant/40 text-xs">Claim ID: #EXP-99284-AX</span>
+</div>
+<h1 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface leading-none">Review Flagged Claim</h1>
+<p class="text-on-surface-variant mt-2 max-w-xl">Manual override required for potential policy violation. AI extraction confidence score: 42%.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-surface-bright transition-all font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-lg" data-icon="history">history</span>
+                    View History
+                </button>
+<button class="px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-surface-bright transition-all font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-lg" data-icon="share">share</span>
+                    Reassign
+                </button>
+</div>
+</header>
+<!-- Main Bento Grid Layout -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Side-by-Side View (Primary Content) -->
+<section class="col-span-12 xl:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- Original Receipt -->
+<div class="bg-surface-container-low rounded-2xl overflow-hidden shadow-2xl relative group h-[600px] flex flex-col">
+<div class="p-4 flex justify-between items-center bg-surface-container-high/50">
+<span class="text-xs font-bold text-on-surface-variant flex items-center gap-2 uppercase tracking-widest">
+<span class="material-symbols-outlined text-sm" data-icon="image">image</span>
+                            Original Receipt
+                        </span>
+<div class="flex gap-2">
+<button class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="zoom_in">zoom_in</span>
+</button>
+<button class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="download">download</span>
+</button>
+</div>
+</div>
+<div class="flex-1 overflow-auto bg-[#000000] p-8 flex justify-center items-start">
+<img alt="High-resolution receipt photo" class="max-w-full rounded shadow-xl opacity-90 brightness-110" data-alt="a scanned vintage-style paper receipt with black text on a dark wooden surface with sharp focus and harsh top lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDREkfj_b78XMJ-SHTx8hhEn2uHkruGM56P4xaarcOg2E76U4dGKs3iFdLnm-XXGFCWYA5N8ra2x3ucKVSuaZMC7h5NzBf9kVvE0IFQHSfFIFO_X5YILQPQO7YwY9BdI43vQU21LYsv7cGhZV3vPprVA4Y20Io4BeWPD1L2lq2_ES4om8FLPG-QSXZlgSRRRtmIdvKATBNM1VapEOJSxbbuYM5ogsKV7F_y0TM38iUfTEZU9FVGPAWK1v6bBZLMh09EPjA8OHBqJGPI"/>
+</div>
+</div>
+<!-- Extracted Data -->
+<div class="bg-surface-container-low rounded-2xl p-6 shadow-2xl h-[600px] flex flex-col border-t border-outline-variant/10">
+<div class="flex justify-between items-center mb-6">
+<span class="text-xs font-bold text-on-surface-variant flex items-center gap-2 uppercase tracking-widest">
+<span class="material-symbols-outlined text-sm" data-icon="data_object">data_object</span>
+                            Extracted Entity Data
+                        </span>
+<div class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(98,250,227,0.6)]"></div>
+</div>
+<div class="space-y-4 flex-1 overflow-auto pr-2">
+<!-- Data Field -->
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Vendor Name</label>
+<div class="bg-surface-container-highest p-3 rounded-xl flex justify-between items-center group">
+<span class="font-headline font-bold text-on-surface">Lumière Bistro &amp; Bar</span>
+<span class="material-symbols-outlined text-secondary opacity-0 group-hover:opacity-100 transition-opacity text-sm" data-icon="edit">edit</span>
+</div>
+</div>
+<!-- Data Field Flagged -->
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Date of Transaction</label>
+<div class="bg-surface-container-highest p-3 rounded-xl flex justify-between items-center border border-error/20 ring-1 ring-error/10">
+<span class="font-headline font-bold text-error">June 14, 2024</span>
+<span class="material-symbols-outlined text-error text-sm" data-icon="warning" style="font-variation-settings: 'FILL' 1;">warning</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Total Amount</label>
+<div class="bg-surface-container-highest p-3 rounded-xl">
+<span class="font-headline font-bold text-on-surface text-xl">$442.80</span>
+</div>
+</div>
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Currency</label>
+<div class="bg-surface-container-highest p-3 rounded-xl">
+<span class="font-headline font-bold text-on-surface">USD</span>
+</div>
+</div>
+</div>
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Category</label>
+<div class="bg-surface-container-highest p-3 rounded-xl flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-primary" data-icon="restaurant">restaurant</span>
+<span class="font-headline font-bold text-on-surface">Client Entertainment</span>
+</div>
+</div>
+<div class="space-y-1.5">
+<label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Submitter</label>
+<div class="bg-surface-container-highest p-3 rounded-xl flex items-center gap-3">
+<div class="w-6 h-6 rounded-full overflow-hidden bg-primary/20">
+<img alt="Submitter avatar" class="w-full h-full object-cover" data-alt="professional portrait of a man with spectacles against a neutral grey background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEeM79NvFssN0WjjKI2VatXO3cWc35kU8QYVuhC04fdtkYoFiG3Ar3lAXW2l_XsbJVDnkdjlddBQg2SfyxLt3kZCgU36ze2VL9Vxeqdkm4vV_Ugv9ucrPA7PV-jmfX-4EwTks_dA_WkCfMUXRxuWCaYUkzGlE2uvIy6krOtSQEONebJhiPd752KVJ8M3RpjringZiLEr7SRgvFMZPIkYJwQzVckM2umlY1D7tJ9vd_34kEAnv8Me0OLBvDGyF0qlQs6F3mjwfoNaLr"/>
+</div>
+<span class="font-headline font-bold text-on-surface text-sm">Marcus Vance</span>
+<span class="text-on-surface-variant/60 text-[10px] ml-auto">Senior Account Exec</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Intelligence Panel (Right Column) -->
+<section class="col-span-12 xl:col-span-4 space-y-6">
+<!-- Flag Reason Card -->
+<div class="bg-surface-container-highest rounded-2xl p-6 border-t border-error/30 relative overflow-hidden shadow-2xl">
+<div class="absolute top-0 right-0 p-4">
+<span class="material-symbols-outlined text-error/20 text-6xl rotate-12" data-icon="security" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+<div class="relative z-10">
+<h4 class="text-error font-headline font-bold text-lg mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined" data-icon="report" style="font-variation-settings: 'FILL' 1;">report</span>
+                            Flag Reason
+                        </h4>
+<div class="p-4 bg-error-container/10 rounded-xl border border-error/20">
+<p class="text-on-surface text-sm font-medium leading-relaxed">
+                                "Duplicate receipt found in June 2024. Transaction matches <span class="text-error underline decoration-2 underline-offset-4 cursor-pointer">#EXP-88120</span> exactly in amount ($442.80) and vendor (Lumière Bistro)."
+                            </p>
+<div class="mt-3 flex items-center gap-2">
+<span class="text-xs text-error/80 font-bold uppercase tracking-tighter">AI Confidence: 98%</span>
+<div class="h-1 flex-1 bg-error/20 rounded-full overflow-hidden">
+<div class="h-full bg-error w-[98%]"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Approver Notes Section -->
+<div class="bg-surface-container-low rounded-2xl p-6 shadow-xl border border-outline-variant/10">
+<h4 class="text-on-surface font-headline font-bold mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary" data-icon="notes">notes</span>
+                        Reviewer Decision
+                    </h4>
+<div class="space-y-4">
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Internal Notes</label>
+<textarea class="w-full bg-surface-container-lowest border-none rounded-xl text-on-surface text-sm p-4 focus:ring-2 focus:ring-secondary/50 h-32 placeholder:text-on-surface-variant/30" placeholder="State the reasoning for approval or rejection..."></textarea>
+</div>
+<div class="space-y-4">
+<label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Action Required</label>
+<!-- Rejection Options -->
+<div class="p-4 bg-surface-container-highest rounded-xl border border-outline-variant/10 space-y-3">
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Rejection Reason (If Applicable)</p>
+<div class="grid grid-cols-1 gap-2">
+<label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
+<input class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-offset-surface focus:ring-error" name="reason" type="radio"/>
+<span class="text-sm text-on-surface-variant group-hover:text-on-surface">Duplicate submission</span>
+</label>
+<label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
+<input class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-offset-surface focus:ring-error" name="reason" type="radio"/>
+<span class="text-sm text-on-surface-variant group-hover:text-on-surface">Incomplete receipt details</span>
+</label>
+<label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
+<input class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-offset-surface focus:ring-error" name="reason" type="radio"/>
+<span class="text-sm text-on-surface-variant group-hover:text-on-surface">Policy violation: Alcohol</span>
+</label>
+</div>
+</div>
+<div class="flex flex-col gap-3 pt-4">
+<button class="w-full py-4 bg-error-dim hover:bg-error text-white font-headline font-extrabold rounded-xl shadow-lg shadow-error/10 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" data-icon="cancel">cancel</span>
+                                    Reject Claim
+                                </button>
+<button class="w-full py-4 bg-gradient-to-r from-secondary to-secondary-dim text-on-secondary-fixed font-headline font-extrabold rounded-xl shadow-lg shadow-secondary/20 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                    Approve Claim
+                                </button>
+</div>
+</div>
+</div>
+</div>
+<!-- AI Insight Card -->
+<div class="glass-card rounded-2xl p-6 border border-secondary/10 relative overflow-hidden">
+<div class="flex items-center gap-3 mb-4">
+<div class="relative">
+<span class="material-symbols-outlined text-secondary" data-icon="psychology">psychology</span>
+<div class="absolute -top-1 -right-1 w-2 h-2 bg-secondary rounded-full animate-ping"></div>
+</div>
+<h5 class="text-secondary font-headline font-bold">Luminous Intelligence Insight</h5>
+</div>
+<p class="text-on-surface-variant text-sm italic leading-relaxed">
+                        "User Marcus Vance has a high accuracy rating (94%) across 128 previous submissions. This duplication may be an accidental resubmission of an already approved vendor invoice."
+                    </p>
+</div>
+</section>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-20 pb-safe md:hidden bg-[#060e20]/80 backdrop-blur-xl border-t border-[#40485d]/15 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+<button class="flex flex-col items-center justify-center text-[#dee5ff] opacity-40 hover:opacity-100 active:scale-90 transition-all">
+<span class="material-symbols-outlined" data-icon="grid_view">grid_view</span>
+<span class="text-[10px] font-bold font-inter uppercase tracking-widest mt-1">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#dee5ff] opacity-40 hover:opacity-100 active:scale-90 transition-all">
+<span class="material-symbols-outlined" data-icon="smart_toy">smart_toy</span>
+<span class="text-[10px] font-bold font-inter uppercase tracking-widest mt-1">Chat</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#62fae3] scale-110 active:scale-90 transition-all">
+<span class="material-symbols-outlined" data-icon="history_edu" style="font-variation-settings: 'FILL' 1;">history_edu</span>
+<span class="text-[10px] font-bold font-inter uppercase tracking-widest mt-1">Logs</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#dee5ff] opacity-40 hover:opacity-100 active:scale-90 transition-all">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="text-[10px] font-bold font-inter uppercase tracking-widest mt-1">Profile</span>
+</button>
+</nav>
+</body></html>

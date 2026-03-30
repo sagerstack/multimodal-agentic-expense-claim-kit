@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Approver Dashboard | Cognitive Atelier</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-container": "#fd81a8",
+              "inverse-surface": "#faf8ff",
+              "on-error": "#490013",
+              "on-primary-fixed-variant": "#430076",
+              "secondary-dim": "#50ebd5",
+              "tertiary-fixed": "#ff8eb0",
+              "inverse-primary": "#842cd3",
+              "on-secondary-fixed": "#004840",
+              "inverse-on-surface": "#4d556b",
+              "surface-container-high": "#141f38",
+              "primary-fixed": "#c284ff",
+              "surface": "#060e20",
+              "secondary": "#62fae3",
+              "surface-bright": "#1f2b49",
+              "surface-dim": "#060e20",
+              "on-background": "#dee5ff",
+              "on-primary-container": "#360061",
+              "on-secondary-container": "#dcfff7",
+              "surface-container-highest": "#192540",
+              "tertiary-dim": "#f0779d",
+              "surface-container": "#0f1930",
+              "background": "#060e20",
+              "outline": "#6d758c",
+              "on-secondary-fixed-variant": "#00675c",
+              "on-tertiary-fixed": "#380018",
+              "primary-container": "#c284ff",
+              "error-container": "#a70138",
+              "surface-container-low": "#091328",
+              "on-tertiary-fixed-variant": "#701039",
+              "outline-variant": "#40485d",
+              "on-tertiary-container": "#59002a",
+              "on-secondary": "#005c52",
+              "on-tertiary": "#6a0934",
+              "on-primary-fixed": "#000000",
+              "primary-dim": "#9c48ea",
+              "surface-tint": "#cc97ff",
+              "secondary-fixed": "#62fae3",
+              "on-surface": "#dee5ff",
+              "primary-fixed-dim": "#b971ff",
+              "primary": "#cc97ff",
+              "surface-container-lowest": "#000000",
+              "on-primary": "#47007c",
+              "on-error-container": "#ffb2b9",
+              "error": "#ff6e84",
+              "secondary-container": "#006b5f",
+              "tertiary": "#ff97b5",
+              "tertiary-fixed-dim": "#f67ca3",
+              "surface-variant": "#192540",
+              "on-surface-variant": "#a3aac4",
+              "error-dim": "#d73357",
+              "secondary-fixed-dim": "#50ebd5"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .glass-panel {
+            background: rgba(25, 37, 64, 0.2);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary selection:text-on-primary">
+<!-- TopNavBar Shell -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-8 h-16 bg-[#060e20] shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold bg-gradient-to-r from-[#cc97ff] to-[#62fae3] bg-clip-text text-transparent font-headline tracking-tight">Cognitive Atelier</span>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-[#dee5ff] opacity-70 font-manrope tracking-tight font-bold hover:text-[#62fae3] transition-colors duration-300" href="#">Dashboard</a>
+<a class="text-[#dee5ff] opacity-70 font-manrope tracking-tight font-bold hover:text-[#62fae3] transition-colors duration-300" href="#">Audit Log</a>
+<a class="text-[#cc97ff] border-b-2 border-[#cc97ff] pb-1 font-manrope tracking-tight font-bold hover:text-[#62fae3] transition-colors duration-300" href="#">Escalations</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-[#dee5ff] hover:text-[#62fae3] transition-colors duration-300 scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-[#dee5ff] hover:text-[#62fae3] transition-colors duration-300 scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant">
+<img alt="User profile with active AI status" data-alt="professional portrait of a confident woman with short hair and modern glasses against a dark tech-themed background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAacXel-aYD3S7EC9z4m_N1ukcn17R-0JgnQGZ_NmVzkgKbvGEp1RS8OFf5u4pvREmX77IqATtXIoQd-Cn4DweaSpi_VKueXPHK3HfW87zFScPg2hl-66ftM0ROgV0i82KT6fpOJ3beTbK5eK8JNrg1-BwouttQ1zoCUuT8z7n7SRyjxBJ6pnGupoNvbqiUMZlbVicUpsI5iwsv2X-5LZL_BIp1opp10D9gDFUgj2Iv1oF8ezdU4OSAic2bUnjaNM1_Cpu6WsWRJ3vi"/>
+</div>
+</div>
+</header>
+<!-- SideNavBar Shell -->
+<aside class="fixed left-0 top-0 h-full flex flex-col py-8 bg-[#091328] w-64 z-40 hidden md:flex pt-24">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3 p-4 bg-surface-container-highest rounded-xl">
+<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-primary-dim flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-fixed" style="font-variation-settings: 'FILL' 1;">bolt</span>
+</div>
+<div>
+<h3 class="font-inter text-sm font-medium tracking-wide text-secondary">Luminous Intelligence</h3>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest">Expense Engine Active</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center gap-3 text-[#dee5ff] opacity-50 py-3 px-6 hover:bg-[#192540] hover:opacity-100 transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined">chat_spark</span> Chat AI
+            </a>
+<a class="flex items-center gap-3 text-[#dee5ff] opacity-50 py-3 px-6 hover:bg-[#192540] hover:opacity-100 transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined">insert_chart</span> Analytics
+            </a>
+<a class="flex items-center gap-3 bg-[#1f2b49] text-[#62fae3] rounded-r-full py-3 px-6 shadow-[0_0_15px_rgba(98,250,227,0.2)] transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined">verified_user</span> Approvals
+            </a>
+<a class="flex items-center gap-3 text-[#dee5ff] opacity-50 py-3 px-6 hover:bg-[#192540] hover:opacity-100 transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined">receipt_long</span> History
+            </a>
+<a class="flex items-center gap-3 text-[#dee5ff] opacity-50 py-3 px-6 hover:bg-[#192540] hover:opacity-100 transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide" href="#">
+<span class="material-symbols-outlined">help_center</span> Support
+            </a>
+</nav>
+<div class="px-6 mt-auto">
+<button class="w-full py-3 bg-gradient-to-r from-primary to-primary-dim rounded-xl font-bold text-on-primary-fixed hover:shadow-[0_0_20px_rgba(204,151,255,0.4)] transition-all active:scale-95">
+                New Expense
+            </button>
+<div class="mt-6 flex items-center gap-3 py-3 px-6 text-on-surface-variant font-inter text-sm font-medium">
+<span class="material-symbols-outlined animate-pulse text-secondary">sensors</span> System Status
+            </div>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="md:ml-64 pt-24 pb-32 px-6 md:px-12 max-w-7xl mx-auto min-h-screen">
+<!-- Header Section -->
+<header class="mb-12">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div>
+<h1 class="text-4xl md:text-5xl font-headline font-extrabold tracking-tight text-on-surface mb-2">Approver Dashboard</h1>
+<p class="text-on-surface-variant font-body">Manage pending claims and AI-driven thresholds.</p>
+</div>
+<div class="flex items-center gap-4 bg-surface-container-low p-2 rounded-2xl border border-outline-variant/10">
+<div class="px-4 py-2">
+<span class="block text-[10px] uppercase tracking-widest text-on-surface-variant mb-1 font-bold">Auto-Approval Threshold</span>
+<div class="flex items-center gap-3">
+<span class="text-lg font-headline font-bold text-secondary">$500.00</span>
+<div class="w-10 h-5 bg-surface-bright rounded-full relative cursor-pointer group border border-outline-variant/20">
+<div class="absolute right-1 top-1 w-3 h-3 bg-secondary rounded-full group-hover:shadow-[0_0_8px_rgba(98,250,227,0.6)] transition-all"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</header>
+<!-- Bento Grid Summary -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+<!-- Total Pending -->
+<div class="bg-surface-container-low p-8 rounded-3xl border-t border-outline-variant/15 flex flex-col justify-between h-48 hover:bg-surface-bright transition-all duration-300">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-primary text-3xl">pending_actions</span>
+<span class="text-xs font-bold text-primary px-3 py-1 bg-primary/10 rounded-full">+12% vs last wk</span>
+</div>
+<div>
+<h4 class="text-4xl font-headline font-extrabold tracking-tight">142</h4>
+<p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Total Pending Claims</p>
+</div>
+</div>
+<!-- Auto-Approved -->
+<div class="bg-surface-container-low p-8 rounded-3xl border-t border-outline-variant/15 flex flex-col justify-between h-48 hover:bg-surface-bright transition-all duration-300">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-secondary text-3xl">magic_button</span>
+<span class="text-xs font-bold text-secondary px-3 py-1 bg-secondary/10 rounded-full">89% Efficiency</span>
+</div>
+<div>
+<div class="flex items-baseline gap-2">
+<h4 class="text-4xl font-headline font-extrabold tracking-tight">1,204</h4>
+<div class="w-2 h-2 rounded-full bg-secondary animate-pulse mb-1"></div>
+</div>
+<p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Auto-Approved by AI</p>
+</div>
+</div>
+<!-- Escalated -->
+<div class="bg-surface-container-low p-8 rounded-3xl border-t border-outline-variant/15 flex flex-col justify-between h-48 hover:bg-surface-bright transition-all duration-300">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-tertiary text-3xl">escalator_warning</span>
+<span class="text-xs font-bold text-tertiary px-3 py-1 bg-tertiary/10 rounded-full">Critical Priority</span>
+</div>
+<div>
+<h4 class="text-4xl font-headline font-extrabold tracking-tight">18</h4>
+<p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Escalated to Human</p>
+</div>
+</div>
+</section>
+<!-- Main Content Area: Chart & List -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+<!-- Efficiency Chart -->
+<section class="lg:col-span-4 bg-surface-container-low rounded-3xl p-8 border-t border-outline-variant/15 flex flex-col">
+<div class="flex justify-between items-center mb-8">
+<h3 class="font-headline font-bold text-xl tracking-tight">AI Efficiency</h3>
+<span class="material-symbols-outlined text-on-surface-variant">more_vert</span>
+</div>
+<div class="flex-1 flex flex-col justify-center gap-4">
+<!-- Fake Chart Visual -->
+<div class="flex items-end justify-between h-32 px-4 gap-2">
+<div class="w-full bg-primary/20 rounded-t-lg h-2/3 relative group">
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-primary text-on-primary-fixed text-[10px] font-bold py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">65%</div>
+</div>
+<div class="w-full bg-primary/20 rounded-t-lg h-1/2 relative group"></div>
+<div class="w-full bg-secondary/40 rounded-t-lg h-3/4 relative group"></div>
+<div class="w-full bg-secondary/60 rounded-t-lg h-full relative group"></div>
+<div class="w-full bg-secondary/40 rounded-t-lg h-2/3 relative group"></div>
+<div class="w-full bg-secondary rounded-t-lg h-5/6 relative group">
+<div class="absolute -top-8 left-1/2 -translate-x-1/2 bg-secondary text-on-secondary-fixed text-[10px] font-bold py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">94%</div>
+</div>
+</div>
+<div class="flex justify-between px-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mt-2">
+<span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+</div>
+</div>
+<div class="mt-8 pt-6 border-t border-outline-variant/10">
+<div class="flex items-center gap-4">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-surface-container-highest flex items-center justify-center text-[10px] font-bold">JD</div>
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-surface-container-highest flex items-center justify-center text-[10px] font-bold">AS</div>
+</div>
+<p class="text-xs text-on-surface-variant"><span class="text-secondary font-bold">2 Agents</span> monitoring AI accuracy</p>
+</div>
+</div>
+</section>
+<!-- Claims List -->
+<section class="lg:col-span-8">
+<div class="bg-surface-container-low rounded-3xl overflow-hidden border-t border-outline-variant/15">
+<div class="p-8 flex justify-between items-center border-b border-outline-variant/10">
+<h3 class="font-headline font-bold text-xl tracking-tight">Recent Claims</h3>
+<div class="flex gap-2">
+<button class="bg-surface-bright px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:text-secondary transition-colors">Filters</button>
+<button class="bg-surface-bright px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:text-secondary transition-colors">Export</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+<tr>
+<th class="px-8 py-4">Employee</th>
+<th class="px-8 py-4">Category</th>
+<th class="px-8 py-4">Amount</th>
+<th class="px-8 py-4">Status</th>
+<th class="px-8 py-4">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/5">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-bright/50 transition-colors group">
+<td class="px-8 py-5">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden">
+<img alt="Claim owner" data-alt="close-up portrait of a male professional with a warm smile in a modern office environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuABPFXOafWqiCX574RszmjVxrqZl6MyU2AePT__2e4q-_3JFYaivKdBQSF4WYgUJ-jErXyFyMXivAhmm27z1EcpwmTaWJKiekF6DkoZl8r4RKxpAy4JpGKOcYbpPXImuPtHtIpWzm2CJwd0kqqrhY02SZVL38obqY3H-BNjR3x5Cp2Yv3tHcCUloxiHEPctX0uU5jbzzu8iNuQNmTcb0D-Jr_-_XlSXpxEdU-VL-XsyaHU8wdOe9gYCQlL-aXi30sxdEW2bjZyBqmji"/>
+</div>
+<div>
+<p class="font-bold text-sm">Marcus Holloway</p>
+<p class="text-xs text-on-surface-variant">Eng - Seattle</p>
+</div>
+</div>
+</td>
+<td class="px-8 py-5">
+<span class="text-sm">Hardware Upgrade</span>
+</td>
+<td class="px-8 py-5 font-headline font-bold text-sm">$2,450.00</td>
+<td class="px-8 py-5">
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest">
+<span class="w-1 h-1 rounded-full bg-primary"></span>
+                                            Pending Human Review
+                                        </div>
+</td>
+<td class="px-8 py-5">
+<button class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">arrow_forward_ios</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-bright/50 transition-colors group">
+<td class="px-8 py-5">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden">
+<img alt="Claim owner" data-alt="headshot of a young creative professional with a light beard and denim jacket" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCy2lw-7J-rq73Zgp3VSJcEgYXazsyqPg_nV7cOqiOllo6e5LA4_z_pX-W9qIitlTJmlpEUB276L1Sk5tJlfygkQgflpC24_y4Qo4HPbXJvfHMoJ_-tsJWSMbmL_VVspy3fT6NomM9yQACQmkArzeAtwy_SaR1pEBrgawi_Y9qG9yWyzWbLWlzqUQTgTSBYPqQddoOh3c3_uizkK6xqFehIaeIxAdCT6UNYXFqYxROCbZHoIF-GvvszLJCxhW56D6qGIJ_grtEX5cEI"/>
+</div>
+<div>
+<p class="font-bold text-sm">Elena Rodriguez</p>
+<p class="text-xs text-on-surface-variant">Design - Madrid</p>
+</div>
+</div>
+</td>
+<td class="px-8 py-5">
+<span class="text-sm">Travel &amp; Lodging</span>
+</td>
+<td class="px-8 py-5 font-headline font-bold text-sm">$412.50</td>
+<td class="px-8 py-5">
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/10 text-secondary text-[10px] font-bold uppercase tracking-widest">
+<span class="w-1 h-1 rounded-full bg-secondary"></span>
+                                            AI-Approved
+                                        </div>
+</td>
+<td class="px-8 py-5">
+<button class="material-symbols-outlined text-on-surface-variant group-hover:text-secondary transition-colors">arrow_forward_ios</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-bright/50 transition-colors group">
+<td class="px-8 py-5">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden">
+<img alt="Claim owner" data-alt="professional portrait of a woman with braided hair wearing a sleek blazer in a studio setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwc62zkROjzX7ef_7CgYKu24fpbIkZB7xe31Y5ArohvxcEnIiN6rA8JA1aA2Z7L-6lnICuvyqKC5if9htIBcMaY5cV2_gJUd2Vajkvjx3OwjGT3HHpmB07jABYBYQvnrUlypyAB3UKK2Oiu8yf9dJ6ULiCDzM6iIXI7wK5vbokmZEGmlZPp9SRLnYycgfTVsBgYEDWL1aKKZUTT-xHziUaiGgZ-EXEGaLwukXJV3T6ZuyeYJN6cqqWDM_2lILCg8I1Qvb3esh358iz"/>
+</div>
+<div>
+<p class="font-bold text-sm">Sarah Jenkins</p>
+<p class="text-xs text-on-surface-variant">Sales - London</p>
+</div>
+</div>
+</td>
+<td class="px-8 py-5">
+<span class="text-sm">Misc. Entertainment</span>
+</td>
+<td class="px-8 py-5 font-headline font-bold text-sm">$1,102.00</td>
+<td class="px-8 py-5">
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-bold uppercase tracking-widest">
+<span class="w-1 h-1 rounded-full bg-tertiary"></span>
+                                            Flagged
+                                        </div>
+</td>
+<td class="px-8 py-5">
+<button class="material-symbols-outlined text-on-surface-variant group-hover:text-tertiary transition-colors">arrow_forward_ios</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- BottomNavBar Shell -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-20 pb-safe md:hidden bg-[#060e20]/80 backdrop-blur-xl border-t border-[#40485d]/15 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+<a class="flex flex-col items-center justify-center text-[#dee5ff] opacity-40 hover:opacity-100 active:scale-90 transition-all font-inter text-[10px] font-bold uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined mb-1">grid_view</span>
+            Home
+        </a>
+<a class="flex flex-col items-center justify-center text-[#dee5ff] opacity-40 hover:opacity-100 active:scale-90 transition-all font-inter text-[10px] font-bold uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined mb-1">smart_toy</span>
+            Chat
+        </a>
+<a class="flex flex-col items-center justify-center text-[#62fae3] scale-110 active:scale-90 transition-all font-inter text-[10px] font-bold uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined mb-1">history_edu</span>
+            Logs
+        </a>
+<a class="flex flex-col items-center justify-center text-[#dee5ff] opacity-40 hover:opacity-100 active:scale-90 transition-all font-inter text-[10px] font-bold uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined mb-1">account_circle</span>
+            Profile
+        </a>
+</nav>
+<!-- Floating Action Pulse -->
+<div class="fixed bottom-24 right-8 z-50 md:bottom-8">
+<button class="w-14 h-14 rounded-full bg-gradient-to-tr from-secondary to-secondary-dim flex items-center justify-center text-on-secondary shadow-lg hover:scale-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">psychology</span>
+<div class="absolute -top-1 -right-1 w-4 h-4 bg-tertiary rounded-full animate-ping"></div>
+<div class="absolute -top-1 -right-1 w-4 h-4 bg-tertiary rounded-full"></div>
+</button>
+</div>
+</body></html>
