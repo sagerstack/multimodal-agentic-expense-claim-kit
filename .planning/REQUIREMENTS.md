@@ -159,13 +159,75 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (to be filled by roadmapper) | | |
+| UIFN-01 | Phase 6 | Pending |
+| UIFN-02 | Phase 6 | Pending |
+| UIFN-03 | Phase 6 | Pending |
+| UIFN-04 | Phase 6 | Pending |
+| UIFN-05 | Phase 6 | Pending |
+| UIFN-06 | Phase 6 | Pending |
+| UIFN-07 | Phase 6 | Pending |
+| UIFN-08 | Phase 6 | Pending |
+| UIFN-09 | Phase 6 | Pending |
+| UIFN-10 | Phase 6 | Pending |
+| MIGR-02 | Phase 6 | Pending |
+| MIGR-09 | Phase 6 | Pending |
+| MIGR-10 | Phase 6 | Pending |
+| STRE-01 | Phase 7 | Pending |
+| STRE-02 | Phase 7 | Pending |
+| STRE-03 | Phase 7 | Pending |
+| STRE-04 | Phase 7 | Pending |
+| STRE-05 | Phase 7 | Pending |
+| MIGR-01 | Phase 7 | Pending |
+| MIGR-03 | Phase 7 | Pending |
+| MIGR-04 | Phase 7 | Pending |
+| MIGR-05 | Phase 7 | Pending |
+| MIGR-06 | Phase 7 | Pending |
+| MIGR-07 | Phase 7 | Pending |
+| MIGR-08 | Phase 7 | Pending |
+| CHAT-01 | Phase 7 | Pending |
+| CHAT-02 | Phase 7 | Pending |
+| CHAT-03 | Phase 7 | Pending |
+| CHAT-04 | Phase 7 | Pending |
+| CHAT-05 | Phase 7 | Pending |
+| CHAT-06 | Phase 7 | Pending |
+| CHAT-07 | Phase 7 | Pending |
+| CHAT-08 | Phase 7 | Pending |
+| CHAT-09 | Phase 7 | Pending |
+| CHAT-10 | Phase 7 | Pending |
+| CHAT-11 | Phase 7 | Pending |
+| DASH-01 | Phase 8 | Pending |
+| DASH-02 | Phase 8 | Pending |
+| DASH-03 | Phase 8 | Pending |
+| DASH-04 | Phase 8 | Pending |
+| DASH-05 | Phase 8 | Pending |
+| AUDT-01 | Phase 8 | Pending |
+| AUDT-02 | Phase 8 | Pending |
+| AUDT-03 | Phase 8 | Pending |
+| AUDT-04 | Phase 8 | Pending |
+| AUDT-05 | Phase 8 | Pending |
+| AUDT-06 | Phase 8 | Pending |
+| AUDT-07 | Phase 8 | Pending |
+| REVW-01 | Phase 9 | Pending |
+| REVW-02 | Phase 9 | Pending |
+| REVW-03 | Phase 9 | Pending |
+| REVW-04 | Phase 9 | Pending |
+| REVW-05 | Phase 9 | Pending |
+| REVW-06 | Phase 9 | Pending |
+| REVW-07 | Phase 9 | Pending |
+| REVW-08 | Phase 9 | Pending |
+| TEST-01 | Phase 10 | Pending |
+| TEST-02 | Phase 10 | Pending |
+| TEST-03 | Phase 10 | Pending |
+| TEST-04 | Phase 10 | Pending |
+| TEST-05 | Phase 10 | Pending |
 
 **Coverage:**
-- v2.0 requirements: 54 total
-- Mapped to phases: 0
-- Unmapped: 54
+- v2.0 requirements: 61 total (header previously stated 54 — recount corrected)
+- Mapped to phases: 61
+- Unmapped: 0
+
+**Note on count:** The original header said 54 requirements. The actual enumeration yields 61: UIFN (10) + MIGR (10) + CHAT (11) + DASH (5) + AUDT (7) + REVW (8) + STRE (5) + TEST (5) = 61. All 61 are mapped.
 
 ---
 *Requirements defined: 2026-03-30*
-*Last updated: 2026-03-30 after milestone v2.0 definition*
+*Last updated: 2026-03-30 — traceability populated by roadmapper (v2.0 phases 6–10)*
