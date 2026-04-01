@@ -1,6 +1,72 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@source "../../templates/**/*.html";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-tertiary-container: #fd81a8;
+  --color-inverse-surface: #faf8ff;
+  --color-on-error: #490013;
+  --color-on-primary-fixed-variant: #430076;
+  --color-secondary-dim: #50ebd5;
+  --color-tertiary-fixed: #ff8eb0;
+  --color-inverse-primary: #842cd3;
+  --color-on-secondary-fixed: #004840;
+  --color-inverse-on-surface: #4d556b;
+  --color-surface-container-high: #141f38;
+  --color-primary-fixed: #c284ff;
+  --color-surface: #060e20;
+  --color-secondary: #62fae3;
+  --color-surface-bright: #1f2b49;
+  --color-surface-dim: #060e20;
+  --color-on-background: #dee5ff;
+  --color-on-primary-container: #360061;
+  --color-on-secondary-container: #dcfff7;
+  --color-surface-container-highest: #192540;
+  --color-tertiary-dim: #f0779d;
+  --color-surface-container: #0f1930;
+  --color-background: #060e20;
+  --color-outline: #6d758c;
+  --color-on-secondary-fixed-variant: #00675c;
+  --color-on-tertiary-fixed: #380018;
+  --color-primary-container: #c284ff;
+  --color-error-container: #a70138;
+  --color-surface-container-low: #091328;
+  --color-on-tertiary-fixed-variant: #701039;
+  --color-outline-variant: #40485d;
+  --color-on-tertiary-container: #59002a;
+  --color-on-secondary: #005c52;
+  --color-on-tertiary: #6a0934;
+  --color-on-primary-fixed: #000000;
+  --color-primary-dim: #9c48ea;
+  --color-surface-tint: #cc97ff;
+  --color-secondary-fixed: #62fae3;
+  --color-on-surface: #dee5ff;
+  --color-primary-fixed-dim: #b971ff;
+  --color-primary: #cc97ff;
+  --color-surface-container-lowest: #000000;
+  --color-on-primary: #47007c;
+  --color-on-error-container: #ffb2b9;
+  --color-error: #ff6e84;
+  --color-secondary-container: #006b5f;
+  --color-tertiary: #ff97b5;
+  --color-tertiary-fixed-dim: #f67ca3;
+  --color-surface-variant: #192540;
+  --color-on-surface-variant: #a3aac4;
+  --color-error-dim: #d73357;
+  --color-secondary-fixed-dim: #50ebd5;
+
+  --font-headline: "Manrope", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-label: "Inter", sans-serif;
+  --font-manrope: "Manrope", sans-serif;
+
+  --radius-DEFAULT: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+}
 
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
