@@ -23,6 +23,8 @@ services:
         condition: service_healthy
     volumes:
       - ./src:/app/src
+      - ./templates:/app/templates
+      - ./static:/app/static
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 10s

@@ -19,12 +19,13 @@ RUN poetry export --without dev -f requirements.txt -o requirements.txt \
     && pip install --no-cache-dir -r requirements.txt \
     && rm requirements.txt
 
-# Copy source code, config, and Alembic migrations
+# Copy source code, config, Alembic migrations, and web assets
 COPY src/ ./src/
 COPY alembic.ini ./
 COPY alembic/ ./alembic/
-COPY .chainlit/ ./.chainlit/
-COPY public/ ./public/
+COPY templates/ ./templates/
+COPY static/ ./static/
+COPY tailwind.config.js ./
 
 # Install root project (no deps — already installed above)
 RUN pip install --no-cache-dir --no-deps .
@@ -35,5 +36,5 @@ ENV PIP_TRUSTED_HOST=""
 # Expose port
 EXPOSE 8000
 
-# Run Chainlit app
-CMD ["chainlit", "run", "src/agentic_claims/app.py", "--host", "0.0.0.0", "--port", "8000"]
+# Run FastAPI app via uvicorn
+CMD ["uvicorn", "agentic_claims.web.main:app", "--host", "0.0.0.0", "--port", "8000"]
