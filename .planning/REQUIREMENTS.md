@@ -9,29 +9,29 @@ Requirements for the UX redesign milestone. Each maps to roadmap phases.
 
 ### UI Foundation
 
-- [ ] **UIFN-01**: FastAPI application replaces Chainlit as the web server, serving all 4 pages via Jinja2 templates
-- [ ] **UIFN-02**: Shared base template (`base.html`) with sidebar navigation, top bar, and "Neon Nocturne" dark theme matching Stitch designs
-- [ ] **UIFN-03**: Tailwind v3 build pipeline via pytailwindcss (not CDN) for production-ready CSS
-- [ ] **UIFN-04**: HTMX 2.0.8 + SSE extension 2.2.4 loaded on all pages for dynamic interactions
-- [ ] **UIFN-05**: Alpine.js v3 loaded on all pages for client-side reactive state (upload progress, panel toggles, zoom)
-- [ ] **UIFN-06**: Material Symbols icons and Google Fonts (Manrope, Inter) loaded matching Stitch designs
-- [ ] **UIFN-07**: Active page indicator in sidebar navigation highlights the current page
-- [ ] **UIFN-08**: System status indicator in sidebar shows service health (intelligence pulse animation)
-- [ ] **UIFN-09**: Docker Compose `app` service updated to run FastAPI via uvicorn instead of Chainlit
-- [ ] **UIFN-10**: SessionMiddleware for per-conversation state (thread_id, claim_id) without authentication
+- [x] **UIFN-01**: FastAPI application replaces Chainlit as the web server, serving all 4 pages via Jinja2 templates
+- [x] **UIFN-02**: Shared base template (`base.html`) with sidebar navigation, top bar, and "Neon Nocturne" dark theme matching Stitch designs
+- [x] **UIFN-03**: Tailwind v3 build pipeline via pytailwindcss (not CDN) for production-ready CSS
+- [x] **UIFN-04**: HTMX 2.0.8 + SSE extension 2.2.4 loaded on all pages for dynamic interactions
+- [x] **UIFN-05**: Alpine.js v3 loaded on all pages for client-side reactive state (upload progress, panel toggles, zoom)
+- [x] **UIFN-06**: Material Symbols icons and Google Fonts (Manrope, Inter) loaded matching Stitch designs
+- [x] **UIFN-07**: Active page indicator in sidebar navigation highlights the current page
+- [x] **UIFN-08**: System status indicator in sidebar shows service health (intelligence pulse animation)
+- [x] **UIFN-09**: Docker Compose `app` service updated to run FastAPI via uvicorn instead of Chainlit
+- [x] **UIFN-10**: SessionMiddleware for per-conversation state (thread_id, claim_id) without authentication
 
 ### V1 Migration (Regression)
 
 - [ ] **MIGR-01**: All v1.0 Intake Agent capabilities (VLM extraction, policy validation, currency conversion, claim submission, human-in-the-loop) work through the new FastAPI UI
-- [ ] **MIGR-02**: LangGraph graph invocation and checkpointer lifecycle managed via FastAPI lifespan (singleton, not per-session)
+- [x] **MIGR-02**: LangGraph graph invocation and checkpointer lifecycle managed via FastAPI lifespan (singleton, not per-session)
 - [ ] **MIGR-03**: Receipt image upload via new UI stores base64 in imageStore and triggers VLM extraction identically to v1.0
 - [ ] **MIGR-04**: SSE streaming delivers token-by-token AI responses to the chat interface matching v1.0 streaming behavior
 - [ ] **MIGR-05**: LangGraph interrupt/resume for human-in-the-loop clarification works through the new chat UI (askHuman tool)
 - [ ] **MIGR-06**: Thinking panel displays Type A (agent reasoning) and Type B (QwQ reasoning tokens) interleaved with tool call summaries
 - [ ] **MIGR-07**: QwQ-32B model with reasoning tokens, temperature settings, and fallback behavior preserved from v1.0
 - [ ] **MIGR-08**: Schema-driven intake prompt with getClaimSchema tool works identically to v1.0
-- [ ] **MIGR-09**: ConversationRunner (headless E2E) continues working after migration — backend is unchanged
-- [ ] **MIGR-10**: All 54 existing unit/integration tests pass without modification
+- [x] **MIGR-09**: ConversationRunner (headless E2E) continues working after migration — backend is unchanged
+- [x] **MIGR-10**: All 54 existing unit/integration tests pass without modification
 
 ### Chat Page (Page 1)
 

@@ -5,26 +5,27 @@
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Milestone v2.0 — Phase 6: FastAPI Scaffold + Static Shell
+**Current focus:** Milestone v2.0 — Phase 7: SSE Streaming + Full Chat Page
 
 ## Current Position
 
-Phase: 6 — FastAPI Scaffold + Static Shell
+Phase: 7 — SSE Streaming + Full Chat Page
 Plan: Not started
-Status: Roadmap defined, ready for Phase 6 planning
-Last activity: 2026-03-30 — v2.0 roadmap created (Phases 6–10)
+Status: Phase 6 complete, ready for Phase 7 planning
+Last activity: 2026-04-01 — Phase 6 executed (3 plans, 3 waves)
 
 ```
-v2.0 Progress: [..........] 0/14 plans
-Phase 6:       [..........] 0/3 plans
+v2.0 Progress: [###.......] 3/14 plans
+Phase 6:       [##########] 3/3 plans (complete)
+Phase 7:       [..........] 0/3 plans
 ```
 
 ## Performance Metrics
 
 **Velocity (from v1.0):**
-- Total plans completed: 24
+- Total plans completed: 27
 - Average duration: 8 min
-- Total execution time: 2.97 hours
+- Total execution time: ~3.5 hours
 
 ## Accumulated Context
 
@@ -51,11 +52,17 @@ New for v2.0:
 - Checkpointer as lifespan singleton — not per-request (Phase 6, critical pitfall prevention)
 - Tailwind v3 via pytailwindcss — not CDN, not v4 (Stitch designs use v3 JS config syntax)
 
+Phase 6 discoveries:
+- pytailwindcss v0.3 downloads Tailwind v4.2.2 (not v3). v4 auto-detects v3 config and generates correct CSS. No compatibility issues.
+- Starlette 1.0 changed TemplateResponse API: now `(request, name, context=)` instead of `(name, {"request": request, ...})`
+- Circular import between main.py and pages.py resolved by extracting templates to `web/templating.py`
+- itsdangerous required for SessionMiddleware cookie signing (added as dependency)
+
 ### Critical Pitfalls to Avoid
 
 From research (see .planning/research/PITFALLS.md):
 
-1. **Checkpointer per-request** (HIGH recovery cost) — Must be lifespan singleton in Phase 6
+1. **Checkpointer per-request** (HIGH recovery cost) — RESOLVED in Phase 6 (lifespan singleton)
 2. **SSE generator not cancelled on disconnect** (MEDIUM) — Must check `request.is_disconnected()` in Phase 7
 3. **HTMX SSE attribute placement** — `hx-ext="sse"` and `sse-connect` must be on the same element in Phase 7
 4. **Interrupt/resume state lost** — Use `graph.aget_state()` to detect interrupts; no session flags in Phase 7
@@ -63,8 +70,8 @@ From research (see .planning/research/PITFALLS.md):
 
 ### Phase Dependencies
 
-- Phase 6 has no hard dependency (replaces app.py)
-- Phase 7 depends on Phase 6 (needs scaffold + static pages)
+- Phase 6 COMPLETE
+- Phase 7 depends on Phase 6 (needs scaffold + static pages) — UNBLOCKED
 - Phase 8 depends on Phase 7 (HTMX partial patterns established, backend data available from intake)
 - Phase 9 depends on Phase 8 (page navigation patterns established, claims data available)
 - Phase 10 depends on Phase 9 (all 4 pages must be complete before E2E test authoring)
@@ -76,8 +83,9 @@ From research (see .planning/research/PITFALLS.md):
 
 ### Pending Todos
 
-- Verify actual requirement count: REQUIREMENTS.md header says 54 but enumeration yields 61. Update header during Phase 6.
+- Verify actual requirement count: REQUIREMENTS.md header says 54 but enumeration yields 61. Update header during Phase 7.
 - Phase 2.5 has 2 skipped plans (CSS reasoning block styles, E2E browser verification) — these are superseded by the new v2.0 UI and Playwright suite respectively.
+- Pre-existing test failure: `testSubmitClaimCallsInsertClaimAndInsertReceipt` (KeyError: employeeId) — not related to v2.0 work.
 
 ### Blockers/Concerns
 
@@ -85,12 +93,12 @@ From research (see .planning/research/PITFALLS.md):
 
 ## Session Continuity
 
-Last session: 2026-03-30
-Stopped at: v2.0 roadmap creation complete
+Last session: 2026-04-01
+Stopped at: Phase 6 execution complete
 Resume file: None
 
 ### Roadmap Evolution
 
 - v1.0 archived to MILESTONES.md (24/26 plans across phases 1–2.5)
 - v2.0 milestone started: Phases 6–10, 14 plans total
-- Roadmap created: 2026-03-30
+- Phase 6 completed: 2026-04-01 (3 plans, 3 waves)

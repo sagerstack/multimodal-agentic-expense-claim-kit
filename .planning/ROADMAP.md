@@ -18,7 +18,7 @@ See MILESTONES.md for archived v1.0 details.
 
 ## v2.0 Phases
 
-- [ ] **Phase 6: FastAPI Scaffold + Static Shell** — Replace Chainlit, all 4 pages served as static shells, lifespan singleton, session middleware
+- [x] **Phase 6: FastAPI Scaffold + Static Shell** — Replace Chainlit, all 4 pages served as static shells, lifespan singleton, session middleware
 - [ ] **Phase 7: SSE Streaming + Full Chat Page** — SSE event taxonomy, streaming pipeline, V1 migration, complete Chat Page feature set
 - [ ] **Phase 8: Dashboard + Audit Log Pages** — Approver Dashboard (KPIs, claims table) and Audit & Transparency Log (decision timeline)
 - [ ] **Phase 9: Claim Review Page** — Escalated claim display, approve/reject actions, receipt zoom, claim navigation
@@ -156,12 +156,12 @@ v2.0 phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 6. FastAPI Scaffold + Static Shell | 0/3 | Not started | — |
+| 6. FastAPI Scaffold + Static Shell | 3/3 | Complete | 2026-04-01 |
 | 7. SSE Streaming + Full Chat Page | 0/3 | Not started | — |
 | 8. Dashboard + Audit Log Pages | 0/3 | Not started | — |
 | 9. Claim Review Page | 0/3 | Not started | — |
 | 10. Browser E2E Tests | 0/2 | Not started | — |
 
-**v2.0 total:** 0/14 plans complete
+**v2.0 total:** 3/14 plans complete
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)
