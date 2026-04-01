@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     # VLM Confidence Threshold
     vlm_confidence_threshold: float = Field(..., description="Minimum VLM confidence before asking human")
 
+    # Session configuration
+    session_secret_key: str = Field(..., description="Secret key for signing session cookies")
+
     # Logging configuration
     log_level: str = Field(..., description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)")
     log_file_path: str = Field(..., description="File path for log output (empty string means no file handler)")
