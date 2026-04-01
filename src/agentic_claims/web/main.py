@@ -7,7 +7,6 @@ from pathlib import Path
 from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
-from starlette.templating import Jinja2Templates
 
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.graph import getCompiledGraph
@@ -16,7 +15,6 @@ from agentic_claims.web.routers.pages import router as pagesRouter
 logger = logging.getLogger(__name__)
 
 projectRoot = Path(__file__).resolve().parent.parent.parent.parent
-templates = Jinja2Templates(directory=str(projectRoot / "templates"))
 
 
 @asynccontextmanager
