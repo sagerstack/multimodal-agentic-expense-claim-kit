@@ -1,0 +1,43 @@
+{% if isAi %}
+<div class="flex gap-4 max-w-2xl">
+  <div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0 border border-outline-variant/20">
+    <span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+  </div>
+  <div class="space-y-2">
+    <div class="bg-surface-container-low p-4 rounded-2xl rounded-tl-none border border-outline-variant/5 shadow-xl">
+      <p class="text-on-surface text-sm leading-relaxed whitespace-pre-wrap">{{ content }}</p>
+      {% if confidenceScores %}
+      <div class="flex flex-wrap gap-1 mt-2">
+        {% for field, score in confidenceScores.items() %}
+        <span class="text-[10px] bg-secondary/10 text-secondary px-2 py-0.5 rounded-full">{{ field }}: {{ score }}%</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if violations %}
+      <div class="mt-2">
+        {% for violation in violations %}
+        <p class="text-[10px] text-tertiary italic mt-1">{{ violation }}</p>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% if timestamp %}
+    <span class="text-[10px] text-outline px-1">{{ timestamp }}</span>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="flex gap-4 max-w-2xl ml-auto flex-row-reverse">
+  <div class="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0 border border-primary/30">
+    <span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">person</span>
+  </div>
+  <div class="space-y-2 text-right">
+    <div class="bg-primary/10 p-4 rounded-2xl rounded-tr-none border border-primary/10 shadow-xl">
+      <p class="text-on-surface text-sm leading-relaxed whitespace-pre-wrap text-left">{{ content }}</p>
+    </div>
+    {% if timestamp %}
+    <span class="text-[10px] text-outline px-1">{{ timestamp }}</span>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

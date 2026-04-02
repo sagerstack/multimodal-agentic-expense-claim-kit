@@ -1,0 +1,50 @@
+<div class="grid grid-cols-2 gap-4">
+  <div class="col-span-2 bg-surface-container-highest p-5 rounded-2xl border-t border-outline-variant/10 shadow-lg">
+    <span class="text-[10px] text-secondary font-bold uppercase tracking-widest block mb-4">Current Session</span>
+    <div class="flex items-end justify-between">
+      <div>
+        <p id="sessionTotal" class="text-3xl font-headline font-extrabold text-on-surface">{{ totalAmount }}</p>
+        <p id="sessionItemCount" class="text-xs text-outline">{{ itemCount }} item{{ 's' if itemCount != 1 else '' }} pending</p>
+      </div>
+      <div class="text-right">
+        <div class="h-1.5 w-24 bg-surface-bright rounded-full overflow-hidden">
+          <div id="sessionProgress" class="h-full bg-secondary transition-all" style="width: {{ progressPct }}%"></div>
+        </div>
+        <p class="text-[10px] text-secondary font-bold mt-2">{{ progressPct }}% Complete</p>
+      </div>
+    </div>
+  </div>
+  <div class="bg-surface-container-highest p-4 rounded-2xl border-t border-outline-variant/10">
+    <span class="material-symbols-outlined text-primary text-sm mb-2">category</span>
+    <p class="text-xs text-outline mb-1">Top Category</p>
+    <p class="text-sm font-bold">{{ topCategory }}</p>
+  </div>
+  <div class="bg-surface-container-highest p-4 rounded-2xl border-t border-outline-variant/10">
+    <span class="material-symbols-outlined text-tertiary text-sm mb-2">warning</span>
+    <p class="text-xs text-outline mb-1">Warnings</p>
+    <p class="text-sm font-bold">{{ warningCount }} Flag{{ 's' if warningCount != 1 else '' }}</p>
+  </div>
+</div>
+<div class="space-y-4 mt-8">
+  <h3 class="text-[10px] text-outline font-bold uppercase tracking-widest">Batch Details</h3>
+  <div id="batchItems" class="space-y-4">
+    {% if batchItems %}
+    {% for item in batchItems %}
+    <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-2xl border border-outline-variant/10">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center">
+          <span class="material-symbols-outlined text-secondary text-sm">receipt_long</span>
+        </div>
+        <div>
+          <p class="text-sm font-bold text-on-surface">{{ item.merchant }}</p>
+          <p class="text-[10px] text-outline">{{ item.category }}</p>
+        </div>
+      </div>
+      <p class="text-sm font-bold text-on-surface">{{ item.amount }}</p>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="text-xs text-on-surface-variant/50 text-center py-8">No items yet. Upload a receipt to begin.</p>
+    {% endif %}
+  </div>
+</div>
