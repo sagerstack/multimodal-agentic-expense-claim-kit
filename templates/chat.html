@@ -41,6 +41,9 @@
       </div>
     </div>
 
+    <!-- User messages injected here by appendUserBubble -->
+    <div id="userMessages" class="space-y-8"></div>
+
     <!-- Thinking Panel -->
     <div id="thinkingPanel" x-show="processing || thinkingVisible" class="max-w-2xl" x-cloak>
       <div class="bg-surface-container-low/50 rounded-2xl border border-outline-variant/5 p-4">
@@ -96,7 +99,7 @@
             hx-post="/chat/message"
             hx-encoding="multipart/form-data"
             hx-swap="none"
-            @submit="appendUserBubble(messageText); processing = true; thinkingVisible = true; thinkingCollapsed = false; messageText = ''; $nextTick(() => { $refs.messageInput.style.height = 'auto'; previewUrl = null; fileName = null; })">
+            @submit="appendUserBubble(messageText, previewUrl, fileName); processing = true; thinkingVisible = true; thinkingCollapsed = false; messageText = ''; $nextTick(() => { $refs.messageInput.style.height = 'auto'; previewUrl = null; fileName = null; })">
         <input type="file" name="receipt" accept="image/*" class="hidden"
                x-ref="fileInput"
                @change="handleFileSelect($event)">
@@ -208,20 +211,31 @@ function chatState() {
         this.fileName = file.name;
       }
     },
-    appendUserBubble(text) {
-      if (!text || !text.trim()) return;
-      const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    appendUserBubble(text, imageUrl, imageName) {
+      const hasText = text && text.trim();
+      const hasImage = imageUrl && imageName;
+      if (!hasText && !hasImage) return;
+      let contentHtml = '';
+      if (hasImage) {
+        const escapedName = imageName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        contentHtml += `<img src="${imageUrl}" class="w-32 h-32 rounded-lg object-cover border border-outline-variant/20 mb-2" alt="${escapedName}">
+          <p class="text-[10px] text-outline">${escapedName}</p>`;
+      }
+      if (hasText) {
+        const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        contentHtml += `<p class="text-on-surface text-sm leading-relaxed whitespace-pre-wrap text-left">${escaped}</p>`;
+      }
       const html = `<div class="flex gap-4 max-w-2xl ml-auto flex-row-reverse">
         <div class="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0 border border-primary/30">
           <span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">person</span>
         </div>
         <div class="space-y-2 text-right">
           <div class="bg-primary/10 p-4 rounded-2xl rounded-tr-none border border-primary/10 shadow-xl">
-            <p class="text-on-surface text-sm leading-relaxed whitespace-pre-wrap text-left">${escaped}</p>
+            ${contentHtml}
           </div>
         </div>
       </div>`;
-      const target = document.getElementById('aiMessages');
+      const target = document.getElementById('userMessages');
       if (target) target.insertAdjacentHTML('beforeend', html);
       const chatHistory = document.getElementById('chatHistory');
       if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;

@@ -380,7 +380,12 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             "reasoning_content"
                         ) or chunk.response_metadata.get("reasoning")
                     if reasoning:
-                        reasoningBuffer += str(reasoning)
+                        reasoningText = str(reasoning)
+                        reasoningBuffer += reasoningText
+                        yield ServerSentEvent(
+                            raw_data=f'<p class="text-xs text-outline/70">{reasoningText}</p>',
+                            event=SseEvent.STEP_CONTENT,
+                        )
 
             elif eventKind == "on_chat_model_end":
                 if pendingToolCalls > 0:
@@ -443,7 +448,10 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     }
                 )
                 pendingToolCalls = max(0, pendingToolCalls - 1)
-                yield ServerSentEvent(raw_data=summary, event=SseEvent.STEP_CONTENT)
+                yield ServerSentEvent(
+                    raw_data=f'<p class="text-xs text-outline">{summary}</p>',
+                    event=SseEvent.STEP_CONTENT,
+                )
                 if pendingToolCalls == 0:
                     yield ServerSentEvent(raw_data="Analyzing...", event=SseEvent.STEP_NAME)
 
