@@ -201,9 +201,15 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 if chunk:
                     reasoning = None
                     if hasattr(chunk, "additional_kwargs"):
-                        reasoning = chunk.additional_kwargs.get("reasoning_content") or chunk.additional_kwargs.get("reasoning")
+                        reasoning = (
+                            chunk.additional_kwargs.get("reasoning_content")
+                            or chunk.additional_kwargs.get("reasoning")
+                        )
                     if not reasoning and hasattr(chunk, "response_metadata"):
-                        reasoning = chunk.response_metadata.get("reasoning_content") or chunk.response_metadata.get("reasoning")
+                        reasoning = (
+                            chunk.response_metadata.get("reasoning_content")
+                            or chunk.response_metadata.get("reasoning")
+                        )
                     if reasoning:
                         reasoningBuffer += str(reasoning)
 
@@ -286,7 +292,11 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             for task in finalState.tasks:
                 if hasattr(task, "interrupts") and task.interrupts:
                     payload = task.interrupts[0].value
-                    question = payload.get("question", str(payload)) if isinstance(payload, dict) else str(payload)
+                    question = (
+                        payload.get("question", str(payload))
+                        if isinstance(payload, dict)
+                        else str(payload)
+                    )
                     request.session["awaiting_clarification"] = True
                     yield ServerSentEvent(data=question, event=SseEvent.INTERRUPT)
                     return
@@ -295,7 +305,11 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
 
     # Extract final response text
     finalText = ""
-    cleanedToken = _stripThinkingTags(_stripToolCallJson(tokenBuffer)) if tokenBuffer.strip() else ""
+    cleanedToken = (
+        _stripThinkingTags(_stripToolCallJson(tokenBuffer))
+        if tokenBuffer.strip()
+        else ""
+    )
 
     if cleanedToken.strip():
         finalText = cleanedToken.strip()
@@ -305,7 +319,12 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             finalState = await graph.aget_state(config=config)
             messages = finalState.values.get("messages", [])
             for msg in reversed(messages):
-                if hasattr(msg, "type") and msg.type == "ai" and hasattr(msg, "content") and msg.content:
+                if (
+                    hasattr(msg, "type")
+                    and msg.type == "ai"
+                    and hasattr(msg, "content")
+                    and msg.content
+                ):
                     finalText = _stripThinkingTags(_stripToolCallJson(str(msg.content)))
                     break
         except Exception as e:
