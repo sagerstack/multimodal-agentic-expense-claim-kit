@@ -128,6 +128,170 @@ def _summarizeToolOutput(toolName: str, toolOutput) -> str:
         return f"Completed {toolName}"
 
 
+async def _getFallbackMessage(graph, config: dict) -> str:
+    """Extract last AI message from graph state as fallback when token buffer is empty."""
+    try:
+        finalState = await graph.aget_state(config=config)
+        messages = finalState.values.get("messages", [])
+        for msg in reversed(messages):
+            if (
+                hasattr(msg, "type")
+                and msg.type == "ai"
+                and hasattr(msg, "content")
+                and msg.content
+            ):
+                return _stripThinkingTags(_stripToolCallJson(str(msg.content)))
+    except Exception as e:
+        logger.error(f"Error in fallback message extraction: {e}", exc_info=True)
+    return ""
+
+
+def _extractSummaryData(thinkingEntries: list) -> dict | None:
+    """Extract summary panel data from tool outputs in thinking entries."""
+    totalAmount = ""
+    merchant = ""
+    category = ""
+    currency = ""
+    warningCount = 0
+    submitted = False
+    convertedAmount = ""
+
+    hasReceiptData = False
+
+    for entry in thinkingEntries:
+        if entry["type"] != "tool":
+            continue
+
+        toolName = entry.get("name", "")
+        toolOutput = entry.get("output", "")
+
+        try:
+            if isinstance(toolOutput, str):
+                data = json.loads(toolOutput)
+            elif hasattr(toolOutput, "content"):
+                data = (
+                    json.loads(toolOutput.content)
+                    if isinstance(toolOutput.content, str)
+                    else toolOutput.content
+                )
+            else:
+                data = toolOutput
+
+            if not isinstance(data, dict):
+                continue
+
+            if toolName == "extractReceiptFields":
+                fields = data.get("fields", {})
+                merchant = fields.get("merchant", "")
+                totalAmount = fields.get("totalAmount", "")
+                currency = fields.get("currency", "SGD")
+                category = fields.get("category", "")
+                hasReceiptData = True
+
+            elif toolName == "searchPolicies":
+                results = data.get("results", data.get("policies", []))
+                if isinstance(results, list):
+                    warningCount = len(results)
+
+            elif toolName == "convertCurrency":
+                convertedAmount = str(data.get("convertedAmount", data.get("amountSgd", "")))
+
+            elif toolName == "submitClaim":
+                if "error" not in data:
+                    submitted = True
+
+        except Exception:
+            continue
+
+    if not hasReceiptData:
+        return None
+
+    displayAmount = f"SGD {convertedAmount}" if convertedAmount else f"{currency} {totalAmount}"
+
+    progressPct = 25
+    if hasReceiptData:
+        progressPct = 50
+    if submitted:
+        progressPct = 100
+
+    return {
+        "totalAmount": displayAmount,
+        "itemCount": 1,
+        "topCategory": category or "--",
+        "warningCount": warningCount,
+        "progressPct": progressPct,
+        "batchItems": [
+            {
+                "merchant": merchant or "Unknown",
+                "amount": displayAmount,
+                "category": category or "uncategorized",
+            }
+        ],
+    }
+
+
+def _extractConfidenceScores(thinkingEntries: list) -> dict | None:
+    """Extract per-field confidence scores from extractReceiptFields output."""
+    for entry in thinkingEntries:
+        if entry.get("type") != "tool" or entry.get("name") != "extractReceiptFields":
+            continue
+        try:
+            toolOutput = entry.get("output", "")
+            if isinstance(toolOutput, str):
+                data = json.loads(toolOutput)
+            elif hasattr(toolOutput, "content"):
+                data = (
+                    json.loads(toolOutput.content)
+                    if isinstance(toolOutput.content, str)
+                    else toolOutput.content
+                )
+            else:
+                data = toolOutput
+            if isinstance(data, dict):
+                confidence = data.get("confidence", data.get("confidenceScores"))
+                if isinstance(confidence, dict):
+                    return {
+                        k: int(float(v) * 100) if isinstance(v, float) and v <= 1 else int(v)
+                        for k, v in confidence.items()
+                    }
+        except Exception:
+            continue
+    return None
+
+
+def _extractViolations(thinkingEntries: list) -> list | None:
+    """Extract policy violation citations from searchPolicies output."""
+    violations = []
+    for entry in thinkingEntries:
+        if entry.get("type") != "tool" or entry.get("name") != "searchPolicies":
+            continue
+        try:
+            toolOutput = entry.get("output", "")
+            if isinstance(toolOutput, str):
+                data = json.loads(toolOutput)
+            elif hasattr(toolOutput, "content"):
+                data = (
+                    json.loads(toolOutput.content)
+                    if isinstance(toolOutput.content, str)
+                    else toolOutput.content
+                )
+            else:
+                data = toolOutput
+            if isinstance(data, dict):
+                results = data.get("violations", data.get("results", []))
+                if isinstance(results, list):
+                    for r in results:
+                        if isinstance(r, dict):
+                            text = r.get("text", r.get("clause", r.get("violation", "")))
+                            if text:
+                                violations.append(str(text))
+                        elif isinstance(r, str):
+                            violations.append(r)
+        except Exception:
+            continue
+    return violations if violations else None
+
+
 def _buildGraphInput(graphInput: dict) -> dict:
     """Build LangGraph input from the queue payload."""
     claimId = graphInput["claimId"]
@@ -287,6 +451,16 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     summary = f"Thought for {_formatElapsed(totalElapsed)} . {toolCount} {toolLabel}"
     yield ServerSentEvent(data=summary, event=SseEvent.THINKING_DONE)
 
+    # Summary panel update
+    summaryData = _extractSummaryData(thinkingEntries)
+    if summaryData:
+        try:
+            summaryTemplate = templates.get_template("partials/summary_panel.html")
+            summaryHtml = summaryTemplate.render(**summaryData)
+            yield ServerSentEvent(data=summaryHtml, event=SseEvent.SUMMARY_UPDATE)
+        except Exception as e:
+            logger.error(f"Error rendering summary panel: {e}", exc_info=True)
+
     # Check for interrupt via graph state
     try:
         finalState = await graph.aget_state(config=config)
@@ -314,26 +488,19 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     if cleanedToken.strip():
         finalText = cleanedToken.strip()
     else:
-        # Fallback: extract last AI message from graph state
-        try:
-            finalState = await graph.aget_state(config=config)
-            messages = finalState.values.get("messages", [])
-            for msg in reversed(messages):
-                if (
-                    hasattr(msg, "type")
-                    and msg.type == "ai"
-                    and hasattr(msg, "content")
-                    and msg.content
-                ):
-                    finalText = _stripThinkingTags(_stripToolCallJson(str(msg.content)))
-                    break
-        except Exception as e:
-            logger.error(f"Error in fallback message extraction: {e}", exc_info=True)
+        finalText = await _getFallbackMessage(graph, config)
 
     if finalText:
+        confidenceScores = _extractConfidenceScores(thinkingEntries)
+        violations = _extractViolations(thinkingEntries)
         try:
             template = templates.get_template("partials/message_bubble.html")
-            messageHtml = template.render(content=finalText, isAi=True)
+            messageHtml = template.render(
+                content=finalText,
+                isAi=True,
+                confidenceScores=confidenceScores,
+                violations=violations,
+            )
         except Exception:
             messageHtml = f'<div class="ai-message">{finalText}</div>'
         yield ServerSentEvent(data=messageHtml, event=SseEvent.MESSAGE)
