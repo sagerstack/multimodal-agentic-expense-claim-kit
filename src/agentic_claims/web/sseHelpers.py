@@ -332,6 +332,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     thinkingEntries = []
     tokenBuffer = ""
     reasoningBuffer = ""
+    finalResponse = ""
     pendingToolCalls = 0
     toolStartTimes = {}
     turnStart = time.time()
@@ -410,6 +411,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                                 "content": reasoningBuffer.strip(),
                             }
                         )
+                    finalResponse = _stripToolCallJson(tokenBuffer)
                     tokenBuffer = ""
                     reasoningBuffer = ""
 
@@ -481,12 +483,10 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
 
     # Extract final response text
     finalText = ""
-    cleanedToken = (
-        _stripThinkingTags(_stripToolCallJson(tokenBuffer)) if tokenBuffer.strip() else ""
-    )
-
-    if cleanedToken.strip():
-        finalText = cleanedToken.strip()
+    if finalResponse and finalResponse.strip():
+        finalText = _stripThinkingTags(finalResponse).strip()
+    elif tokenBuffer.strip():
+        finalText = _stripThinkingTags(_stripToolCallJson(tokenBuffer)).strip()
     else:
         finalText = await _getFallbackMessage(graph, config)
 
