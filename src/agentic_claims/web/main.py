@@ -14,7 +14,25 @@ from agentic_claims.web.routers.pages import router as pagesRouter
 
 logger = logging.getLogger(__name__)
 
-projectRoot = Path(__file__).resolve().parent.parent.parent.parent
+def _findProjectRoot() -> Path:
+    """Find the project root containing static/ and templates/ directories.
+
+    Walks up from this file's location. Falls back to /app (Docker workdir)
+    then cwd.
+    """
+    candidate = Path(__file__).resolve().parent
+    for _ in range(10):
+        candidate = candidate.parent
+        if (candidate / "static").is_dir() and (candidate / "templates").is_dir():
+            return candidate
+    # Docker workdir fallback
+    docker = Path("/app")
+    if (docker / "static").is_dir():
+        return docker
+    return Path.cwd()
+
+
+projectRoot = _findProjectRoot()
 
 
 @asynccontextmanager
