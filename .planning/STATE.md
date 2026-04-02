@@ -5,19 +5,20 @@
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Milestone v2.0 — Phase 7: SSE Streaming + Full Chat Page
+**Current focus:** Milestone v2.0 — Phase 8: Dashboard + Audit Log Pages
 
 ## Current Position
 
-Phase: 7 — SSE Streaming + Full Chat Page
+Phase: 8 — Dashboard + Audit Log Pages
 Plan: Not started
-Status: Phase 6 complete, ready for Phase 7 planning
-Last activity: 2026-04-01 — Phase 6 executed (3 plans, 3 waves)
+Status: Phase 7 complete (SSE streaming, V1 migration, Chat Page wired), ready for Phase 8 planning
+Last activity: 2026-04-02 — Phase 7 delivered by maverick team (3 plans, 36 tests, browser UAT passed)
 
 ```
-v2.0 Progress: [###.......] 3/14 plans
+v2.0 Progress: [######....] 6/14 plans
 Phase 6:       [##########] 3/3 plans (complete)
-Phase 7:       [..........] 0/3 plans
+Phase 7:       [##########] 3/3 plans (complete)
+Phase 8:       [..........] 0/3 plans
 ```
 
 ## Performance Metrics
@@ -50,13 +51,24 @@ New for v2.0:
 - Alpine.js for local UI state (Phase 7, 9)
 - `asyncio.Queue` per session to decouple POST from SSE GET (Phase 7)
 - Checkpointer as lifespan singleton — not per-request (Phase 6, critical pitfall prevention)
-- Tailwind v3 via pytailwindcss — not CDN, not v4 (Stitch designs use v3 JS config syntax)
+- Tailwind v4 CSS-first via pytailwindcss — not CDN, not v3 config (migrated to @import/@theme format)
 
 Phase 6 discoveries:
-- pytailwindcss v0.3 downloads Tailwind v4.2.2 (not v3). v4 auto-detects v3 config and generates correct CSS. No compatibility issues.
+- pytailwindcss v0.3 downloads Tailwind v4.2.2 (not v3). Migrated to v4 CSS-first format (@import "tailwindcss", @theme block). tailwind.config.js deleted.
 - Starlette 1.0 changed TemplateResponse API: now `(request, name, context=)` instead of `(name, {"request": request, ...})`
 - Circular import between main.py and pages.py resolved by extracting templates to `web/templating.py`
 - itsdangerous required for SessionMiddleware cookie signing (added as dependency)
+
+Phase 6 v2 redo discoveries (2026-04-02):
+- projectRoot path resolution broken inside Docker — `Path(__file__).parent` resolves to site-packages, not /app. Fixed with directory-walking detection + /app fallback.
+- mcp-rag container crashes on restart due to SSL cert error downloading sentence-transformers model. Fixed by mounting host HuggingFace cache as read-only volume with HF_HUB_OFFLINE=1.
+- Ruff N802/N803/N806 rules conflict with CamelCase convention — suppressed in pyproject.toml.
+
+Phase 7 discoveries (2026-04-02):
+- FastAPI `EventSourceResponse` with manual construction expects strings/bytes, not `ServerSentEvent` objects. Fix: use `response_class=EventSourceResponse` on the endpoint decorator.
+- `ServerSentEvent(data=...)` JSON-serializes strings (adds quotes). Use `raw_data=` for HTML/text payloads that HTMX injects directly into the DOM.
+- Ruff N999 (module naming) and N812 (import alias) also conflict with CamelCase convention — added to suppression list.
+- HTMX SSE dispatches `htmx:sseMessage` (camelCase with colon), not `sse-message`. Use CustomEvent + window listener pattern for Alpine.js integration.
 
 ### Critical Pitfalls to Avoid
 
@@ -71,8 +83,8 @@ From research (see .planning/research/PITFALLS.md):
 ### Phase Dependencies
 
 - Phase 6 COMPLETE
-- Phase 7 depends on Phase 6 (needs scaffold + static pages) — UNBLOCKED
-- Phase 8 depends on Phase 7 (HTMX partial patterns established, backend data available from intake)
+- Phase 7 COMPLETE
+- Phase 8 depends on Phase 7 (HTMX partial patterns established, backend data available from intake) — UNBLOCKED
 - Phase 9 depends on Phase 8 (page navigation patterns established, claims data available)
 - Phase 10 depends on Phase 9 (all 4 pages must be complete before E2E test authoring)
 
@@ -93,8 +105,8 @@ From research (see .planning/research/PITFALLS.md):
 
 ## Session Continuity
 
-Last session: 2026-04-01
-Stopped at: Phase 6 execution complete
+Last session: 2026-04-02
+Stopped at: Phase 7 execution complete
 Resume file: None
 
 ### Roadmap Evolution
@@ -102,3 +114,4 @@ Resume file: None
 - v1.0 archived to MILESTONES.md (24/26 plans across phases 1–2.5)
 - v2.0 milestone started: Phases 6–10, 14 plans total
 - Phase 6 completed: 2026-04-01 (3 plans, 3 waves)
+- Phase 7 completed: 2026-04-02 (3 plans, 3 waves, 36 new tests, browser UAT passed)

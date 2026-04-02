@@ -19,7 +19,7 @@ See MILESTONES.md for archived v1.0 details.
 ## v2.0 Phases
 
 - [x] **Phase 6: FastAPI Scaffold + Static Shell** — Replace Chainlit, all 4 pages served as static shells, lifespan singleton, session middleware
-- [ ] **Phase 7: SSE Streaming + Full Chat Page** — SSE event taxonomy, streaming pipeline, V1 migration, complete Chat Page feature set
+- [x] **Phase 7: SSE Streaming + Full Chat Page** — SSE event taxonomy, streaming pipeline, V1 migration, complete Chat Page feature set
 - [ ] **Phase 8: Dashboard + Audit Log Pages** — Approver Dashboard (KPIs, claims table) and Audit & Transparency Log (decision timeline)
 - [ ] **Phase 9: Claim Review Page** — Escalated claim display, approve/reject actions, receipt zoom, claim navigation
 - [ ] **Phase 10: Browser E2E Tests** — Playwright test suite covering all 4 pages against a live server
@@ -47,9 +47,9 @@ See MILESTONES.md for archived v1.0 details.
 **Plans:** 3 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — FastAPI app structure (`web/` package), uvicorn Docker config, lifespan (checkpointer + graph singleton), SessionMiddleware, StaticFiles, pytailwindcss build
-- [ ] 06-02-PLAN.md — Jinja2 base template (`base.html`): sidebar, top nav, active-page indicator, system status, fonts, icons, Neon Nocturne theme variables
-- [ ] 06-03-PLAN.md — 4 page shells (Chat, Dashboard, Audit Log, Review) as empty content blocks in Jinja2 templates, all routing wired, smoke tests verify zero 404s
+- [x] 06-01-PLAN.md — FastAPI app structure (`web/` package), uvicorn Docker config, lifespan (checkpointer + graph singleton), SessionMiddleware, StaticFiles, pytailwindcss build
+- [x] 06-02-PLAN.md — Jinja2 base template (`base.html`): sidebar, top nav, active-page indicator, system status, fonts, icons, Neon Nocturne theme variables
+- [x] 06-03-PLAN.md — 4 page shells (Chat, Dashboard, Audit Log, Review) with full Stitch layout structure, all routing wired, smoke tests verify zero 404s
 
 ---
 
@@ -72,9 +72,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — SSE event taxonomy (`SseEvent` constants), `POST /chat/message` → `asyncio.Queue` → `GET /chat/stream` pipeline, `EventSourceResponse`, disconnect cleanup
-- [ ] 07-02-PLAN.md — V1 migration: image upload endpoint (multipart Form + File), imageStore wiring, interrupt/resume via `graph.aget_state()`, QwQ-32B reasoning token pass-through
-- [ ] 07-03-PLAN.md — Chat Page Jinja2 template completion: drag-and-drop upload with inline preview, thinking panel, confirm/edit buttons, submission summary panel, inline confidence scores, policy citation rendering
+- [x] 07-01-PLAN.md — SSE event taxonomy (`SseEvent` constants), `POST /chat/message` → `asyncio.Queue` → `GET /chat/stream` pipeline, `EventSourceResponse`, disconnect cleanup
+- [x] 07-02-PLAN.md — V1 migration: image upload endpoint (multipart Form + File), imageStore wiring, interrupt/resume via `graph.aget_state()`, QwQ-32B reasoning token pass-through
+- [x] 07-03-PLAN.md — Chat Page Jinja2 template completion: drag-and-drop upload with inline preview, thinking panel, confirm/edit buttons, submission summary panel, inline confidence scores, policy citation rendering
 
 ---
 
@@ -156,7 +156,7 @@ v2.0 phases execute in numeric order: 6 → 7 → 8 → 9 → 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
-| 6. FastAPI Scaffold + Static Shell | 3/3 | Complete | 2026-04-01 |
+| 6. FastAPI Scaffold + Static Shell | 3/3 | Complete (v2 redo) | 2026-04-02 |
 | 7. SSE Streaming + Full Chat Page | 0/3 | Not started | — |
 | 8. Dashboard + Audit Log Pages | 0/3 | Not started | — |
 | 9. Claim Review Page | 0/3 | Not started | — |
