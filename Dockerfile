@@ -25,7 +25,6 @@ COPY alembic.ini ./
 COPY alembic/ ./alembic/
 COPY templates/ ./templates/
 COPY static/ ./static/
-COPY tailwind.config.js ./
 
 # Install root project (no deps — already installed above)
 RUN pip install --no-cache-dir --no-deps .
