@@ -337,7 +337,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     toolStartTimes = {}
     turnStart = time.time()
 
-    yield ServerSentEvent(data="", event=SseEvent.THINKING_START)
+    yield ServerSentEvent(raw_data="", event=SseEvent.THINKING_START)
 
     threadId = graphInput["threadId"]
     config = {"configurable": {"thread_id": threadId}}
@@ -361,7 +361,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 chunk = event.get("data", {}).get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     tokenBuffer += chunk.content
-                    yield ServerSentEvent(data=chunk.content, event=SseEvent.TOKEN)
+                    yield ServerSentEvent(raw_data=chunk.content, event=SseEvent.TOKEN)
 
                 if chunk:
                     reasoning = None
@@ -420,7 +420,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 toolStartTimes[toolName] = time.time()
                 pendingToolCalls += 1
                 label = TOOL_LABELS.get(toolName, f"Running {toolName}...")
-                yield ServerSentEvent(data=label, event=SseEvent.STEP_NAME)
+                yield ServerSentEvent(raw_data=label, event=SseEvent.STEP_NAME)
 
             elif eventKind == "on_tool_end":
                 toolName = event.get("name", "unknown")
@@ -437,13 +437,13 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     }
                 )
                 pendingToolCalls = max(0, pendingToolCalls - 1)
-                yield ServerSentEvent(data=summary, event=SseEvent.STEP_CONTENT)
+                yield ServerSentEvent(raw_data=summary, event=SseEvent.STEP_CONTENT)
                 if pendingToolCalls == 0:
-                    yield ServerSentEvent(data="Analyzing...", event=SseEvent.STEP_NAME)
+                    yield ServerSentEvent(raw_data="Analyzing...", event=SseEvent.STEP_NAME)
 
     except Exception as e:
         logger.error(f"Error during graph streaming: {e}", exc_info=True)
-        yield ServerSentEvent(data=str(e), event=SseEvent.ERROR)
+        yield ServerSentEvent(raw_data=str(e), event=SseEvent.ERROR)
         return
 
     # Thinking done summary
@@ -451,7 +451,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     toolCount = sum(1 for e in thinkingEntries if e["type"] == "tool")
     toolLabel = "tool" if toolCount == 1 else "tools"
     summary = f"Thought for {_formatElapsed(totalElapsed)} . {toolCount} {toolLabel}"
-    yield ServerSentEvent(data=summary, event=SseEvent.THINKING_DONE)
+    yield ServerSentEvent(raw_data=summary, event=SseEvent.THINKING_DONE)
 
     # Summary panel update
     summaryData = _extractSummaryData(thinkingEntries)
@@ -459,7 +459,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
         try:
             summaryTemplate = templates.get_template("partials/summary_panel.html")
             summaryHtml = summaryTemplate.render(**summaryData)
-            yield ServerSentEvent(data=summaryHtml, event=SseEvent.SUMMARY_UPDATE)
+            yield ServerSentEvent(raw_data=summaryHtml, event=SseEvent.SUMMARY_UPDATE)
         except Exception as e:
             logger.error(f"Error rendering summary panel: {e}", exc_info=True)
 
@@ -476,7 +476,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         else str(payload)
                     )
                     request.session["awaiting_clarification"] = True
-                    yield ServerSentEvent(data=question, event=SseEvent.INTERRUPT)
+                    yield ServerSentEvent(raw_data=question, event=SseEvent.INTERRUPT)
                     return
     except Exception as e:
         logger.error(f"Error checking interrupt state: {e}", exc_info=True)
@@ -503,4 +503,4 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             )
         except Exception:
             messageHtml = f'<div class="ai-message">{finalText}</div>'
-        yield ServerSentEvent(data=messageHtml, event=SseEvent.MESSAGE)
+        yield ServerSentEvent(raw_data=messageHtml, event=SseEvent.MESSAGE)

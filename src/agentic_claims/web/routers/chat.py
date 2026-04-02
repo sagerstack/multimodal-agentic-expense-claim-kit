@@ -56,7 +56,7 @@ async def postMessage(
     return Response(status_code=204)
 
 
-@router.get("/chat/stream")
+@router.get("/chat/stream", response_class=EventSourceResponse)
 async def streamChat(request: Request):
     """SSE endpoint that reads from per-session queue and streams graph events."""
     sessionIds = getSessionIds(request)
@@ -64,22 +64,19 @@ async def streamChat(request: Request):
     queue = getOrCreateQueue(threadId)
     graph = request.app.state.graph
 
-    async def eventGenerator():
-        while True:
-            if await request.is_disconnected():
-                break
-            try:
-                graphInput = await asyncio.wait_for(queue.get(), timeout=30.0)
-            except asyncio.TimeoutError:
-                yield ServerSentEvent(data="", event="ping")
-                continue
+    while True:
+        if await request.is_disconnected():
+            break
+        try:
+            graphInput = await asyncio.wait_for(queue.get(), timeout=30.0)
+        except asyncio.TimeoutError:
+            yield ServerSentEvent(raw_data="", event="ping")
+            continue
 
-            async for sseEvent in runGraph(graph, graphInput, request, templates):
-                yield sseEvent
+        async for sseEvent in runGraph(graph, graphInput, request, templates):
+            yield sseEvent
 
-            yield ServerSentEvent(data="", event="done")
-
-    return EventSourceResponse(eventGenerator())
+        yield ServerSentEvent(raw_data="", event="done")
 
 
 @router.post("/chat/reset")

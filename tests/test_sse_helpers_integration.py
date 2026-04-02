@@ -106,8 +106,8 @@ async def testRunGraphYieldsTokenEvents():
     collected = await _collectEvents(graph, _baseGraphInput(), request)
     tokenEvents = [e for e in collected if e.event == SseEvent.TOKEN]
     assert len(tokenEvents) == 2
-    assert tokenEvents[0].data == "Hello"
-    assert tokenEvents[1].data == " world"
+    assert tokenEvents[0].raw_data == "Hello"
+    assert tokenEvents[1].raw_data == " world"
 
 
 @pytest.mark.asyncio
@@ -125,7 +125,7 @@ async def testRunGraphYieldsStepNameOnToolStart():
     request = _makeMockRequest()
     collected = await _collectEvents(graph, _baseGraphInput(), request)
     stepNames = [e for e in collected if e.event == SseEvent.STEP_NAME]
-    assert any("Extracting receipt fields" in e.data for e in stepNames)
+    assert any("Extracting receipt fields" in e.raw_data for e in stepNames)
 
 
 @pytest.mark.asyncio
@@ -145,8 +145,8 @@ async def testRunGraphYieldsThinkingDoneSummary():
     collected = await _collectEvents(graph, _baseGraphInput(), request)
     doneEvents = [e for e in collected if e.event == SseEvent.THINKING_DONE]
     assert len(doneEvents) == 1
-    assert "Thought for" in doneEvents[0].data
-    assert "1 tool" in doneEvents[0].data
+    assert "Thought for" in doneEvents[0].raw_data
+    assert "1 tool" in doneEvents[0].raw_data
 
 
 @pytest.mark.asyncio
@@ -160,8 +160,8 @@ async def testRunGraphYieldsMessageWithRenderedHtml():
     collected = await _collectEvents(graph, _baseGraphInput(), request)
     msgEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
     assert len(msgEvents) == 1
-    assert "bg-surface-container-low" in msgEvents[0].data
-    assert "Here is your result" in msgEvents[0].data
+    assert "bg-surface-container-low" in msgEvents[0].raw_data
+    assert "Here is your result" in msgEvents[0].raw_data
 
 
 @pytest.mark.asyncio
@@ -180,7 +180,7 @@ async def testRunGraphDetectsInterruptAndYieldsInterruptEvent():
     collected = await _collectEvents(graph, _baseGraphInput(), request)
     interruptEvents = [e for e in collected if e.event == SseEvent.INTERRUPT]
     assert len(interruptEvents) == 1
-    assert "confirm the amount" in interruptEvents[0].data
+    assert "confirm the amount" in interruptEvents[0].raw_data
     assert request.session["awaiting_clarification"] is True
 
 
