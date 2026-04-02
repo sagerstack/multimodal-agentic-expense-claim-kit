@@ -2,6 +2,7 @@
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
+from psycopg_pool import AsyncConnectionPool
 
 from agentic_claims.agents.advisor.node import advisorNode
 from agentic_claims.agents.compliance.node import complianceNode
@@ -70,30 +71,28 @@ def buildGraph() -> StateGraph:
 
 
 async def getCompiledGraph():
-    """Create compiled graph with Postgres checkpointer.
+    """Create compiled graph with Postgres checkpointer using a connection pool.
 
-    The checkpointer persists state after each node execution,
-    enabling resumption and debugging.
-
-    AsyncPostgresSaver.from_conn_string() returns an async context manager.
-    We enter it manually here — caller must store the context and call
-    __aexit__ on cleanup (see app.py onChatEnd).
+    Uses AsyncConnectionPool instead of a single connection so that
+    astream_events can issue concurrent checkpoint reads/writes without
+    hitting psycopg's one-command-at-a-time limitation.
 
     Returns:
-        Tuple of (compiled graph, checkpointer context manager)
+        Tuple of (compiled graph, connection pool)
     """
     settings = getSettings()
 
-    # from_conn_string returns an async context manager — enter it manually
-    # so the connection pool stays alive for the session lifetime
-    checkpointerCtx = AsyncPostgresSaver.from_conn_string(settings.postgres_dsn)
-    checkpointer = await checkpointerCtx.__aenter__()
+    pool = AsyncConnectionPool(
+        conninfo=settings.postgres_dsn,
+        max_size=20,
+        open=False,
+    )
+    await pool.open()
 
-    # Setup checkpointer tables in Postgres
+    checkpointer = AsyncPostgresSaver(pool)
     await checkpointer.setup()
 
-    # Build and compile graph with checkpointer
     builder = buildGraph()
     graph = builder.compile(checkpointer=checkpointer)
 
-    return graph, checkpointerCtx
+    return graph, pool

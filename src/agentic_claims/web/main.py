@@ -40,13 +40,13 @@ projectRoot = _findProjectRoot()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize graph and checkpointer once at startup (singleton pattern)."""
-    graph, checkpointerCtx = await getCompiledGraph()
+    graph, pool = await getCompiledGraph()
     app.state.graph = graph
-    app.state.checkpointerCtx = checkpointerCtx
+    app.state.pool = pool
     logger.info("LangGraph graph and checkpointer initialized (lifespan singleton)")
     yield
-    await checkpointerCtx.__aexit__(None, None, None)
-    logger.info("Checkpointer connection closed")
+    await pool.close()
+    logger.info("Checkpointer pool closed")
 
 
 settings = getSettings()

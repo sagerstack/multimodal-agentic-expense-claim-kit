@@ -1,11 +1,9 @@
 """Smoke tests for all 4 page routes and session cookie."""
 
 import os
-from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI
 from starlette.testclient import TestClient
 
 
@@ -18,8 +16,8 @@ def client():
     # Mock getCompiledGraph to avoid DB connection during import
     with patch("agentic_claims.core.graph.getCompiledGraph") as mockGetGraph:
         mockGraph = AsyncMock()
-        mockCheckpointerCtx = AsyncMock()
-        mockGetGraph.return_value = (mockGraph, mockCheckpointerCtx)
+        mockPool = AsyncMock()
+        mockGetGraph.return_value = (mockGraph, mockPool)
 
         # Now import the app — getSettings() will load from .env.test via conftest
         from agentic_claims.web.main import app
