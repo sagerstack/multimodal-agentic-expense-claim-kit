@@ -68,6 +68,9 @@ services:
       QDRANT_URL: http://qdrant:6333
       COLLECTION_NAME: expense_policies
       EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HOME: /root/.cache/huggingface
     depends_on:
       qdrant:
         condition: service_healthy
@@ -76,6 +79,7 @@ services:
     volumes:
       - ./scripts:/app/scripts:ro
       - ./src/agentic_claims/policy:/app/policy:ro
+      - ~/.cache/huggingface:/root/.cache/huggingface:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -so /dev/null -w '%{http_code}' http://127.0.0.1:8000/mcp | grep -qE '^[0-9]+$'"]
       interval: 5s
