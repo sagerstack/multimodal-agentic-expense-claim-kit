@@ -15,6 +15,7 @@ from agentic_claims.web.routers.pages import router as pagesRouter
 
 logger = logging.getLogger(__name__)
 
+
 def _findProjectRoot() -> Path:
     """Find the project root containing static/ and templates/ directories.
 

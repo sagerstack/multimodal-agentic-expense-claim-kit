@@ -30,9 +30,7 @@ def testSseEventAllConstantsAreLowercaseHyphenated():
         if attr.startswith("_"):
             continue
         value = getattr(SseEvent, attr)
-        assert pattern.match(value), (
-            f"SseEvent.{attr} = '{value}' does not match pattern"
-        )
+        assert pattern.match(value), f"SseEvent.{attr} = '{value}' does not match pattern"
 
 
 # ── sessionQueues ──
@@ -97,13 +95,15 @@ def testFormatElapsedSubSecond():
 
 
 def testSummarizeToolOutputExtractReceipt():
-    toolOutput = json.dumps({
-        "fields": {
-            "merchant": "Starbucks",
-            "totalAmount": "4.50",
-            "currency": "SGD",
+    toolOutput = json.dumps(
+        {
+            "fields": {
+                "merchant": "Starbucks",
+                "totalAmount": "4.50",
+                "currency": "SGD",
+            }
         }
-    })
+    )
     result = _summarizeToolOutput("extractReceiptFields", toolOutput)
     assert "Starbucks" in result
 

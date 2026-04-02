@@ -201,15 +201,13 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 if chunk:
                     reasoning = None
                     if hasattr(chunk, "additional_kwargs"):
-                        reasoning = (
-                            chunk.additional_kwargs.get("reasoning_content")
-                            or chunk.additional_kwargs.get("reasoning")
-                        )
+                        reasoning = chunk.additional_kwargs.get(
+                            "reasoning_content"
+                        ) or chunk.additional_kwargs.get("reasoning")
                     if not reasoning and hasattr(chunk, "response_metadata"):
-                        reasoning = (
-                            chunk.response_metadata.get("reasoning_content")
-                            or chunk.response_metadata.get("reasoning")
-                        )
+                        reasoning = chunk.response_metadata.get(
+                            "reasoning_content"
+                        ) or chunk.response_metadata.get("reasoning")
                     if reasoning:
                         reasoningBuffer += str(reasoning)
 
@@ -220,32 +218,34 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     continue
 
                 output = event.get("data", {}).get("output")
-                hasToolCalls = (
-                    output
-                    and hasattr(output, "tool_calls")
-                    and output.tool_calls
-                )
+                hasToolCalls = output and hasattr(output, "tool_calls") and output.tool_calls
 
                 if hasToolCalls:
                     cleanedBuffer = _stripToolCallJson(tokenBuffer.strip())
                     if cleanedBuffer:
-                        thinkingEntries.append({
-                            "type": "reasoning",
-                            "content": cleanedBuffer,
-                        })
+                        thinkingEntries.append(
+                            {
+                                "type": "reasoning",
+                                "content": cleanedBuffer,
+                            }
+                        )
                     if reasoningBuffer.strip():
-                        thinkingEntries.append({
-                            "type": "reasoning_b",
-                            "content": reasoningBuffer.strip(),
-                        })
+                        thinkingEntries.append(
+                            {
+                                "type": "reasoning_b",
+                                "content": reasoningBuffer.strip(),
+                            }
+                        )
                     tokenBuffer = ""
                     reasoningBuffer = ""
                 else:
                     if reasoningBuffer.strip():
-                        thinkingEntries.append({
-                            "type": "reasoning_b",
-                            "content": reasoningBuffer.strip(),
-                        })
+                        thinkingEntries.append(
+                            {
+                                "type": "reasoning_b",
+                                "content": reasoningBuffer.strip(),
+                            }
+                        )
                     tokenBuffer = ""
                     reasoningBuffer = ""
 
@@ -262,12 +262,14 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 startTime = toolStartTimes.pop(toolName, None)
                 elapsed = time.time() - startTime if startTime else 0
                 summary = _summarizeToolOutput(toolName, toolOutput)
-                thinkingEntries.append({
-                    "type": "tool",
-                    "name": toolName,
-                    "elapsed": elapsed,
-                    "output": toolOutput,
-                })
+                thinkingEntries.append(
+                    {
+                        "type": "tool",
+                        "name": toolName,
+                        "elapsed": elapsed,
+                        "output": toolOutput,
+                    }
+                )
                 pendingToolCalls = max(0, pendingToolCalls - 1)
                 yield ServerSentEvent(data=summary, event=SseEvent.STEP_CONTENT)
                 if pendingToolCalls == 0:
@@ -306,9 +308,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     # Extract final response text
     finalText = ""
     cleanedToken = (
-        _stripThinkingTags(_stripToolCallJson(tokenBuffer))
-        if tokenBuffer.strip()
-        else ""
+        _stripThinkingTags(_stripToolCallJson(tokenBuffer)) if tokenBuffer.strip() else ""
     )
 
     if cleanedToken.strip():
