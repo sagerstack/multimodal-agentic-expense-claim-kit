@@ -10,6 +10,7 @@ from starlette.staticfiles import StaticFiles
 
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.graph import getCompiledGraph
+from agentic_claims.web.routers.chat import router as chatRouter
 from agentic_claims.web.routers.pages import router as pagesRouter
 
 logger = logging.getLogger(__name__)
@@ -62,4 +63,5 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=str(projectRoot / "static")), name="static")
 
+app.include_router(chatRouter)
 app.include_router(pagesRouter)

@@ -1,0 +1,100 @@
+"""Chat router: POST /chat/message, GET /chat/stream, POST /chat/reset."""
+
+import asyncio
+import base64
+import uuid
+
+from fastapi import APIRouter, File, Form, UploadFile
+from fastapi.sse import EventSourceResponse, ServerSentEvent
+from starlette.requests import Request
+from starlette.responses import Response
+
+from agentic_claims.core.imageStore import clearImage, storeImage
+from agentic_claims.web.session import getSessionIds
+from agentic_claims.web.sessionQueues import getOrCreateQueue, removeQueue
+from agentic_claims.web.sseHelpers import runGraph
+from agentic_claims.web.templating import templates
+
+router = APIRouter()
+
+
+@router.post("/chat/message")
+async def postMessage(
+    request: Request,
+    message: str = Form(default=""),
+    receipt: UploadFile | None = File(default=None),
+):
+    """Accept a chat message, enqueue graph input, return 204."""
+    sessionIds = getSessionIds(request)
+    threadId = sessionIds["threadId"]
+    claimId = sessionIds["claimId"]
+
+    hasImage = False
+    if receipt and receipt.filename:
+        imageBytes = await receipt.read()
+        imageB64 = base64.b64encode(imageBytes).decode("utf-8")
+        storeImage(claimId, imageB64)
+        hasImage = True
+
+    awaitingClarification = request.session.get("awaiting_clarification", False)
+
+    graphInput = {
+        "threadId": threadId,
+        "claimId": claimId,
+        "message": message,
+        "hasImage": hasImage,
+        "isResume": awaitingClarification,
+    }
+
+    if awaitingClarification:
+        graphInput["resumeData"] = {"response": message, "action": "confirm"}
+        request.session["awaiting_clarification"] = False
+
+    queue = getOrCreateQueue(threadId)
+    await queue.put(graphInput)
+
+    return Response(status_code=204)
+
+
+@router.get("/chat/stream")
+async def streamChat(request: Request):
+    """SSE endpoint that reads from per-session queue and streams graph events."""
+    sessionIds = getSessionIds(request)
+    threadId = sessionIds["threadId"]
+    queue = getOrCreateQueue(threadId)
+    graph = request.app.state.graph
+
+    async def eventGenerator():
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                graphInput = await asyncio.wait_for(queue.get(), timeout=30.0)
+            except asyncio.TimeoutError:
+                yield ServerSentEvent(data="", event="ping")
+                continue
+
+            async for sseEvent in runGraph(graph, graphInput, request, templates):
+                yield sseEvent
+
+            yield ServerSentEvent(data="", event="done")
+
+    return EventSourceResponse(eventGenerator())
+
+
+@router.post("/chat/reset")
+async def resetChat(request: Request):
+    """Clear session state, remove queue, redirect to /."""
+    oldClaimId = request.session.get("claim_id")
+    oldThreadId = request.session.get("thread_id")
+
+    if oldClaimId:
+        clearImage(oldClaimId)
+    if oldThreadId:
+        removeQueue(oldThreadId)
+
+    request.session["thread_id"] = str(uuid.uuid4())
+    request.session["claim_id"] = str(uuid.uuid4())
+    request.session.pop("awaiting_clarification", None)
+
+    return Response(status_code=204, headers={"HX-Redirect": "/"})
