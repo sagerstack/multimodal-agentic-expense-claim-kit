@@ -81,6 +81,18 @@
   scrollbar-width: none;
 }
 
+.glass-panel {
+  background: rgba(25, 37, 64, 0.2);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.glass-card {
+  background: rgba(25, 37, 64, 0.2);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
 .intelligence-pulse {
   width: 8px;
   height: 8px;

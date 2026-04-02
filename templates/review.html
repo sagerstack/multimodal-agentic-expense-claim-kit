@@ -1,12 +1,202 @@
 {% extends "base.html" %}
 {% block title %}Claim Review{% endblock %}
 {% block content %}
-<div class="flex items-center justify-center h-full">
-  <div class="border border-outline-variant/10 rounded-xl p-12 text-center">
-    <span class="material-symbols-outlined text-primary text-6xl mb-4 block" style="font-size: 64px;">receipt_long</span>
-    <h1 class="font-headline font-bold text-2xl text-on-surface mb-2">Claim Review</h1>
-    <p class="text-on-surface-variant text-sm mb-4">Review interface coming in Phase 9</p>
-    <p class="text-secondary text-xs">Reviewing claim: {{ claimId }}</p>
+<div class="pt-8 pb-12 px-8 overflow-y-auto h-full">
+<!-- Page Header -->
+<header class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+  <div>
+    <div class="flex items-center gap-3 mb-2">
+      <span class="bg-error/10 text-error text-[10px] font-bold px-2 py-0.5 rounded-full border border-error/20 flex items-center gap-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span>
+        ESCALATION
+      </span>
+      <span class="text-on-surface-variant/40 text-xs">Claim ID: {{ claimId }}</span>
+    </div>
+    <h1 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface leading-none">Review Flagged Claim</h1>
+    <p class="text-on-surface-variant mt-2 max-w-xl">Manual override required. Select a claim to review AI extraction and flag details.</p>
   </div>
+  <div class="flex gap-3">
+    <button class="px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-surface-bright transition-all font-bold flex items-center gap-2">
+      <span class="material-symbols-outlined text-lg">history</span>
+      View History
+    </button>
+    <button class="px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-surface-bright transition-all font-bold flex items-center gap-2">
+      <span class="material-symbols-outlined text-lg">share</span>
+      Reassign
+    </button>
+  </div>
+</header>
+<!-- Main Bento Grid Layout -->
+<div class="grid grid-cols-12 gap-6">
+  <!-- Side-by-Side View (Primary Content) -->
+  <section class="col-span-12 xl:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Original Receipt -->
+    <div class="bg-surface-container-low rounded-2xl overflow-hidden shadow-2xl relative group h-[600px] flex flex-col">
+      <div class="p-4 flex justify-between items-center bg-surface-container-high/50">
+        <span class="text-xs font-bold text-on-surface-variant flex items-center gap-2 uppercase tracking-widest">
+          <span class="material-symbols-outlined text-sm">image</span>
+          Original Receipt
+        </span>
+        <div class="flex gap-2">
+          <button class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors">
+            <span class="material-symbols-outlined text-lg">zoom_in</span>
+          </button>
+          <button class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors">
+            <span class="material-symbols-outlined text-lg">download</span>
+          </button>
+        </div>
+      </div>
+      <div class="flex-1 overflow-auto bg-[#000000] p-8 flex justify-center items-center">
+        <div class="w-64 h-80 rounded-lg border border-outline-variant/20 flex flex-col items-center justify-center gap-4 bg-surface-container-lowest/20">
+          <span class="material-symbols-outlined text-on-surface-variant/30 text-6xl">receipt_long</span>
+          <p class="text-on-surface-variant/40 text-xs text-center px-4">Receipt image will appear here when a claim is loaded.</p>
+        </div>
+      </div>
+    </div>
+    <!-- Extracted Data -->
+    <div class="bg-surface-container-low rounded-2xl p-6 shadow-2xl h-[600px] flex flex-col border-t border-outline-variant/10">
+      <div class="flex justify-between items-center mb-6">
+        <span class="text-xs font-bold text-on-surface-variant flex items-center gap-2 uppercase tracking-widest">
+          <span class="material-symbols-outlined text-sm">data_object</span>
+          Extracted Entity Data
+        </span>
+        <div class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(98,250,227,0.6)]"></div>
+      </div>
+      <div class="space-y-4 flex-1 overflow-auto pr-2">
+        <!-- Vendor Name -->
+        <div class="space-y-1.5">
+          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Vendor Name</label>
+          <div class="bg-surface-container-highest p-3 rounded-xl flex justify-between items-center group">
+            <span class="font-headline font-bold text-on-surface">--</span>
+            <span class="material-symbols-outlined text-secondary opacity-0 group-hover:opacity-100 transition-opacity text-sm">edit</span>
+          </div>
+        </div>
+        <!-- Date -->
+        <div class="space-y-1.5">
+          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Date of Transaction</label>
+          <div class="bg-surface-container-highest p-3 rounded-xl flex justify-between items-center">
+            <span class="font-headline font-bold text-on-surface">--</span>
+          </div>
+        </div>
+        <!-- Amount + Currency -->
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1.5">
+            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Total Amount</label>
+            <div class="bg-surface-container-highest p-3 rounded-xl">
+              <span class="font-headline font-bold text-on-surface text-xl">$0.00</span>
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Currency</label>
+            <div class="bg-surface-container-highest p-3 rounded-xl">
+              <span class="font-headline font-bold text-on-surface">SGD</span>
+            </div>
+          </div>
+        </div>
+        <!-- Category -->
+        <div class="space-y-1.5">
+          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Category</label>
+          <div class="bg-surface-container-highest p-3 rounded-xl flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm text-primary">restaurant</span>
+            <span class="font-headline font-bold text-on-surface">--</span>
+          </div>
+        </div>
+        <!-- Submitter -->
+        <div class="space-y-1.5">
+          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Submitter</label>
+          <div class="bg-surface-container-highest p-3 rounded-xl flex items-center gap-3">
+            <div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+              <span class="material-symbols-outlined text-primary text-sm">person</span>
+            </div>
+            <span class="font-headline font-bold text-on-surface text-sm">--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- Intelligence Panel (Right Column) -->
+  <section class="col-span-12 xl:col-span-4 space-y-6">
+    <!-- Flag Reason Card -->
+    <div class="bg-surface-container-highest rounded-2xl p-6 border-t border-error/30 relative overflow-hidden shadow-2xl">
+      <div class="absolute top-0 right-0 p-4">
+        <span class="material-symbols-outlined text-error/20 text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">security</span>
+      </div>
+      <div class="relative z-10">
+        <h4 class="text-error font-headline font-bold text-lg mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">report</span>
+          Flag Reason
+        </h4>
+        <div class="p-4 bg-error-container/10 rounded-xl border border-error/20">
+          <p class="text-on-surface text-sm font-medium leading-relaxed">
+            No flag reason available. Select an escalated claim to review.
+          </p>
+          <div class="mt-3 flex items-center gap-2">
+            <span class="text-xs text-error/80 font-bold uppercase tracking-tighter">AI Confidence: --%</span>
+            <div class="h-1 flex-1 bg-error/20 rounded-full overflow-hidden">
+              <div class="h-full bg-error w-0"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Reviewer Decision Section -->
+    <div class="bg-surface-container-low rounded-2xl p-6 shadow-xl border border-outline-variant/10">
+      <h4 class="text-on-surface font-headline font-bold mb-4 flex items-center gap-2">
+        <span class="material-symbols-outlined text-secondary">notes</span>
+        Reviewer Decision
+      </h4>
+      <div class="space-y-4">
+        <div class="space-y-2">
+          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Internal Notes</label>
+          <textarea class="w-full bg-surface-container-lowest border-none rounded-xl text-on-surface text-sm p-4 focus:ring-2 focus:ring-secondary/50 h-32 placeholder:text-on-surface-variant/30" placeholder="State the reasoning for approval or rejection..."></textarea>
+        </div>
+        <div class="space-y-4">
+          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Action Required</label>
+          <!-- Rejection Options -->
+          <div class="p-4 bg-surface-container-highest rounded-xl border border-outline-variant/10 space-y-3">
+            <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Rejection Reason (If Applicable)</p>
+            <div class="grid grid-cols-1 gap-2">
+              <label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
+                <input class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-offset-surface focus:ring-error" name="reason" type="radio"/>
+                <span class="text-sm text-on-surface-variant group-hover:text-on-surface">Duplicate submission</span>
+              </label>
+              <label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
+                <input class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-offset-surface focus:ring-error" name="reason" type="radio"/>
+                <span class="text-sm text-on-surface-variant group-hover:text-on-surface">Incomplete receipt details</span>
+              </label>
+              <label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
+                <input class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-offset-surface focus:ring-error" name="reason" type="radio"/>
+                <span class="text-sm text-on-surface-variant group-hover:text-on-surface">Policy violation</span>
+              </label>
+            </div>
+          </div>
+          <div class="flex flex-col gap-3 pt-4">
+            <button class="w-full py-4 bg-error-dim hover:bg-error text-white font-headline font-extrabold rounded-xl shadow-lg shadow-error/10 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">cancel</span>
+              Reject Claim
+            </button>
+            <button class="w-full py-4 bg-gradient-to-r from-secondary to-secondary-dim text-on-secondary-fixed font-headline font-extrabold rounded-xl shadow-lg shadow-secondary/20 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+              Approve Claim
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- AI Insight Card -->
+    <div class="glass-card rounded-2xl p-6 border border-secondary/10 relative overflow-hidden">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="relative">
+          <span class="material-symbols-outlined text-secondary">psychology</span>
+          <div class="absolute -top-1 -right-1 w-2 h-2 bg-secondary rounded-full animate-ping"></div>
+        </div>
+        <h5 class="text-secondary font-headline font-bold">Luminous Intelligence Insight</h5>
+      </div>
+      <p class="text-on-surface-variant text-sm italic leading-relaxed">
+        AI insight will appear here once the claim has been analyzed by the compliance and fraud agents.
+      </p>
+    </div>
+  </section>
+</div>
 </div>
 {% endblock %}
