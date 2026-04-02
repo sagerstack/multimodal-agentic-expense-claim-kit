@@ -20,7 +20,7 @@
     <nav class="hidden md:flex gap-6">
       <a href="/dashboard" class="text-[#dee5ff] opacity-70 font-manrope tracking-tight font-bold hover:text-[#62fae3] transition-colors duration-300">Dashboard</a>
       <a href="/audit" class="text-[#dee5ff] opacity-70 font-manrope tracking-tight font-bold hover:text-[#62fae3] transition-colors duration-300">Audit Log</a>
-      <a href="/dashboard" class="text-[#dee5ff] opacity-70 font-manrope tracking-tight font-bold hover:text-[#62fae3] transition-colors duration-300">Escalations</a>
+      <a href="#" class="text-[#dee5ff] opacity-70 font-manrope tracking-tight font-bold hover:text-[#62fae3] transition-colors duration-300">Escalations</a>
     </nav>
   </div>
   <div class="flex items-center gap-4">
@@ -44,8 +44,8 @@
         <span class="material-symbols-outlined text-on-primary" style="font-variation-settings: 'FILL' 1;">bolt</span>
       </div>
       <div>
-        <h3 class="font-body text-sm font-bold tracking-wide text-on-surface">Luminous Intelligence</h3>
-        <p class="text-[10px] text-secondary opacity-80 uppercase tracking-[0.2em]">Expense Engine Active</p>
+        <h3 class="font-inter text-sm font-bold tracking-wide text-on-surface">Luminous Intelligence</h3>
+        <p class="text-[10px] text-secondary opacity-80 uppercase tracking-widest">Expense Engine Active</p>
       </div>
     </div>
     <a href="/" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-primary to-primary-dim text-on-primary font-bold text-sm transition-all hover:shadow-[0_0_20px_rgba(204,151,255,0.4)] active:scale-95 flex items-center justify-center gap-2">
@@ -55,32 +55,32 @@
   </div>
   <nav class="flex-1 space-y-1">
     <a href="/"
-       class="flex items-center gap-3 py-3 px-6 transition-all duration-200 ease-in-out font-body text-sm font-medium tracking-wide
+       class="flex items-center gap-3 py-3 px-6 transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide
               {% if activePage == 'chat' %}bg-[#1f2b49] text-[#62fae3] rounded-r-full shadow-[0_0_15px_rgba(98,250,227,0.2)]{% else %}text-[#dee5ff] opacity-50 hover:bg-[#192540] hover:opacity-100{% endif %}">
       <span class="material-symbols-outlined">chat_spark</span>
       Chat AI
     </a>
     <a href="/dashboard"
-       class="flex items-center gap-3 py-3 px-6 transition-all duration-200 ease-in-out font-body text-sm font-medium tracking-wide
+       class="flex items-center gap-3 py-3 px-6 transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide
               {% if activePage == 'dashboard' %}bg-[#1f2b49] text-[#62fae3] rounded-r-full shadow-[0_0_15px_rgba(98,250,227,0.2)]{% else %}text-[#dee5ff] opacity-50 hover:bg-[#192540] hover:opacity-100{% endif %}">
       <span class="material-symbols-outlined">insert_chart</span>
       Dashboard
     </a>
     <a href="/audit"
-       class="flex items-center gap-3 py-3 px-6 transition-all duration-200 ease-in-out font-body text-sm font-medium tracking-wide
+       class="flex items-center gap-3 py-3 px-6 transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide
               {% if activePage == 'audit' %}bg-[#1f2b49] text-[#62fae3] rounded-r-full shadow-[0_0_15px_rgba(98,250,227,0.2)]{% else %}text-[#dee5ff] opacity-50 hover:bg-[#192540] hover:opacity-100{% endif %}">
       <span class="material-symbols-outlined">verified_user</span>
       Audit Log
     </a>
-    <a href="/dashboard"
-       class="flex items-center gap-3 py-3 px-6 transition-all duration-200 ease-in-out font-body text-sm font-medium tracking-wide
+    <a href="#"
+       class="flex items-center gap-3 py-3 px-6 transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide
               {% if activePage == 'review' %}bg-[#1f2b49] text-[#62fae3] rounded-r-full shadow-[0_0_15px_rgba(98,250,227,0.2)]{% else %}text-[#dee5ff] opacity-50 hover:bg-[#192540] hover:opacity-100{% endif %}">
       <span class="material-symbols-outlined">receipt_long</span>
       Review
     </a>
   </nav>
   <div class="px-6 mt-auto">
-    <a href="#" class="flex items-center gap-3 text-[#dee5ff] opacity-50 py-3 hover:opacity-100 transition-all font-body text-sm font-medium tracking-wide">
+    <a href="#" class="flex items-center gap-3 text-[#dee5ff] opacity-50 py-3 hover:opacity-100 transition-all font-inter text-sm font-medium tracking-wide">
       <span class="material-symbols-outlined">sensors</span>
       System Status
       <div class="intelligence-pulse ml-auto"></div>
