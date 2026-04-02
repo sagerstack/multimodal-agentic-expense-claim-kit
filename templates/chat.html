@@ -1,19 +1,31 @@
 {% extends "base.html" %}
 {% block title %}AI Expense Submission{% endblock %}
 {% block content %}
-<div class="flex flex-col lg:flex-row h-full overflow-hidden">
+<div x-data="chatState()" @stream-done.window="processing = false" class="flex flex-col lg:flex-row h-full overflow-hidden">
+<div id="sseContainer" hx-ext="sse" sse-connect="/chat/stream" class="flex flex-col lg:flex-row flex-1 overflow-hidden">
 <!-- Chat Interface Section -->
 <section class="flex-1 flex flex-col h-full relative border-r border-outline-variant/10">
-  <!-- Chat Header (Mobile Only) -->
-  <div class="p-6 flex items-center justify-between border-b border-outline-variant/10 md:hidden">
-    <h2 class="font-headline font-bold text-primary">Chat AI</h2>
+  <!-- Chat Header -->
+  <div class="p-6 flex items-center justify-between border-b border-outline-variant/10">
     <div class="flex items-center gap-2">
-      <div class="intelligence-pulse"></div>
-      <span class="text-[10px] uppercase tracking-widest text-secondary font-bold">Active</span>
+      <h2 class="font-headline font-bold text-primary md:hidden">Chat AI</h2>
+      <div class="intelligence-pulse" x-show="processing" x-cloak></div>
+      <span class="text-[10px] uppercase tracking-widest font-bold" :class="processing ? 'text-secondary' : 'text-outline'">
+        <span x-show="processing">Processing</span>
+        <span x-show="!processing">Ready</span>
+      </span>
     </div>
+    <button hx-post="/chat/reset" hx-swap="none"
+            class="text-xs text-secondary hover:text-primary transition-colors font-bold uppercase tracking-widest flex items-center gap-1">
+      <span class="material-symbols-outlined text-sm align-middle">add_circle</span> New Claim
+    </button>
   </div>
   <!-- Chat History -->
-  <div id="chatHistory" class="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 hide-scrollbar">
+  <div id="chatHistory"
+       class="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 hide-scrollbar"
+       @dragover.prevent="$el.classList.add('ring-2', 'ring-secondary/50')"
+       @dragleave="$el.classList.remove('ring-2', 'ring-secondary/50')"
+       @drop.prevent="handleDrop($event)">
     <!-- System Greeting -->
     <div class="flex gap-4 max-w-2xl">
       <div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0 border border-outline-variant/20">
@@ -28,25 +40,81 @@
         <span class="text-[10px] text-outline px-1">Just now</span>
       </div>
     </div>
+
+    <!-- Thinking Panel -->
+    <div id="thinkingPanel" x-show="processing || thinkingVisible" class="max-w-2xl" x-cloak>
+      <div class="bg-surface-container-low/50 rounded-2xl border border-outline-variant/5 p-4">
+        <button @click="thinkingCollapsed = !thinkingCollapsed" class="flex items-center gap-2 w-full text-left">
+          <div class="intelligence-pulse" x-show="processing"></div>
+          <span x-show="processing" class="text-xs text-secondary font-bold">Analyzing...</span>
+          <span x-show="!processing" id="thinkingSummary" sse-swap="thinking-done" hx-swap="innerHTML" class="text-xs text-outline font-bold"></span>
+          <span class="material-symbols-outlined text-xs transition-transform ml-auto text-outline" :class="thinkingCollapsed ? '' : 'rotate-180'">expand_more</span>
+        </button>
+        <div x-show="!thinkingCollapsed" class="mt-3 space-y-2">
+          <div id="thinkingStepName" sse-swap="step-name" hx-swap="innerHTML" class="text-xs text-secondary font-bold"></div>
+          <div id="thinkingContent" sse-swap="step-content" hx-swap="beforeend" class="text-xs text-outline space-y-1"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Token stream target -->
+    <div id="tokenTarget" sse-swap="token" hx-swap="beforeend" class="text-on-surface text-sm leading-relaxed max-w-2xl whitespace-pre-wrap"></div>
+
+    <!-- Hidden thinking-start trigger -->
+    <div sse-swap="thinking-start" hx-swap="innerHTML" class="hidden"></div>
+
+    <!-- AI Messages -->
+    <div id="aiMessages" sse-swap="message" hx-swap="beforeend" class="space-y-8"></div>
+
+    <!-- Done sentinel -->
+    <div id="doneTarget" sse-swap="done" hx-swap="innerHTML"
+         hx-on::after-swap="document.dispatchEvent(new CustomEvent('stream-done'))" class="hidden"></div>
+
+    <!-- Interrupt target -->
+    <div id="interruptTarget" sse-swap="interrupt" hx-swap="innerHTML"
+         hx-on::after-swap="document.dispatchEvent(new CustomEvent('stream-done'))"
+         class="max-w-2xl text-sm text-tertiary italic p-4 bg-tertiary/5 rounded-2xl border border-tertiary/10 empty:hidden"></div>
+
+    <!-- Error target -->
+    <div id="errorTarget" sse-swap="error" hx-swap="innerHTML"
+         hx-on::after-swap="document.dispatchEvent(new CustomEvent('stream-done'))"
+         class="max-w-2xl text-sm text-error p-4 bg-error/5 rounded-2xl border border-error/10 empty:hidden"></div>
   </div>
   <!-- Chat Input Area -->
   <div class="p-6 md:p-8 bg-surface/80 backdrop-blur-md">
     <div class="max-w-3xl mx-auto relative">
-      <!-- Drop Zone Hint -->
-      <div class="absolute -top-12 left-0 right-0 flex justify-center opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
-        <div class="bg-surface-container-highest px-4 py-1 rounded-full border border-secondary/30 text-[10px] text-secondary font-bold uppercase tracking-widest">Drop receipt to upload</div>
+      <!-- Image Preview -->
+      <div x-show="previewUrl" class="flex items-center gap-3 mb-3 px-2" x-cloak>
+        <img :src="previewUrl" class="w-12 h-12 rounded-lg object-cover border border-outline-variant/20">
+        <span class="text-xs text-outline" x-text="fileName"></span>
+        <button type="button" @click="previewUrl = null; fileName = null; $refs.fileInput.value = ''"
+                class="text-outline hover:text-error text-xs ml-auto">Remove</button>
       </div>
-      <div class="flex items-end gap-3 bg-surface-container-lowest border border-outline-variant/30 rounded-[1.25rem] p-2 focus-within:border-secondary/50 transition-all shadow-2xl">
-        <button class="p-3 rounded-xl hover:bg-surface-bright text-outline hover:text-secondary transition-colors">
-          <span class="material-symbols-outlined">attach_file</span>
-        </button>
-        <textarea class="flex-1 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-outline/50 py-3 resize-none font-body text-sm" placeholder="Type a message or drop files..." rows="1"></textarea>
-        <button class="p-3 rounded-xl bg-gradient-to-br from-primary to-primary-dim text-on-primary shadow-lg shadow-primary/20 active:scale-90 transition-transform">
-          <span class="material-symbols-outlined">send</span>
-        </button>
-      </div>
+      <form id="chatForm"
+            hx-post="/chat/message"
+            hx-encoding="multipart/form-data"
+            hx-swap="none"
+            @submit="processing = true; thinkingVisible = true; thinkingCollapsed = false; messageText = ''; $nextTick(() => { $refs.messageInput.style.height = 'auto'; previewUrl = null; fileName = null; })">
+        <input type="file" name="receipt" accept="image/*" class="hidden"
+               x-ref="fileInput"
+               @change="handleFileSelect($event)">
+        <div class="flex items-end gap-3 bg-surface-container-lowest border border-outline-variant/30 rounded-[1.25rem] p-2 focus-within:border-secondary/50 transition-all shadow-2xl">
+          <button type="button" @click="$refs.fileInput.click()"
+                  class="p-3 rounded-xl hover:bg-surface-bright text-outline hover:text-secondary transition-colors">
+            <span class="material-symbols-outlined">attach_file</span>
+          </button>
+          <textarea name="message" x-model="messageText" x-ref="messageInput"
+                    class="flex-1 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-outline/50 py-3 resize-none font-body text-sm"
+                    placeholder="Type a message or drop files..." rows="1"
+                    @keydown.enter.prevent="if (!$event.shiftKey) $el.form.requestSubmit()"></textarea>
+          <button type="submit" :disabled="processing"
+                  class="p-3 rounded-xl bg-gradient-to-br from-primary to-primary-dim text-on-primary shadow-lg shadow-primary/20 active:scale-90 transition-transform disabled:opacity-50">
+            <span class="material-symbols-outlined">send</span>
+          </button>
+        </div>
+      </form>
       <div class="mt-4 flex gap-6 px-4">
-        <div class="flex items-center gap-1.5 opacity-40 hover:opacity-100 transition-opacity cursor-pointer">
+        <div class="flex items-center gap-1.5 opacity-40 hover:opacity-100 transition-opacity cursor-pointer" @click="$refs.fileInput.click()">
           <span class="material-symbols-outlined text-sm">photo_camera</span>
           <span class="text-[10px] font-bold uppercase tracking-tighter">Capture</span>
         </div>
@@ -65,40 +133,42 @@
 <!-- Right Side: Submission Summary Panel -->
 <section class="w-full lg:w-96 p-6 md:p-8 bg-surface-container-low space-y-8 overflow-y-auto hide-scrollbar">
   <h2 class="font-headline text-lg font-bold text-on-surface tracking-tight">Submission Summary</h2>
-  <!-- Current Progress Bento -->
-  <div class="grid grid-cols-2 gap-4">
-    <div class="col-span-2 bg-surface-container-highest p-5 rounded-2xl border-t border-outline-variant/10 shadow-lg">
-      <span class="text-[10px] text-secondary font-bold uppercase tracking-widest block mb-4">Current Session</span>
-      <div class="flex items-end justify-between">
-        <div>
-          <p id="sessionTotal" class="text-3xl font-headline font-extrabold text-on-surface">$0.00</p>
-          <p id="sessionItemCount" class="text-xs text-outline">0 items pending</p>
-        </div>
-        <div class="text-right">
-          <div class="h-1.5 w-24 bg-surface-bright rounded-full overflow-hidden">
-            <div id="sessionProgress" class="h-full bg-secondary w-0"></div>
+  <div id="summaryContent" sse-swap="summary-update" hx-swap="innerHTML">
+    <!-- Current Progress Bento -->
+    <div class="grid grid-cols-2 gap-4">
+      <div class="col-span-2 bg-surface-container-highest p-5 rounded-2xl border-t border-outline-variant/10 shadow-lg">
+        <span class="text-[10px] text-secondary font-bold uppercase tracking-widest block mb-4">Current Session</span>
+        <div class="flex items-end justify-between">
+          <div>
+            <p id="sessionTotal" class="text-3xl font-headline font-extrabold text-on-surface">$0.00</p>
+            <p id="sessionItemCount" class="text-xs text-outline">0 items pending</p>
           </div>
-          <p class="text-[10px] text-secondary font-bold mt-2">0% Complete</p>
+          <div class="text-right">
+            <div class="h-1.5 w-24 bg-surface-bright rounded-full overflow-hidden">
+              <div id="sessionProgress" class="h-full bg-secondary w-0"></div>
+            </div>
+            <p class="text-[10px] text-secondary font-bold mt-2">0% Complete</p>
+          </div>
         </div>
       </div>
+      <!-- Small Info Cards -->
+      <div class="bg-surface-container-highest p-4 rounded-2xl border-t border-outline-variant/10">
+        <span class="material-symbols-outlined text-primary text-sm mb-2">category</span>
+        <p class="text-xs text-outline mb-1">Top Category</p>
+        <p class="text-sm font-bold">--</p>
+      </div>
+      <div class="bg-surface-container-highest p-4 rounded-2xl border-t border-outline-variant/10">
+        <span class="material-symbols-outlined text-tertiary text-sm mb-2">warning</span>
+        <p class="text-xs text-outline mb-1">Warnings</p>
+        <p class="text-sm font-bold">0 Flags</p>
+      </div>
     </div>
-    <!-- Small Info Cards -->
-    <div class="bg-surface-container-highest p-4 rounded-2xl border-t border-outline-variant/10">
-      <span class="material-symbols-outlined text-primary text-sm mb-2">category</span>
-      <p class="text-xs text-outline mb-1">Top Category</p>
-      <p class="text-sm font-bold">--</p>
-    </div>
-    <div class="bg-surface-container-highest p-4 rounded-2xl border-t border-outline-variant/10">
-      <span class="material-symbols-outlined text-tertiary text-sm mb-2">warning</span>
-      <p class="text-xs text-outline mb-1">Warnings</p>
-      <p class="text-sm font-bold">0 Flags</p>
-    </div>
-  </div>
-  <!-- Batch Details -->
-  <div class="space-y-4">
-    <h3 class="text-[10px] text-outline font-bold uppercase tracking-widest">Batch Details</h3>
-    <div id="batchItems" class="space-y-4">
-      <p class="text-xs text-on-surface-variant/50 text-center py-8">No items yet. Upload a receipt to begin.</p>
+    <!-- Batch Details -->
+    <div class="space-y-4 mt-8">
+      <h3 class="text-[10px] text-outline font-bold uppercase tracking-widest">Batch Details</h3>
+      <div id="batchItems" class="space-y-4">
+        <p class="text-xs text-on-surface-variant/50 text-center py-8">No items yet. Upload a receipt to begin.</p>
+      </div>
     </div>
   </div>
   <button class="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-dim text-on-primary font-bold text-sm transition-all hover:shadow-[0_10px_30px_rgba(204,151,255,0.3)] active:scale-95 opacity-50 cursor-not-allowed" disabled>
@@ -106,4 +176,37 @@
   </button>
 </section>
 </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function chatState() {
+  return {
+    processing: false,
+    thinkingCollapsed: false,
+    thinkingVisible: false,
+    previewUrl: null,
+    fileName: null,
+    messageText: '',
+    handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (file) {
+        this.previewUrl = URL.createObjectURL(file);
+        this.fileName = file.name;
+      }
+    },
+    handleDrop(event) {
+      event.target.classList.remove('ring-2', 'ring-secondary/50');
+      const file = event.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        this.$refs.fileInput.files = dt.files;
+        this.previewUrl = URL.createObjectURL(file);
+        this.fileName = file.name;
+      }
+    }
+  };
+}
+</script>
 {% endblock %}
