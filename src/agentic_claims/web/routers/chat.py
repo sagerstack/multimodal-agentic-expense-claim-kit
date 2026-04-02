@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import logging
 import uuid
 
 from fastapi import APIRouter, File, Form, UploadFile
@@ -14,6 +15,8 @@ from agentic_claims.web.session import getSessionIds
 from agentic_claims.web.sessionQueues import getOrCreateQueue, removeQueue
 from agentic_claims.web.sseHelpers import runGraph
 from agentic_claims.web.templating import templates
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -73,9 +76,12 @@ async def streamChat(request: Request):
             yield ServerSentEvent(comment="ping")
             continue
 
+        logger.info("Queue got input: threadId=%s", graphInput.get("threadId"))
+
         async for sseEvent in runGraph(graph, graphInput, request, templates):
             yield sseEvent
 
+        logger.info("Stream complete, yielding done event")
         yield ServerSentEvent(raw_data="<!-- done -->", event="done")
 
 

@@ -13,6 +13,7 @@ from agentic_claims.core.graph import getCompiledGraph
 from agentic_claims.web.routers.chat import router as chatRouter
 from agentic_claims.web.routers.pages import router as pagesRouter
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

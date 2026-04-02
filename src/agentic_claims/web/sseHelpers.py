@@ -329,6 +329,11 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     into the SseEvent taxonomy. Checks request.is_disconnected() at each
     iteration to break on client disconnect.
     """
+    logger.info(
+        "runGraph started: threadId=%s, isResume=%s",
+        graphInput.get("threadId"),
+        graphInput.get("isResume"),
+    )
     thinkingEntries = []
     tokenBuffer = ""
     reasoningBuffer = ""
@@ -353,6 +358,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 break
 
             eventKind = event.get("event")
+            logger.info("astream_events event: %s - %s", eventKind, event.get("name", ""))
 
             if eventKind == "on_chat_model_stream":
                 if pendingToolCalls > 0:
@@ -452,6 +458,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     toolLabel = "tool" if toolCount == 1 else "tools"
     summary = f"Thought for {_formatElapsed(totalElapsed)} . {toolCount} {toolLabel}"
     yield ServerSentEvent(raw_data=summary, event=SseEvent.THINKING_DONE)
+    logger.info("Thinking done: %s", summary)
 
     # Summary panel update
     summaryData = _extractSummaryData(thinkingEntries)
@@ -504,3 +511,4 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
         except Exception:
             messageHtml = f'<div class="ai-message">{finalText}</div>'
         yield ServerSentEvent(raw_data=messageHtml, event=SseEvent.MESSAGE)
+        logger.info("Message yielded: %d chars", len(finalText))
