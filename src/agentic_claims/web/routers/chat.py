@@ -70,13 +70,13 @@ async def streamChat(request: Request):
         try:
             graphInput = await asyncio.wait_for(queue.get(), timeout=30.0)
         except asyncio.TimeoutError:
-            yield ServerSentEvent(raw_data="", event="ping")
+            yield ServerSentEvent(comment="ping")
             continue
 
         async for sseEvent in runGraph(graph, graphInput, request, templates):
             yield sseEvent
 
-        yield ServerSentEvent(raw_data="", event="done")
+        yield ServerSentEvent(raw_data="<!-- done -->", event="done")
 
 
 @router.post("/chat/reset")

@@ -337,7 +337,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     toolStartTimes = {}
     turnStart = time.time()
 
-    yield ServerSentEvent(raw_data="", event=SseEvent.THINKING_START)
+    yield ServerSentEvent(raw_data="<!-- thinking -->", event=SseEvent.THINKING_START)
 
     threadId = graphInput["threadId"]
     config = {"configurable": {"thread_id": threadId}}

@@ -64,20 +64,22 @@
     <div sse-swap="thinking-start" hx-swap="innerHTML" class="hidden"></div>
 
     <!-- AI Messages -->
-    <div id="aiMessages" sse-swap="message" hx-swap="beforeend" class="space-y-8"></div>
+    <div id="aiMessages" sse-swap="message" hx-swap="beforeend"
+         hx-on::after-swap="document.getElementById('tokenTarget').innerHTML = ''"
+         class="space-y-8"></div>
 
     <!-- Done sentinel -->
     <div id="doneTarget" sse-swap="done" hx-swap="innerHTML"
-         hx-on::after-swap="document.dispatchEvent(new CustomEvent('stream-done'))" class="hidden"></div>
+         hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done'))" class="hidden"></div>
 
     <!-- Interrupt target -->
     <div id="interruptTarget" sse-swap="interrupt" hx-swap="innerHTML"
-         hx-on::after-swap="document.dispatchEvent(new CustomEvent('stream-done'))"
+         hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done'))"
          class="max-w-2xl text-sm text-tertiary italic p-4 bg-tertiary/5 rounded-2xl border border-tertiary/10 empty:hidden"></div>
 
     <!-- Error target -->
     <div id="errorTarget" sse-swap="error" hx-swap="innerHTML"
-         hx-on::after-swap="document.dispatchEvent(new CustomEvent('stream-done'))"
+         hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done'))"
          class="max-w-2xl text-sm text-error p-4 bg-error/5 rounded-2xl border border-error/10 empty:hidden"></div>
   </div>
   <!-- Chat Input Area -->
