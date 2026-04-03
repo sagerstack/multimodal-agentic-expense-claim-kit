@@ -8,7 +8,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_openrouter import ChatOpenRouter
 from langgraph.prebuilt import create_react_agent
 
-from agentic_claims.agents.intake.prompts.agentSystemPrompt import INTAKE_AGENT_SYSTEM_PROMPT
+from agentic_claims.agents.intake.prompts.agentSystemPrompt_v2 import INTAKE_AGENT_SYSTEM_PROMPT
 from agentic_claims.agents.intake.tools.convertCurrency import convertCurrency
 from agentic_claims.agents.intake.tools.extractReceiptFields import extractReceiptFields
 from agentic_claims.agents.intake.tools.getClaimSchema import getClaimSchema
