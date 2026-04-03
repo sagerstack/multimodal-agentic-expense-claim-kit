@@ -20,7 +20,7 @@ See MILESTONES.md for archived v1.0 details.
 
 - [x] **Phase 6: FastAPI Scaffold + Static Shell** — Replace Chainlit, all 4 pages served as static shells, lifespan singleton, session middleware
 - [x] **Phase 7: SSE Streaming + Full Chat Page** — SSE event taxonomy, streaming pipeline, V1 migration, complete Chat Page feature set
-- [ ] **Phase 6.1: Model Upgrade + UX Fixes** — Switch LLM from QwQ-32B to Qwen3-235B-A22B (fast MoE, no CoT chains), trim system prompt, fix submission summary panel (100% on submit, show Claim ID, correct amounts)
+- [ ] **Phase 6.1: Model Upgrade + UX Fixes** — Switch LLM from QwQ-32B to Qwen3-235B-A22B (fast MoE, no CoT chains), swap to v2 system prompt, fix submission summary panel (100% on submit, show Claim ID, correct amounts)
 - [ ] **Phase 8: Dashboard + Audit Log Pages** — Approver Dashboard (KPIs, claims table) and Audit & Transparency Log (decision timeline)
 - [ ] **Phase 9: Claim Review Page** — Escalated claim display, approve/reject actions, receipt zoom, claim navigation
 - [ ] **Phase 10: Browser E2E Tests** — Playwright test suite covering all 4 pages against a live server
@@ -91,14 +91,14 @@ Plans:
 1. A receipt upload + full claim submission flow completes in under 60 seconds total (all turns combined), down from 7+ minutes with QwQ-32B
 2. The thinking panel shows tool activity steps (names + summaries) without reasoning preview content — no empty or broken panels
 3. After `submitClaim` succeeds, the Submission Summary panel shows: 100% Complete, the claim number (CLAIM-XXX), the correct SGD amount, the expense category, and the "Submit Entire Batch" button is hidden
-4. The system prompt is under 100 lines (trimmed from 170) with no tool signature duplication
-5. All existing tests pass without regression
+4. The v2 system prompt is active with tool-calling discipline, submission reality guardrails, and self-verification — imported from `agentSystemPrompt_v2.py`
+5. All existing tests pass without regression; new unit tests cover BUG-013 guard and step-driven progressPct
 
 **Plans:** 2 plans
 
 Plans:
-- [ ] 06.1-01-PLAN.md — Model switch (env config), system prompt trim (<100 lines), ClaimState expansion (claimNumber), intakeNode state propagation (extractedReceipt, currencyConversion, claimNumber)
-- [ ] 06.1-02-PLAN.md — Summary panel fixes: claimNumber in header, 100% on submit, conditional submit button, BUG-013 hallucination guard
+- [ ] 06.1-01-PLAN.md — Model switch (env config), v2 system prompt swap (import change in node.py), ClaimState expansion (claimNumber), intakeNode state propagation (extractedReceipt, currencyConversion, claimNumber)
+- [ ] 06.1-02-PLAN.md — Summary panel fixes: claimNumber in header, 100% on submit, conditional submit button, BUG-013 hallucination guard, step-driven progressPct, unit tests
 
 ---
 
