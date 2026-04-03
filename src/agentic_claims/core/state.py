@@ -23,6 +23,7 @@ class ClaimState(TypedDict):
     violations: Optional[list[dict]]  # Policy violations with cited clauses
     currencyConversion: Optional[dict]  # Original and converted amounts
     claimSubmitted: Optional[bool]  # Gate flag for routing to compliance/fraud
+    claimNumber: Optional[str]  # Claim number returned by submitClaim (e.g. CLAIM-003)
 
     # Phase 2.2: Agent observations (mismatches, overrides, red flags) for downstream agents and reviewer audit trail
     intakeFindings: Optional[dict]

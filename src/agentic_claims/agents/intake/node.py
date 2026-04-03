@@ -119,21 +119,26 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
     # Build state update
     stateUpdate = {"messages": result["messages"]}
 
-    # Detect if submitClaim tool was called successfully by scanning result messages
-    # ToolMessages from LangGraph ReAct agent contain tool name and response content
+    # Scan tool messages to extract state updates from agent tool calls
     for msg in result["messages"]:
-        if (
-            hasattr(msg, "name")
-            and msg.name == "submitClaim"
-            and hasattr(msg, "content")
-        ):
-            # Parse tool response to check for success (no error key)
-            try:
-                content = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
-                if isinstance(content, dict) and "error" not in content:
-                    stateUpdate["claimSubmitted"] = True
-                    break
-            except (json.JSONDecodeError, TypeError):
-                pass
+        if not (hasattr(msg, "name") and hasattr(msg, "content")):
+            continue
+        try:
+            content = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+            if not isinstance(content, dict) or "error" in content:
+                continue
+
+            if msg.name == "submitClaim":
+                stateUpdate["claimSubmitted"] = True
+                claimRecord = content.get("claim", {})
+                claimNumber = claimRecord.get("claim_number")
+                if claimNumber:
+                    stateUpdate["claimNumber"] = claimNumber
+            elif msg.name == "extractReceiptFields":
+                stateUpdate["extractedReceipt"] = content
+            elif msg.name == "convertCurrency":
+                stateUpdate["currencyConversion"] = content
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     return stateUpdate

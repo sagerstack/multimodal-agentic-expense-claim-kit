@@ -10,7 +10,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from starlette.requests import Request
 from starlette.responses import Response
 
-from agentic_claims.core.imageStore import clearImage, storeImage
+from agentic_claims.core.imageStore import clearImage, getImage, storeImage
 from agentic_claims.web.session import getSessionIds
 from agentic_claims.web.sessionQueues import getOrCreateQueue, removeQueue
 from agentic_claims.web.sseHelpers import runGraph
@@ -83,6 +83,18 @@ async def streamChat(request: Request):
 
         logger.info("Stream complete, yielding done event")
         yield ServerSentEvent(raw_data="<!-- done -->", event="done")
+
+
+@router.get("/chat/receipt-image")
+async def getReceiptImage(request: Request):
+    """Serve the receipt image for the current session as image/jpeg."""
+    sessionIds = getSessionIds(request)
+    claimId = sessionIds["claimId"]
+    imageB64 = getImage(claimId)
+    if not imageB64:
+        return Response(status_code=404, content="No receipt image")
+    imageBytes = base64.b64decode(imageB64)
+    return Response(content=imageBytes, media_type="image/jpeg")
 
 
 @router.post("/chat/reset")
