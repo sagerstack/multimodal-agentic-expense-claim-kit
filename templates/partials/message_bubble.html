@@ -3,9 +3,9 @@
   <div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0 border border-outline-variant/20">
     <span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
   </div>
-  <div class="space-y-2">
+  <div class="space-y-2 min-w-0 flex-1">
     <div class="bg-surface-container-low p-4 rounded-2xl rounded-tl-none border border-outline-variant/5 shadow-xl">
-      <p class="text-on-surface text-sm leading-relaxed whitespace-pre-wrap">{{ content }}</p>
+      <div class="ai-markdown text-on-surface text-sm leading-relaxed">{{ content }}</div>
       {% if confidenceScores %}
       <div class="flex flex-wrap gap-1 mt-2">
         {% for field, score in confidenceScores.items() %}

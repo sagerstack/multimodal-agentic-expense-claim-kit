@@ -45,15 +45,15 @@ def _stripToolCallJson(text: str) -> str:
 
 
 def _stripThinkingTags(text: str) -> str:
-    """Strip XML-style thinking/reasoning wrappers from model output.
+    """Strip XML-style thinking/reasoning/tools wrappers from model output.
 
-    Models like QwQ-32B sometimes emit <Thinking>...</Thinking> or
-    <think>...</think> tags in their text content. The UI handles
-    reasoning display via the thinking panel, so these leak through
-    as unwanted visible text.
+    Models like QwQ-32B sometimes emit <Thinking>...</Thinking>,
+    <think>...</think>, or <tools>...</tools> tags in their text content.
+    The UI handles reasoning display via the thinking panel, and tool calls
+    are handled by LangGraph, so these leak through as unwanted visible text.
     """
     cleaned = re.sub(
-        r"<(?:Thinking|thinking|think|Think|reasoning|Reasoning)>.*?</(?:Thinking|thinking|think|Think|reasoning|Reasoning)>",
+        r"<(?:Thinking|thinking|think|Think|reasoning|Reasoning|tools|Tools)>.*?</(?:Thinking|thinking|think|Think|reasoning|Reasoning|tools|Tools)>",
         "",
         text,
         flags=re.DOTALL,
@@ -146,8 +146,13 @@ async def _getFallbackMessage(graph, config: dict) -> str:
     return ""
 
 
-def _extractSummaryData(thinkingEntries: list) -> dict | None:
-    """Extract summary panel data from tool outputs in thinking entries."""
+def _extractSummaryData(thinkingEntries: list, graphState: dict | None = None) -> dict | None:
+    """Extract summary panel data from tool outputs and graph state.
+
+    Uses thinkingEntries (current turn's tool outputs) first, then falls
+    back to graphState for data from prior turns (e.g. extractedReceipt
+    from turn 1 when turn 2 only does submission).
+    """
     totalAmount = ""
     merchant = ""
     category = ""
@@ -202,6 +207,24 @@ def _extractSummaryData(thinkingEntries: list) -> dict | None:
 
         except Exception:
             continue
+
+    # Fall back to graph state for receipt data from prior turns
+    if not hasReceiptData and graphState:
+        extractedReceipt = graphState.get("extractedReceipt")
+        if isinstance(extractedReceipt, dict):
+            fields = extractedReceipt.get("fields", extractedReceipt)
+            merchant = fields.get("merchant", "")
+            totalAmount = fields.get("totalAmount", "")
+            currency = fields.get("currency", "SGD")
+            category = fields.get("category", "")
+            hasReceiptData = bool(merchant or totalAmount)
+
+        conversionData = graphState.get("currencyConversion")
+        if isinstance(conversionData, dict) and not convertedAmount:
+            convertedAmount = str(conversionData.get("convertedAmount", conversionData.get("amountSgd", "")))
+
+        if graphState.get("claimSubmitted"):
+            submitted = True
 
     if not hasReceiptData:
         return None
@@ -339,6 +362,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     reasoningBuffer = ""
     finalResponse = ""
     pendingToolCalls = 0
+    hadAnyToolCall = False
     toolStartTimes = {}
     turnStart = time.time()
 
@@ -367,7 +391,13 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 chunk = event.get("data", {}).get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     tokenBuffer += chunk.content
-                    yield ServerSentEvent(raw_data=chunk.content, event=SseEvent.TOKEN)
+                    # Only stream tokens to the chat area if this could be the
+                    # final response (no tool calls seen yet, or tools are done
+                    # and model is generating). Intermediate reasoning between
+                    # tool calls is buffered silently — it flashes confusingly
+                    # if streamed live.
+                    if not hadAnyToolCall or pendingToolCalls == 0:
+                        yield ServerSentEvent(raw_data=chunk.content, event=SseEvent.TOKEN)
 
                 if chunk:
                     reasoning = None
@@ -380,12 +410,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             "reasoning_content"
                         ) or chunk.response_metadata.get("reasoning")
                     if reasoning:
-                        reasoningText = str(reasoning)
-                        reasoningBuffer += reasoningText
-                        yield ServerSentEvent(
-                            raw_data=f'<p class="text-xs text-outline/70">{reasoningText}</p>',
-                            event=SseEvent.STEP_CONTENT,
-                        )
+                        reasoningBuffer += str(reasoning)
 
             elif eventKind == "on_chat_model_end":
                 if pendingToolCalls > 0:
@@ -412,6 +437,20 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                                 "content": reasoningBuffer.strip(),
                             }
                         )
+                    # Show brief reasoning summary in thinking panel
+                    reasoningText = reasoningBuffer.strip() or cleanedBuffer or ""
+                    if reasoningText:
+                        preview = reasoningText[:120].replace("\n", " ").strip()
+                        if len(reasoningText) > 120:
+                            preview += "..."
+                        yield ServerSentEvent(
+                            raw_data="Reasoning...",
+                            event=SseEvent.STEP_NAME,
+                        )
+                        yield ServerSentEvent(
+                            raw_data=f'<div class="text-xs text-outline/50 italic mt-1">{preview}</div>',
+                            event=SseEvent.STEP_CONTENT,
+                        )
                     tokenBuffer = ""
                     reasoningBuffer = ""
                 else:
@@ -422,6 +461,18 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                                 "content": reasoningBuffer.strip(),
                             }
                         )
+                        # Show brief reasoning summary in thinking panel
+                        preview = reasoningBuffer.strip()[:120].replace("\n", " ").strip()
+                        if len(reasoningBuffer.strip()) > 120:
+                            preview += "..."
+                        yield ServerSentEvent(
+                            raw_data="Reasoning...",
+                            event=SseEvent.STEP_NAME,
+                        )
+                        yield ServerSentEvent(
+                            raw_data=f'<div class="text-xs text-outline/50 italic mt-1">{preview}</div>',
+                            event=SseEvent.STEP_CONTENT,
+                        )
                     finalResponse = _stripToolCallJson(tokenBuffer)
                     tokenBuffer = ""
                     reasoningBuffer = ""
@@ -430,6 +481,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 toolName = event.get("name", "unknown")
                 toolStartTimes[toolName] = time.time()
                 pendingToolCalls += 1
+                hadAnyToolCall = True
                 label = TOOL_LABELS.get(toolName, f"Running {toolName}...")
                 yield ServerSentEvent(raw_data=label, event=SseEvent.STEP_NAME)
 
@@ -449,11 +501,9 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 )
                 pendingToolCalls = max(0, pendingToolCalls - 1)
                 yield ServerSentEvent(
-                    raw_data=f'<p class="text-xs text-outline">{summary}</p>',
+                    raw_data=f'<div class="text-xs text-outline mt-1">{summary}</div>',
                     event=SseEvent.STEP_CONTENT,
                 )
-                if pendingToolCalls == 0:
-                    yield ServerSentEvent(raw_data="Analyzing...", event=SseEvent.STEP_NAME)
 
     except Exception as e:
         logger.error(f"Error during graph streaming: {e}", exc_info=True)
@@ -468,8 +518,17 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     yield ServerSentEvent(raw_data=summary, event=SseEvent.THINKING_DONE)
     logger.info("Thinking done: %s", summary)
 
-    # Summary panel update
-    summaryData = _extractSummaryData(thinkingEntries)
+    # Fetch graph state once — reused for summary panel, interrupt check, and fallback message
+    finalState = None
+    graphStateValues = None
+    try:
+        finalState = await graph.aget_state(config=config)
+        graphStateValues = finalState.values if finalState else None
+    except Exception as e:
+        logger.error(f"Error fetching graph state: {e}", exc_info=True)
+
+    # Summary panel update (uses graph state for cross-turn receipt data)
+    summaryData = _extractSummaryData(thinkingEntries, graphState=graphStateValues)
     if summaryData:
         try:
             summaryTemplate = templates.get_template("partials/summary_panel.html")
@@ -480,8 +539,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
 
     # Check for interrupt via graph state
     try:
-        finalState = await graph.aget_state(config=config)
-        if finalState.next:
+        if finalState and finalState.next:
             for task in finalState.tasks:
                 if hasattr(task, "interrupts") and task.interrupts:
                     payload = task.interrupts[0].value
@@ -500,10 +558,23 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     finalText = ""
     if finalResponse and finalResponse.strip():
         finalText = _stripThinkingTags(finalResponse).strip()
-    elif tokenBuffer.strip():
+    if not finalText and tokenBuffer.strip():
         finalText = _stripThinkingTags(_stripToolCallJson(tokenBuffer)).strip()
-    else:
-        finalText = await _getFallbackMessage(graph, config)
+    if not finalText:
+        # Use already-fetched state if available, otherwise fetch
+        if graphStateValues:
+            messages = graphStateValues.get("messages", [])
+            for msg in reversed(messages):
+                if (
+                    hasattr(msg, "type")
+                    and msg.type == "ai"
+                    and hasattr(msg, "content")
+                    and msg.content
+                ):
+                    finalText = _stripThinkingTags(_stripToolCallJson(str(msg.content)))
+                    break
+        if not finalText:
+            finalText = await _getFallbackMessage(graph, config)
 
     if finalText:
         confidenceScores = _extractConfidenceScores(thinkingEntries)

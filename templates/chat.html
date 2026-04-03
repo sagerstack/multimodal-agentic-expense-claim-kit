@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}AI Expense Submission{% endblock %}
 {% block content %}
-<div x-data="chatState()" @stream-done.window="processing = false" class="flex flex-col lg:flex-row h-full overflow-hidden">
+<div x-data="chatState()" @stream-done.window="onStreamDone()" @message-swapped.window="onMessageSwapped()" class="flex flex-col lg:flex-row h-full overflow-hidden">
 <div id="sseContainer" hx-ext="sse" sse-connect="/chat/stream" class="flex flex-col lg:flex-row flex-1 overflow-hidden">
 <!-- Chat Interface Section -->
 <section class="flex-1 flex flex-col h-full relative border-r border-outline-variant/10">
@@ -22,7 +22,7 @@
   </div>
   <!-- Chat History -->
   <div id="chatHistory"
-       class="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 hide-scrollbar"
+       class="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 hide-scrollbar"
        @dragover.prevent="$el.classList.add('ring-2', 'ring-secondary/50')"
        @dragleave="$el.classList.remove('ring-2', 'ring-secondary/50')"
        @drop.prevent="handleDrop($event)">
@@ -41,11 +41,10 @@
       </div>
     </div>
 
-    <!-- User messages injected here by appendUserBubble -->
-    <div id="userMessages" class="space-y-8"></div>
+    <!-- Frozen turns get inserted here by freezeTurn() -->
 
-    <!-- Thinking Panel -->
-    <div id="thinkingPanel" x-show="processing || thinkingVisible" class="max-w-2xl" x-cloak>
+    <!-- Thinking Panel (reused each turn, then frozen on done) -->
+    <div id="thinkingPanel" x-show="processing" class="max-w-2xl" x-cloak>
       <div class="bg-surface-container-low/50 rounded-2xl border border-outline-variant/5 p-4">
         <button @click="thinkingCollapsed = !thinkingCollapsed" class="flex items-center gap-2 w-full text-left">
           <div class="intelligence-pulse" x-show="processing"></div>
@@ -53,25 +52,27 @@
           <span x-show="!processing" id="thinkingSummary" sse-swap="thinking-done" hx-swap="innerHTML" class="text-xs text-outline font-bold"></span>
           <span class="material-symbols-outlined text-xs transition-transform ml-auto text-outline" :class="thinkingCollapsed ? '' : 'rotate-180'">expand_more</span>
         </button>
-        <div x-show="!thinkingCollapsed" class="mt-3 space-y-2">
+        <div x-show="!thinkingCollapsed" class="mt-3">
           <div id="thinkingStepName" sse-swap="step-name" hx-swap="innerHTML" class="text-xs text-secondary font-bold"></div>
-          <div id="thinkingContent" sse-swap="step-content" hx-swap="beforeend" class="text-xs text-outline space-y-1"></div>
+          <div id="thinkingContent" sse-swap="step-content" hx-swap="beforeend" class="text-xs text-outline/70 leading-relaxed mt-1"></div>
         </div>
       </div>
     </div>
 
-    <!-- Token stream target -->
-    <div id="tokenTarget" sse-swap="token" hx-swap="beforeend" class="text-on-surface text-sm leading-relaxed max-w-2xl whitespace-pre-wrap"></div>
+    <!-- Token stream target (live tokens during generation) -->
+    <div id="tokenTarget" sse-swap="token" hx-swap="beforeend" class="text-on-surface text-sm leading-relaxed max-w-2xl whitespace-pre-wrap empty:hidden"></div>
 
-    <!-- Hidden thinking-start trigger -->
-    <div sse-swap="thinking-start" hx-swap="innerHTML" class="hidden"></div>
+    <!-- Hidden thinking-start trigger — clears prior turn's thinking content -->
+    <div sse-swap="thinking-start" hx-swap="innerHTML"
+         hx-on::after-swap="document.getElementById('thinkingStepName').innerHTML = ''; document.getElementById('thinkingContent').innerHTML = ''; document.getElementById('thinkingSummary').innerHTML = ''"
+         class="hidden"></div>
 
-    <!-- AI Messages -->
+    <!-- AI Messages (accumulator — frozen into flow on done) -->
     <div id="aiMessages" sse-swap="message" hx-swap="beforeend"
-         hx-on::after-swap="document.getElementById('tokenTarget').innerHTML = ''"
-         class="space-y-8"></div>
+         hx-on::after-swap="window.dispatchEvent(new CustomEvent('message-swapped'))"
+         class="space-y-6 empty:hidden"></div>
 
-    <!-- Done sentinel -->
+    <!-- Done sentinel — triggers turn freeze -->
     <div id="doneTarget" sse-swap="done" hx-swap="innerHTML"
          hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done'))" class="hidden"></div>
 
@@ -99,17 +100,18 @@
             hx-post="/chat/message"
             hx-encoding="multipart/form-data"
             hx-swap="none"
-            @submit="appendUserBubble(messageText, previewUrl, fileName); processing = true; thinkingVisible = true; thinkingCollapsed = false; messageText = ''; $nextTick(() => { $refs.messageInput.style.height = 'auto'; previewUrl = null; fileName = null; })">
+            @submit="submitForm()">
         <input type="file" name="receipt" accept="image/*" class="hidden"
                x-ref="fileInput"
                @change="handleFileSelect($event)">
-        <div class="flex items-end gap-3 bg-surface-container-lowest border border-outline-variant/30 rounded-[1.25rem] p-2 focus-within:border-secondary/50 transition-all shadow-2xl">
+        <div class="flex items-end gap-3 bg-surface-container-lowest border border-outline-variant/10 rounded-[1.25rem] p-2 transition-all shadow-2xl">
           <button type="button" @click="$refs.fileInput.click()"
                   class="p-3 rounded-xl hover:bg-surface-bright text-outline hover:text-secondary transition-colors">
             <span class="material-symbols-outlined">attach_file</span>
           </button>
           <textarea name="message" x-model="messageText" x-ref="messageInput"
-                    class="flex-1 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-outline/50 py-3 resize-none font-body text-sm"
+                    class="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none outline-none text-on-surface placeholder:text-outline/50 py-3 resize-none font-body text-sm"
+                    style="outline: none !important;"
                     placeholder="Type a message or drop files..." rows="1"
                     @keydown.enter.prevent="if (!$event.shiftKey) $el.form.requestSubmit()"></textarea>
           <button type="submit" :disabled="processing"
@@ -184,15 +186,29 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<style>
+  .ai-markdown table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.8125rem; }
+  .ai-markdown th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(222,229,255,0.15); color: var(--color-secondary, #62fae3); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ai-markdown td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(222,229,255,0.05); }
+  .ai-markdown tr:hover td { background: rgba(98,250,227,0.03); }
+  .ai-markdown p { margin: 0.5rem 0; }
+  .ai-markdown p:first-child { margin-top: 0; }
+  .ai-markdown p:last-child { margin-bottom: 0; }
+  .ai-markdown strong { color: var(--color-secondary, #62fae3); font-weight: 600; }
+  .ai-markdown code { background: rgba(222,229,255,0.08); padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.8125rem; }
+  .ai-markdown ul, .ai-markdown ol { margin: 0.5rem 0; padding-left: 1.5rem; }
+  .ai-markdown li { margin: 0.25rem 0; }
+</style>
 <script>
 function chatState() {
   return {
     processing: false,
     thinkingCollapsed: false,
-    thinkingVisible: false,
+    turnDone: false,
     previewUrl: null,
     fileName: null,
     messageText: '',
+
     handleFileSelect(event) {
       const file = event.target.files[0];
       if (file) {
@@ -200,6 +216,7 @@ function chatState() {
         this.fileName = file.name;
       }
     },
+
     handleDrop(event) {
       event.target.classList.remove('ring-2', 'ring-secondary/50');
       const file = event.dataTransfer.files[0];
@@ -211,6 +228,131 @@ function chatState() {
         this.fileName = file.name;
       }
     },
+
+    submitForm() {
+      // Capture current state before clearing
+      const text = this.messageText;
+      const imageUrl = this.previewUrl;
+      const imageName = this.fileName;
+
+      // Show user bubble immediately
+      this.appendUserBubble(text, imageUrl, imageName);
+
+      // Set processing state
+      this.processing = true;
+      this.thinkingCollapsed = false;
+
+      // Clear Alpine state immediately (visual only)
+      this.messageText = '';
+      this.previewUrl = null;
+      this.fileName = null;
+      this.$refs.messageInput.style.height = 'auto';
+
+      // Clear DOM file input AFTER HTMX has serialized the form.
+      // HTMX processes submit synchronously, so by the time setTimeout
+      // fires the form data has already been captured and sent.
+      setTimeout(() => {
+        this.$refs.fileInput.value = '';
+      }, 0);
+    },
+
+    onStreamDone() {
+      this.processing = false;
+      this.thinkingCollapsed = true;
+      this.turnDone = true;
+      // Defer freeze to allow HTMX to complete pending SSE swaps
+      setTimeout(() => this.freezeTurn(), 200);
+    },
+
+    freezeTurn() {
+      const thinkingPanel = document.getElementById('thinkingPanel');
+      const aiMessages = document.getElementById('aiMessages');
+      const tokenTarget = document.getElementById('tokenTarget');
+      const thinkingSummary = document.getElementById('thinkingSummary');
+      const thinkingContent = document.getElementById('thinkingContent');
+      const thinkingStepName = document.getElementById('thinkingStepName');
+
+      // 1. Freeze thinking panel as a static collapsed <details> element
+      const summaryText = thinkingSummary ? thinkingSummary.textContent.trim() : '';
+      const contentHtml = thinkingContent ? thinkingContent.innerHTML.trim() : '';
+      const stepNameHtml = thinkingStepName ? thinkingStepName.innerHTML.trim() : '';
+
+      if (summaryText || contentHtml) {
+        const frozen = document.createElement('div');
+        frozen.className = 'max-w-2xl';
+        frozen.innerHTML = `
+          <details class="bg-surface-container-low/50 rounded-2xl border border-outline-variant/5 p-4">
+            <summary class="flex items-center gap-2 cursor-pointer text-xs text-outline font-bold list-none [&::-webkit-details-marker]:hidden">
+              <span class="material-symbols-outlined text-xs text-outline" style="font-size: 14px;">neurology</span>
+              ${summaryText || 'Processing complete'}
+              <span class="material-symbols-outlined text-xs ml-auto text-outline">expand_more</span>
+            </summary>
+            <div class="mt-3">
+              ${stepNameHtml ? '<div class="text-xs text-secondary font-bold">' + stepNameHtml + '</div>' : ''}
+              <div class="text-xs text-outline/70 leading-relaxed mt-1">${contentHtml}</div>
+            </div>
+          </details>`;
+        thinkingPanel.insertAdjacentElement('beforebegin', frozen);
+      }
+
+      // 2. Move AI messages out of accumulator into flow (if arrived)
+      const moved = this.moveAiMessages();
+
+      // 3. Clear reusable elements for next turn
+      tokenTarget.innerHTML = '';
+      if (thinkingSummary) thinkingSummary.innerHTML = '';
+      if (thinkingContent) thinkingContent.innerHTML = '';
+      if (thinkingStepName) thinkingStepName.innerHTML = '';
+
+      // 4. Render markdown + scroll
+      this.renderMarkdownAndScroll();
+
+      // Only clear turnDone if we actually moved messages.
+      // If message SSE hasn't arrived yet, keep turnDone=true
+      // so onMessageSwapped() can do the move later.
+      if (moved) this.turnDone = false;
+    },
+
+    moveAiMessages() {
+      const thinkingPanel = document.getElementById('thinkingPanel');
+      const aiMessages = document.getElementById('aiMessages');
+      let moved = false;
+      // Use firstElementChild (not firstChild) to skip whitespace text nodes
+      // that HTMX SSE swap may insert — insertAdjacentElement requires Element
+      let el;
+      while (aiMessages && (el = aiMessages.firstElementChild)) {
+        thinkingPanel.insertAdjacentElement('beforebegin', el);
+        moved = true;
+      }
+      // Clear any remaining text nodes
+      if (moved) aiMessages.innerHTML = '';
+      return moved;
+    },
+
+    renderMarkdownAndScroll() {
+      document.querySelectorAll('.ai-markdown:not([data-rendered])').forEach(function(el) {
+        if (typeof marked !== 'undefined') {
+          el.innerHTML = marked.parse(el.textContent);
+          el.dataset.rendered = '1';
+        }
+      });
+      const chatHistory = document.getElementById('chatHistory');
+      if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;
+    },
+
+    onMessageSwapped() {
+      // Called from message SSE after-swap. Renders markdown immediately.
+      // If turn already finished (done fired before message arrived),
+      // also move elements into the chat flow now.
+      document.getElementById('tokenTarget').innerHTML = '';
+      this.renderMarkdownAndScroll();
+      if (this.turnDone) {
+        this.moveAiMessages();
+        this.renderMarkdownAndScroll();
+        this.turnDone = false;
+      }
+    },
+
     appendUserBubble(text, imageUrl, imageName) {
       const hasText = text && text.trim();
       const hasImage = imageUrl && imageName;
@@ -235,8 +377,8 @@ function chatState() {
           </div>
         </div>
       </div>`;
-      const target = document.getElementById('userMessages');
-      if (target) target.insertAdjacentHTML('beforeend', html);
+      const thinkingPanel = document.getElementById('thinkingPanel');
+      if (thinkingPanel) thinkingPanel.insertAdjacentHTML('beforebegin', html);
       const chatHistory = document.getElementById('chatHistory');
       if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;
     }
