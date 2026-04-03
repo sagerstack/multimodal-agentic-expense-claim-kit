@@ -94,11 +94,11 @@ Plans:
 4. The system prompt is under 100 lines (trimmed from 170) with no tool signature duplication
 5. All existing tests pass without regression
 
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] 06.1-01-PLAN.md — Model switch (env config + OpenRouter client), system prompt trim, remove QwQ-specific streaming logic (Type B reasoning, `<think>` tag stripping)
-- [ ] 06.1-02-PLAN.md — Summary panel fixes: post-submission state (100%, Claim ID header, SGD conversion, category, hide submit button)
+- [ ] 06.1-01-PLAN.md — Model switch (env config), system prompt trim (<100 lines), ClaimState expansion (claimNumber), intakeNode state propagation (extractedReceipt, currencyConversion, claimNumber)
+- [ ] 06.1-02-PLAN.md — Summary panel fixes: claimNumber in header, 100% on submit, conditional submit button, BUG-013 hallucination guard
 
 ---
 
@@ -176,16 +176,17 @@ Plans:
 ## Progress
 
 **Execution Order:**
-v2.0 phases execute in numeric order: 6 → 7 → 8 → 9 → 10
+v2.0 phases execute in numeric order: 6 → 7 → 6.1 → 8 → 9 → 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 6. FastAPI Scaffold + Static Shell | 3/3 | Complete (v2 redo) | 2026-04-02 |
-| 7. SSE Streaming + Full Chat Page | 0/3 | Not started | — |
+| 7. SSE Streaming + Full Chat Page | 3/3 | Complete | 2026-04-02 |
+| 6.1. Model Upgrade + UX Fixes | 0/2 | Not started | — |
 | 8. Dashboard + Audit Log Pages | 0/3 | Not started | — |
 | 9. Claim Review Page | 0/3 | Not started | — |
 | 10. Browser E2E Tests | 0/2 | Not started | — |
 
-**v2.0 total:** 3/14 plans complete
+**v2.0 total:** 6/16 plans complete
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)
