@@ -66,9 +66,9 @@ class Settings(BaseSettings):
     # Logging configuration
     log_level: str = Field(..., description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)")
     log_file_path: str = Field(..., description="File path for log output (empty string means no file handler)")
-    seq_url: str = Field(..., description="Seq dashboard URL for documentation/reference")
-    seq_password: str = Field(..., description="Seq admin password")
-    seq_ingestion_url: str = Field(..., description="Seq CLEF ingestion endpoint URL (Docker-internal, e.g. http://seq/api/events/raw)")
+    seq_url: str = Field(default="", description="Seq dashboard URL for documentation/reference")
+    seq_password: str = Field(default="", description="Seq admin password (empty = no auth)")
+    seq_ingestion_url: str = Field(default="", description="Seq CLEF ingestion endpoint URL (Docker-internal, e.g. http://seq/api/events/raw)")
 
     @property
     def postgres_dsn(self) -> str:

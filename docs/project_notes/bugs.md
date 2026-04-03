@@ -81,6 +81,29 @@ Bugs discovered during Phase 2.3 UAT testing. Resolved bugs documented for refer
 
 ## Open
 
+### BUG-013: LLM hallucinated claim submission — CLAIM-1523 never persisted
+- **Found**: Phase 7 UAT (browser + DB verification)
+- **Symptom**: Chat shows "Claim Reference: CLAIM-1523" with "successfully submitted" message, but `SELECT * FROM claims` shows only old CLAIM-001 from March 28. CLAIM-1523 does not exist in PostgreSQL.
+- **Root cause**: The LLM (QwQ-32B) skipped the `submitClaim` tool call and hallucinated the entire submission response. Logs confirm "Thought for 28s . 0 tools" — zero tool calls in the submission turn. MCP DB server logs show only health check GETs (406), no actual MCP tool calls. This is a known ReAct agent failure mode where the model generates a plausible tool-result response without invoking the tool.
+- **Severity**: **Critical** — data loss. User believes claim is submitted but nothing was persisted. No error shown.
+- **Contributing factors**:
+  - QwQ-32B's long reasoning chains may cause it to "conclude" the submission happened based on prior context
+  - System prompt says "Call submitClaim" but doesn't enforce verification
+  - No server-side validation that `submitClaim` was actually called before showing success
+- **Fix planned**: Phase 6.1 — multiple mitigations:
+  1. Switch to `qwen/qwen3-235b-a22b-2507` (better tool calling compliance, no reasoning drift)
+  2. Add post-turn validation: check `claimSubmitted` flag in graph state AND verify claim exists in DB before showing success
+  3. Add system prompt guardrail: "NEVER state a claim was submitted unless you received a claim number from the submitClaim tool response"
+  4. Consider: if final response mentions "submitted" but no `submitClaim` in thinkingEntries, inject an error message instead
+
+### BUG-012: Submission Summary panel not updating after claim submission
+- **Found**: Phase 7 UAT (browser)
+- **Symptom**: After successful claim submission (CLAIM-1523 confirmed in chat), the Submission Summary panel still shows: "Current Session" header, "USD 98.56" (unconverted), "50% Complete", category "--", "Submit Entire Batch" button still visible
+- **Root cause**: `_extractSummaryData` in `sseHelpers.py` reads `claimSubmitted` from graph state but the submission turn may not have `extractReceiptFields` in its `thinkingEntries` — the graph state fallback was added but `progressPct` only reaches 100% if `submitted=True` is detected, and the claim number is never propagated to the summary panel template. Additionally, "Current Session" header is hardcoded in `summary_panel.html`, and the "Submit Entire Batch" button has no conditional hide logic.
+- **Severity**: Medium — functional but misleading UX; user sees stale data after submission
+- **Fix planned**: Phase 6.1 — propagate claim number + submitted status to summary panel, replace "Current Session" with Claim ID after submission, show 100% + correct SGD amount + category, hide submit button
+- **Screenshot**: `qa/screenshots/` — submission summary shows 50% after CLAIM-1523 confirmed
+
 ### BUG-010: Post-submission agents produce no visible output
 - **Found**: Phase 2.3 UAT (analysis)
 - **Symptom**: After submitClaim, compliance/fraud/advisor nodes run but their messages are not rendered in Chainlit

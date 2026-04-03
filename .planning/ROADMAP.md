@@ -20,6 +20,7 @@ See MILESTONES.md for archived v1.0 details.
 
 - [x] **Phase 6: FastAPI Scaffold + Static Shell** — Replace Chainlit, all 4 pages served as static shells, lifespan singleton, session middleware
 - [x] **Phase 7: SSE Streaming + Full Chat Page** — SSE event taxonomy, streaming pipeline, V1 migration, complete Chat Page feature set
+- [ ] **Phase 6.1: Model Upgrade + UX Fixes** — Switch LLM from QwQ-32B to Qwen3-235B-A22B (fast MoE, no CoT chains), trim system prompt, fix submission summary panel (100% on submit, show Claim ID, correct amounts)
 - [ ] **Phase 8: Dashboard + Audit Log Pages** — Approver Dashboard (KPIs, claims table) and Audit & Transparency Log (decision timeline)
 - [ ] **Phase 9: Claim Review Page** — Escalated claim display, approve/reject actions, receipt zoom, claim navigation
 - [ ] **Phase 10: Browser E2E Tests** — Playwright test suite covering all 4 pages against a live server
@@ -75,6 +76,29 @@ Plans:
 - [x] 07-01-PLAN.md — SSE event taxonomy (`SseEvent` constants), `POST /chat/message` → `asyncio.Queue` → `GET /chat/stream` pipeline, `EventSourceResponse`, disconnect cleanup
 - [x] 07-02-PLAN.md — V1 migration: image upload endpoint (multipart Form + File), imageStore wiring, interrupt/resume via `graph.aget_state()`, QwQ-32B reasoning token pass-through
 - [x] 07-03-PLAN.md — Chat Page Jinja2 template completion: drag-and-drop upload with inline preview, thinking panel, confirm/edit buttons, submission summary panel, inline confidence scores, policy citation rendering
+
+---
+
+### Phase 6.1: Model Upgrade + UX Fixes
+
+**Goal:** The Chat Page responds in seconds instead of minutes by switching the LLM from QwQ-32B (reasoning model with uncontrollable 1-3min CoT chains) to Qwen3-235B-A22B-Instruct (fast MoE, 22B active params, no thinking mode), and the Submission Summary panel correctly reflects claim state after submission — showing 100% complete, the Claim ID, converted amounts, and category.
+
+**Depends on:** Phase 7
+
+**Requirements:** STRE-04, CHAT-05, MIGR-07
+
+**Success Criteria** (what must be TRUE when Phase 6.1 completes):
+1. A receipt upload + full claim submission flow completes in under 60 seconds total (all turns combined), down from 7+ minutes with QwQ-32B
+2. The thinking panel shows tool activity steps (names + summaries) without reasoning preview content — no empty or broken panels
+3. After `submitClaim` succeeds, the Submission Summary panel shows: 100% Complete, the claim number (CLAIM-XXX), the correct SGD amount, the expense category, and the "Submit Entire Batch" button is hidden
+4. The system prompt is under 100 lines (trimmed from 170) with no tool signature duplication
+5. All existing tests pass without regression
+
+**Plans:** 0 plans
+
+Plans:
+- [ ] 06.1-01-PLAN.md — Model switch (env config + OpenRouter client), system prompt trim, remove QwQ-specific streaming logic (Type B reasoning, `<think>` tag stripping)
+- [ ] 06.1-02-PLAN.md — Summary panel fixes: post-submission state (100%, Claim ID header, SGD conversion, category, hide submit button)
 
 ---
 
