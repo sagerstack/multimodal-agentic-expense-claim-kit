@@ -8,6 +8,8 @@ services:
     environment:
       POSTGRES_HOST: postgres
       QDRANT_HOST: qdrant
+      SEQ_INGESTION_URL: http://seq:80/api/events/raw
+      SEQ_PASSWORD: ${SEQ_PASSWORD:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -20,6 +22,8 @@ services:
       mcp-currency:
         condition: service_healthy
       mcp-email:
+        condition: service_healthy
+      seq:
         condition: service_healthy
     volumes:
       - ./src:/app/src

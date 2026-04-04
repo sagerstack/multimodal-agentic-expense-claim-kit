@@ -713,11 +713,17 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
 
                 if toolName in ("extractReceiptFields", "submitClaim"):
                     try:
-                        sessionTotal = sum(float(c.get("total_amount", 0) or 0) for c in tableClaims if c.get("total_amount") and c["total_amount"] != "--")
+                        renderClaims = tableClaims
+                        if toolName == "submitClaim":
+                            from agentic_claims.web.routers.chat import fetchClaimsForTable
+                            dbClaims = await fetchClaimsForTable()
+                            if dbClaims:
+                                renderClaims = dbClaims
+                        sessionTotal = sum(float(c.get("total_amount", 0) or 0) for c in renderClaims if c.get("total_amount") and str(c.get("total_amount")) != "--")
                         tableHtml = templates.get_template("partials/submission_table.html").render(
-                            claims=tableClaims,
+                            claims=renderClaims,
                             sessionTotal=f"SGD {sessionTotal:.2f}",
-                            itemCount=len(tableClaims),
+                            itemCount=len(renderClaims),
                         )
                         yield ServerSentEvent(raw_data=tableHtml, event=SseEvent.TABLE_UPDATE)
                     except Exception as e:

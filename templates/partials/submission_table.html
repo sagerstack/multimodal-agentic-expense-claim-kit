@@ -14,6 +14,7 @@
   <table class="w-full text-left border-separate border-spacing-y-2">
     <thead>
       <tr class="text-[10px] text-outline font-bold uppercase tracking-widest">
+        <th class="px-4 py-2">Claim</th>
         <th class="px-4 py-2">Merchant</th>
         <th class="px-4 py-2">Date</th>
         <th class="px-4 py-2">Amount</th>
@@ -23,7 +24,8 @@
     <tbody>
       {% for claim in claims %}
       <tr class="{% if claim.status == 'processing' %}bg-surface-container-highest border border-primary/20{% else %}bg-surface-container-highest/50 hover:bg-surface-bright transition-colors cursor-pointer group{% endif %}">
-        <td class="px-4 py-3 rounded-l-xl border-l border-t border-b border-outline-variant/10">
+        <td class="px-4 py-3 rounded-l-xl border-l border-t border-b border-outline-variant/10 text-xs text-on-surface-variant font-mono">{{ claim.claim_number or '--' }}</td>
+        <td class="px-4 py-3 border-t border-b border-outline-variant/10">
           <div class="flex items-center gap-3">
             {% if claim.status == 'processing' %}
             <span class="material-symbols-outlined text-primary-dim text-sm animate-pulse">receipt</span>
@@ -53,7 +55,7 @@
       {% endfor %}
       {% if not claims %}
       <tr>
-        <td colspan="4" class="px-4 py-8 text-center text-xs text-on-surface-variant/50">No claims yet. Upload a receipt to begin.</td>
+        <td colspan="5" class="px-4 py-8 text-center text-xs text-on-surface-variant/50">No claims yet. Upload a receipt to begin.</td>
       </tr>
       {% endif %}
     </tbody>
