@@ -20,7 +20,7 @@ See MILESTONES.md for archived v1.0 details.
 
 - [x] **Phase 6: FastAPI Scaffold + Static Shell** -- Replace Chainlit, all 4 pages served as static shells, lifespan singleton, session middleware
 - [x] **Phase 7: SSE Streaming + Full Chat Page** -- SSE event taxonomy, streaming pipeline, V1 migration, complete Chat Page feature set
-- [ ] **Phase 6.1: Model Upgrade + UX Fixes** -- Switch LLM from QwQ-32B to Qwen3-235B-A22B (fast MoE, no CoT chains), swap to v2 system prompt, fix submission summary panel (100% on submit, show Claim ID, correct amounts)
+- [x] **Phase 6.1: Model Upgrade + UX Fixes** -- Switch LLM from QwQ-32B to Qwen3-235B-A22B (fast MoE, no CoT chains), swap to v2 system prompt, fix submission summary panel (100% on submit, show Claim ID, correct amounts)
 - [ ] **Phase 8: Dashboard + Audit Log Pages** -- Approver Dashboard (KPIs, claims table) and Audit & Transparency Log (decision timeline)
 - [ ] **Phase 9: Claim Review Page** -- Escalated claim display, approve/reject actions, receipt zoom, claim navigation
 - [ ] **Phase 10: Browser E2E Tests** -- Playwright test suite covering all 4 pages against a live server
@@ -98,7 +98,7 @@ Plans:
 
 Plans:
 - [x] 06.1-01-PLAN.md -- Model switch (env config), v2 system prompt swap, ClaimState expansion (claimNumber), intakeNode state propagation, receipt image serving endpoint
-- [ ] 06.1-02-PLAN.md -- Summary panel fixes (claimNumber header, 100% on submit, receipt thumbnail, conditional button), BUG-013 guard, step-driven progressPct, thinking panel header live tool name + duration counter, unit tests
+- [x] 06.1-02-PLAN.md -- Summary panel fixes (claimNumber header, 100% on submit, receipt thumbnail, conditional button), BUG-013 guard, step-driven progressPct, thinking panel header live tool name + duration counter, unit tests
 
 ---
 
@@ -182,11 +182,11 @@ v2.0 phases execute in numeric order: 6 -> 7 -> 6.1 -> 8 -> 9 -> 10
 |-------|---------------|--------|-----------|
 | 6. FastAPI Scaffold + Static Shell | 3/3 | Complete (v2 redo) | 2026-04-02 |
 | 7. SSE Streaming + Full Chat Page | 3/3 | Complete | 2026-04-02 |
-| 6.1. Model Upgrade + UX Fixes | 1/2 | In progress | -- |
+| 6.1. Model Upgrade + UX Fixes | 2/2 | Complete | 2026-04-04 |
 | 8. Dashboard + Audit Log Pages | 0/3 | Not started | -- |
 | 9. Claim Review Page | 0/3 | Not started | -- |
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
 
-**v2.0 total:** 7/16 plans complete
+**v2.0 total:** 8/16 plans complete
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)
