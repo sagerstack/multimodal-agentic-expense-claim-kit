@@ -262,8 +262,10 @@ def _extractSummaryData(thinkingEntries: list, graphState: dict | None = None, c
         if isinstance(conversionData, dict) and not convertedAmount:
             convertedAmount = str(conversionData.get("convertedAmount", conversionData.get("amountSgd", "")))
 
-        if graphState.get("claimSubmitted"):
-            submitted = True
+    # Check graphState claimSubmitted regardless of hasReceiptData
+    # (prior turn may have submitted while current turn has new receipt data)
+    if graphState and graphState.get("claimSubmitted"):
+        submitted = True
 
     if not extractedClaimNumber and graphState:
         extractedClaimNumber = graphState.get("claimNumber", "") or ""
