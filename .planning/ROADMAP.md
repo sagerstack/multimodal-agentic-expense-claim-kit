@@ -85,11 +85,11 @@ Plans:
 
 **Depends on:** Phase 7
 
-**Requirements:** STRE-04, CHAT-05, MIGR-07
+**Requirements:** MIGR-07, CHAT-09
 
 **Success Criteria** (what must be TRUE when Phase 6.1 completes):
 1. A receipt upload + full claim submission flow completes in under 60 seconds total (all turns combined), down from 7+ minutes with QwQ-32B
-2. The thinking panel shows tool activity steps (names + summaries) without reasoning preview content -- no empty or broken panels
+2. The thinking panel header shows the active tool name with a live duration counter during processing; short reasoning snippets are visible when the model produces pre-tool reasoning text; no empty or broken panels
 3. After `submitClaim` succeeds, the Submission Summary panel shows: 100% Complete, the claim number (CLAIM-XXX), the correct SGD amount, the expense category, and the "Submit Entire Batch" button is hidden
 4. The v2 system prompt is active with tool-calling discipline, submission reality guardrails, and self-verification -- imported from `agentSystemPrompt_v2.py`
 5. All existing tests pass without regression; new unit tests cover BUG-013 guard and step-driven progressPct
@@ -97,7 +97,7 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 06.1-01-PLAN.md -- Model switch (env config), v2 system prompt swap, ClaimState expansion (claimNumber), intakeNode state propagation, receipt image serving endpoint
+- [x] 06.1-01-PLAN.md -- Model switch (env config), v2 system prompt swap, ClaimState expansion (claimNumber), intakeNode state propagation, receipt image serving endpoint
 - [ ] 06.1-02-PLAN.md -- Summary panel fixes (claimNumber header, 100% on submit, receipt thumbnail, conditional button), BUG-013 guard, step-driven progressPct, thinking panel header live tool name + duration counter, unit tests
 
 ---
@@ -182,11 +182,11 @@ v2.0 phases execute in numeric order: 6 -> 7 -> 6.1 -> 8 -> 9 -> 10
 |-------|---------------|--------|-----------|
 | 6. FastAPI Scaffold + Static Shell | 3/3 | Complete (v2 redo) | 2026-04-02 |
 | 7. SSE Streaming + Full Chat Page | 3/3 | Complete | 2026-04-02 |
-| 6.1. Model Upgrade + UX Fixes | 0/2 | Not started | -- |
+| 6.1. Model Upgrade + UX Fixes | 1/2 | In progress | -- |
 | 8. Dashboard + Audit Log Pages | 0/3 | Not started | -- |
 | 9. Claim Review Page | 0/3 | Not started | -- |
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
 
-**v2.0 total:** 6/16 plans complete
+**v2.0 total:** 7/16 plans complete
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)
