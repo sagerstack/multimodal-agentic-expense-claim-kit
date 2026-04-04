@@ -9,6 +9,7 @@ class SseEvent:
     THINKING_DONE = "thinking-done"
     MESSAGE = "message"
     SUMMARY_UPDATE = "summary-update"
+    PATHWAY_UPDATE = "pathway-update"
     DONE = "done"
     ERROR = "error"
     INTERRUPT = "interrupt"

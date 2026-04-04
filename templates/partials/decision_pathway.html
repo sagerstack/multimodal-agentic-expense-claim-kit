@@ -1,0 +1,70 @@
+<h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-secondary mb-10">Decision Pathway</h3>
+<div class="relative flex flex-col gap-10 pr-2">
+  <!-- Connection Line -->
+  <div class="absolute left-6 top-2 bottom-2 w-px bg-gradient-to-b from-secondary via-primary/50 to-outline-variant/20"></div>
+
+  {% for step in steps %}
+  <div class="flex gap-6 relative group">
+    <!-- Circle Icon -->
+    {% if step.status == 'completed' %}
+    <div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center z-10 border border-secondary/40 shadow-[0_0_15px_rgba(98,250,227,0.15)]">
+      <span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">task_alt</span>
+    </div>
+    {% elif step.status == 'in_progress' %}
+    <div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center z-10 border border-secondary/40 shadow-[0_0_15px_rgba(98,250,227,0.15)] relative">
+      <span class="material-symbols-outlined text-secondary">{{ step.icon }}</span>
+      <div class="absolute inset-0 bg-secondary/10 animate-pulse rounded-full"></div>
+    </div>
+    {% else %}
+    <div class="w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center z-10 border border-outline-variant/20">
+      <span class="material-symbols-outlined text-outline">{{ step.icon }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Content -->
+    <div class="flex-1">
+      <div class="flex items-center justify-between mb-1">
+        <h4 class="font-bold text-sm {% if step.status == 'pending' %}text-outline{% else %}text-on-surface{% endif %}">{{ step.name }}</h4>
+        <span class="text-[10px] font-mono {% if step.status == 'pending' %}text-outline/30{% else %}text-on-surface-variant{% endif %}">{{ step.timestamp or '--:--:-- --' }}</span>
+      </div>
+
+      {% if step.name == 'AI Extraction' and step.status == 'completed' and step.details %}
+      <!-- Confidence score panel -->
+      <div class="bg-surface-container-lowest/50 p-4 rounded-xl border border-outline-variant/10 mb-2">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] font-medium text-on-surface-variant">Confidence Score</span>
+          <span class="text-[10px] font-bold text-secondary">{{ step.details.confidence }}%</span>
+        </div>
+        <div class="h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+          <div class="h-full bg-secondary shadow-[0_0_8px_rgba(98,250,227,0.5)]" style="width: {{ step.details.confidence }}%"></div>
+        </div>
+        <p class="mt-3 text-[10px] text-on-surface-variant leading-relaxed">
+          <span class="text-on-surface">Extracted:</span> {{ step.details.amount }} |
+          <span class="text-on-surface">Merchant:</span> {{ step.details.merchant }} |
+          <span class="text-on-surface">Date:</span> {{ step.details.date }}
+        </p>
+      </div>
+      {% elif step.status == 'pending' %}
+      <div class="p-3 rounded-xl bg-outline-variant/5 border border-outline-variant/10 flex items-center gap-3 mb-2 opacity-50">
+        <span class="material-symbols-outlined text-outline text-sm">hourglass_empty</span>
+        <span class="text-[10px] font-medium text-outline">{{ step.waitingText or 'Awaiting previous step...' }}</span>
+      </div>
+      {% elif step.description %}
+      <p class="text-xs text-on-surface-variant mb-2">{{ step.description }}</p>
+      {% endif %}
+
+      <!-- Status Badge -->
+      {% if step.status == 'completed' %}
+      <span class="text-[10px] text-secondary font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-secondary/10">Completed</span>
+      {% elif step.status == 'in_progress' %}
+      <div class="flex items-center gap-2">
+        <div class="intelligence-pulse"></div>
+        <p class="text-[10px] text-secondary font-bold uppercase tracking-widest animate-pulse">In Progress</p>
+      </div>
+      {% else %}
+      <p class="text-[10px] text-outline/50 font-bold uppercase tracking-widest">Pending</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>

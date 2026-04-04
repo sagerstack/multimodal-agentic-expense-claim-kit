@@ -93,9 +93,10 @@ async def testChatPageRendersWithFileInput(chatApp):
 
 
 @pytest.mark.asyncio
-async def testChatPageRendersWithSummaryPanel(chatApp):
+async def testChatPageRendersWithDecisionPathway(chatApp):
     transport = ASGITransport(app=chatApp)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/")
-    assert "summaryContent" in response.text
-    assert 'sse-swap="summary-update"' in response.text
+    assert "pathwayContent" in response.text
+    assert 'sse-swap="pathway-update"' in response.text
+    assert "Decision Pathway" in response.text

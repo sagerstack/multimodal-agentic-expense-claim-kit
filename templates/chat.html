@@ -142,51 +142,12 @@
     </div>
   </div>
 </section>
-<!-- Right Side: Submission Summary Panel -->
-<section class="w-full lg:w-96 p-6 md:p-8 bg-surface-container-low space-y-8 overflow-y-auto hide-scrollbar">
-  <h2 class="font-headline text-lg font-bold text-on-surface tracking-tight">Submission Summary</h2>
-  <div id="summaryContent" sse-swap="summary-update" hx-swap="innerHTML">
-    <!-- Current Progress Bento -->
-    <div class="grid grid-cols-2 gap-4">
-      <div class="col-span-2 bg-surface-container-highest p-5 rounded-2xl border-t border-outline-variant/10 shadow-lg">
-        <span class="text-[10px] text-secondary font-bold uppercase tracking-widest block mb-4">Current Session</span>
-        <div class="flex items-end justify-between">
-          <div>
-            <p id="sessionTotal" class="text-3xl font-headline font-extrabold text-on-surface">$0.00</p>
-            <p id="sessionItemCount" class="text-xs text-outline">0 items pending</p>
-          </div>
-          <div class="text-right">
-            <div class="h-1.5 w-24 bg-surface-bright rounded-full overflow-hidden">
-              <div id="sessionProgress" class="h-full bg-secondary w-0"></div>
-            </div>
-            <p class="text-[10px] text-secondary font-bold mt-2">0% Complete</p>
-          </div>
-        </div>
-      </div>
-      <!-- Small Info Cards -->
-      <div class="bg-surface-container-highest p-4 rounded-2xl border-t border-outline-variant/10">
-        <span class="material-symbols-outlined text-primary text-sm mb-2">category</span>
-        <p class="text-xs text-outline mb-1">Top Category</p>
-        <p class="text-sm font-bold">--</p>
-      </div>
-      <div class="bg-surface-container-highest p-4 rounded-2xl border-t border-outline-variant/10">
-        <span class="material-symbols-outlined text-tertiary text-sm mb-2">warning</span>
-        <p class="text-xs text-outline mb-1">Warnings</p>
-        <p class="text-sm font-bold">0 Flags</p>
-      </div>
-    </div>
-    <!-- Batch Details -->
-    <div class="space-y-4 mt-8">
-      <h3 class="text-[10px] text-outline font-bold uppercase tracking-widest">Batch Details</h3>
-      <div id="batchItems" class="space-y-4">
-        <p class="text-xs text-on-surface-variant/50 text-center py-8">No items yet. Upload a receipt to begin.</p>
-      </div>
-    </div>
-    <button class="w-full py-4 mt-8 rounded-2xl bg-gradient-to-r from-primary to-primary-dim text-on-primary font-bold text-sm transition-all hover:shadow-[0_10px_30px_rgba(204,151,255,0.3)] active:scale-95 opacity-50 cursor-not-allowed" disabled>
-      Submit Entire Batch
-    </button>
+<!-- Right Side: Decision Pathway -->
+<aside class="hidden xl:flex w-[420px] flex-col p-8 bg-surface-container-low shrink-0 overflow-y-auto hide-scrollbar">
+  <div id="pathwayContent" sse-swap="pathway-update" hx-swap="innerHTML">
+    {% include "partials/decision_pathway.html" %}
   </div>
-</section>
+</aside>
 </div>
 </div>
 {% endblock %}

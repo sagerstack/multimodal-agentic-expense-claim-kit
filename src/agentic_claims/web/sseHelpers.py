@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import time
+from datetime import datetime
 
 from fastapi.sse import ServerSentEvent
 from langchain_core.messages import HumanMessage
@@ -126,6 +127,98 @@ def _summarizeToolOutput(toolName: str, toolOutput) -> str:
 
     except Exception:
         return f"Completed {toolName}"
+
+
+TOOL_TO_STEP = {
+    "extractReceiptFields": 1,
+    "searchPolicies": 2,
+    "submitClaim": 3,
+}
+
+PATHWAY_WAITING_TEXT = {
+    0: "",
+    1: "Awaiting receipt upload...",
+    2: "Awaiting extraction data...",
+    3: "Awaiting policy check...",
+}
+
+
+def _nowTimestamp() -> str:
+    return datetime.now().strftime("%I:%M:%S %p")
+
+
+def _buildPathwaySteps(
+    completedTools: set,
+    activeTools: set,
+    hasImage: bool,
+    toolTimestamps: dict,
+    extractionDetails: dict | None = None,
+) -> list:
+    """Build the 4 Decision Pathway steps from current tool state."""
+    steps = [
+        {"name": "Receipt Uploaded", "icon": "cloud_upload", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": ""},
+        {"name": "AI Extraction", "icon": "troubleshoot", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": PATHWAY_WAITING_TEXT[1]},
+        {"name": "Policy Check", "icon": "rule", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": PATHWAY_WAITING_TEXT[2]},
+        {"name": "Final Decision", "icon": "verified", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": PATHWAY_WAITING_TEXT[3]},
+    ]
+
+    # Step 0: Receipt Uploaded
+    if hasImage:
+        steps[0]["status"] = "completed"
+        steps[0]["timestamp"] = toolTimestamps.get("receiptUploaded", _nowTimestamp())
+
+    # Steps 1-3: tool-driven
+    for toolName, stepIdx in TOOL_TO_STEP.items():
+        if toolName in completedTools:
+            steps[stepIdx]["status"] = "completed"
+            steps[stepIdx]["timestamp"] = toolTimestamps.get(toolName)
+            if toolName == "extractReceiptFields" and extractionDetails:
+                steps[stepIdx]["details"] = extractionDetails
+            if toolName == "submitClaim":
+                steps[stepIdx]["description"] = "Claim submitted successfully"
+        elif toolName in activeTools:
+            steps[stepIdx]["status"] = "in_progress"
+            steps[stepIdx]["timestamp"] = toolTimestamps.get(toolName)
+
+    return steps
+
+
+def _extractExtractionDetails(toolOutput) -> dict | None:
+    """Parse extractReceiptFields output into pathway display details."""
+    try:
+        if isinstance(toolOutput, str):
+            data = json.loads(toolOutput)
+        elif hasattr(toolOutput, "content"):
+            data = json.loads(toolOutput.content) if isinstance(toolOutput.content, str) else toolOutput.content
+        else:
+            data = toolOutput
+
+        if not isinstance(data, dict):
+            return None
+
+        fields = data.get("fields", {})
+        confidence = data.get("confidence", data.get("confidenceScores", {}))
+
+        if isinstance(confidence, dict) and confidence:
+            scores = [float(v) for v in confidence.values() if isinstance(v, (int, float))]
+            avgConfidence = round((sum(scores) / len(scores)) * 100 if scores and all(s <= 1 for s in scores) else sum(scores) / len(scores) if scores else 0, 1)
+        elif isinstance(confidence, (int, float)):
+            avgConfidence = round(confidence * 100 if confidence <= 1 else confidence, 1)
+        else:
+            avgConfidence = 0
+
+        currency = fields.get("currency", "")
+        totalAmount = fields.get("totalAmount", "")
+        amountStr = f"{currency} {totalAmount}" if currency else str(totalAmount)
+
+        return {
+            "confidence": avgConfidence,
+            "merchant": fields.get("merchant", "Unknown"),
+            "amount": amountStr,
+            "date": fields.get("date", "Unknown"),
+        }
+    except Exception:
+        return None
 
 
 async def _getFallbackMessage(graph, config: dict) -> str:
@@ -418,7 +511,25 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     toolStartTimes = {}
     turnStart = time.time()
 
+    # Decision Pathway state
+    pathwayActiveTools: set = set()
+    pathwayCompletedTools: set = set()
+    pathwayToolTimestamps: dict = {}
+    pathwayExtractionDetails: dict | None = None
+    hasImage = graphInput.get("hasImage", False)
+
+    if hasImage:
+        pathwayToolTimestamps["receiptUploaded"] = _nowTimestamp()
+
     yield ServerSentEvent(raw_data="<!-- thinking -->", event=SseEvent.THINKING_START)
+
+    # Initial pathway state
+    try:
+        initialSteps = _buildPathwaySteps(pathwayCompletedTools, pathwayActiveTools, hasImage, pathwayToolTimestamps)
+        pathwayHtml = templates.get_template("partials/decision_pathway.html").render(steps=initialSteps)
+        yield ServerSentEvent(raw_data=pathwayHtml, event=SseEvent.PATHWAY_UPDATE)
+    except Exception as e:
+        logger.error(f"Error rendering initial pathway: {e}", exc_info=True)
 
     threadId = graphInput["threadId"]
     config = {"configurable": {"thread_id": threadId}}
@@ -537,6 +648,17 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 label = TOOL_LABELS.get(toolName, f"Running {toolName}...")
                 yield ServerSentEvent(raw_data=label, event=SseEvent.STEP_NAME)
 
+                # Pathway: mark tool as in_progress
+                if toolName in TOOL_TO_STEP:
+                    pathwayActiveTools.add(toolName)
+                    pathwayToolTimestamps[toolName] = _nowTimestamp()
+                    try:
+                        steps = _buildPathwaySteps(pathwayCompletedTools, pathwayActiveTools, hasImage, pathwayToolTimestamps, pathwayExtractionDetails)
+                        pathwayHtml = templates.get_template("partials/decision_pathway.html").render(steps=steps)
+                        yield ServerSentEvent(raw_data=pathwayHtml, event=SseEvent.PATHWAY_UPDATE)
+                    except Exception as e:
+                        logger.error(f"Error rendering pathway on tool start: {e}", exc_info=True)
+
             elif eventKind == "on_tool_end":
                 toolName = event.get("name", "unknown")
                 toolOutput = event.get("data", {}).get("output", "")
@@ -556,6 +678,20 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     raw_data=f'<div class="text-xs text-outline mt-1">{summary}</div>',
                     event=SseEvent.STEP_CONTENT,
                 )
+
+                # Pathway: mark tool as completed
+                if toolName in TOOL_TO_STEP:
+                    pathwayActiveTools.discard(toolName)
+                    pathwayCompletedTools.add(toolName)
+                    pathwayToolTimestamps[toolName] = _nowTimestamp()
+                    if toolName == "extractReceiptFields":
+                        pathwayExtractionDetails = _extractExtractionDetails(toolOutput)
+                    try:
+                        steps = _buildPathwaySteps(pathwayCompletedTools, pathwayActiveTools, hasImage, pathwayToolTimestamps, pathwayExtractionDetails)
+                        pathwayHtml = templates.get_template("partials/decision_pathway.html").render(steps=steps)
+                        yield ServerSentEvent(raw_data=pathwayHtml, event=SseEvent.PATHWAY_UPDATE)
+                    except Exception as e:
+                        logger.error(f"Error rendering pathway on tool end: {e}", exc_info=True)
 
     except Exception as e:
         logger.error(f"Error during graph streaming: {e}", exc_info=True)

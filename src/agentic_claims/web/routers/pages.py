@@ -33,6 +33,12 @@ async def chatPage(request: Request):
     request.session.pop("awaiting_clarification", None)
 
     sessionIds = getSessionIds(request)
+    initialSteps = [
+        {"name": "Receipt Uploaded", "icon": "cloud_upload", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": ""},
+        {"name": "AI Extraction", "icon": "troubleshoot", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": "Awaiting receipt upload..."},
+        {"name": "Policy Check", "icon": "rule", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": "Awaiting extraction data..."},
+        {"name": "Final Decision", "icon": "verified", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": "Awaiting policy check..."},
+    ]
     return templates.TemplateResponse(
         request,
         "chat.html",
@@ -40,6 +46,7 @@ async def chatPage(request: Request):
             "activePage": "chat",
             "threadId": sessionIds["threadId"],
             "claimId": sessionIds["claimId"],
+            "steps": initialSteps,
         },
     )
 
