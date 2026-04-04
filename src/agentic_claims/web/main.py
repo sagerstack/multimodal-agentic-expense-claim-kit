@@ -10,10 +10,10 @@ from starlette.staticfiles import StaticFiles
 
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.graph import getCompiledGraph
+from agentic_claims.core.logging import setupLogging
 from agentic_claims.web.routers.chat import router as chatRouter
 from agentic_claims.web.routers.pages import router as pagesRouter
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -41,6 +41,7 @@ projectRoot = _findProjectRoot()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize graph and checkpointer once at startup (singleton pattern)."""
+    setupLogging()
     graph, pool = await getCompiledGraph()
     app.state.graph = graph
     app.state.pool = pool
