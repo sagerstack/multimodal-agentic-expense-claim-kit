@@ -148,13 +148,13 @@ async def testSubmitClaimCallsInsertClaimAndInsertReceipt():
 
         claimData = {
             "claimNumber": "CLM-001",
-            "employeeId": "EMP-001",
+            "claimantId": "EMP-001",
             "status": "pending",
             "totalAmount": 100.0,
             "currency": "SGD",
         }
         receiptData = {
-            "number": "REC-001",
+            "receiptNumber": "REC-001",
             "merchant": "Test Merchant",
             "date": "2026-03-25",
             "totalAmount": 100.0,
@@ -183,7 +183,7 @@ async def testSubmitClaimCallsInsertClaimAndInsertReceipt():
         assert arguments["claimNumber"] == "CLM-001"
         assert arguments["employeeId"] == "EMP-001"
         assert arguments["receiptNumber"] == "REC-001"
-        assert arguments["receiptMerchant"] == "Test Merchant"
+        assert arguments["merchant"] == "Test Merchant"
         assert arguments["intakeFindings"] == intakeFindings
 
 
