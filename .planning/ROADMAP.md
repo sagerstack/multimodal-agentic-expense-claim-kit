@@ -118,11 +118,13 @@ Plans:
 4. A user providing any format of employee ID (EMP-042, 1010736, or any alphanumeric string) has it correctly captured and persisted to the database -- the ID is extracted server-side from the user message, not by the LLM
 5. All existing tests pass without regression; new unit tests cover the employee ID extraction logic
 
-**Plans:** TBD
+**Plans:** 4 plans
 
 Plans:
-- [ ] 06.2-01-PLAN.md -- TBD
-- [ ] 06.2-02-PLAN.md -- TBD
+- [ ] 06.2-01-PLAN.md -- TDD: Employee ID server-side extraction module + wire into chat flow and submitClaim pipeline, remove EMP-001 from system prompt
+- [ ] 06.2-02-PLAN.md -- Decision Pathway sidebar: partial template with 4 steps, SSE pathway-update events, replace right-panel summary
+- [ ] 06.2-03-PLAN.md -- Bottom Submission Table: horizontal claims table from DB, session total card, SSE real-time row updates
+- [ ] 06.2-04-PLAN.md -- Branding refresh (Expense AI logo, sidebar nav reduction) + message bubble styling (Analysis Complete badge, timestamps, quick-reply buttons)
 
 ---
 
@@ -207,11 +209,11 @@ v2.0 phases execute in numeric order: 6 -> 7 -> 6.1 -> 6.2 -> 8 -> 9 -> 10
 | 6. FastAPI Scaffold + Static Shell | 3/3 | Complete (v2 redo) | 2026-04-02 |
 | 7. SSE Streaming + Full Chat Page | 3/3 | Complete | 2026-04-02 |
 | 6.1. Model Upgrade + UX Fixes | 2/2 | Complete | 2026-04-04 |
-| 6.2. Chat UI Refresh + Employee ID Fix | 0/2 | Not started | -- |
+| 6.2. Chat UI Refresh + Employee ID Fix | 0/4 | Not started | -- |
 | 8. Dashboard + Audit Log Pages | 0/3 | Not started | -- |
 | 9. Claim Review Page | 0/3 | Not started | -- |
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
 
-**v2.0 total:** 8/18 plans complete
+**v2.0 total:** 8/20 plans complete
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)
