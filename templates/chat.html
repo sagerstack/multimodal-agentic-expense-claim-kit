@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}AI Expense Submission{% endblock %}
 {% block content %}
-<div x-data="chatState()" @stream-done.window="onStreamDone()" @message-swapped.window="onMessageSwapped()" class="flex flex-col lg:flex-row h-full overflow-hidden">
+<div x-data="chatState()" @stream-done.window="onStreamDone()" @message-swapped.window="onMessageSwapped()" @tool-step.window="onStepName($event.detail)" class="flex flex-col lg:flex-row h-full overflow-hidden">
 <div id="sseContainer" hx-ext="sse" sse-connect="/chat/stream" class="flex flex-col lg:flex-row flex-1 overflow-hidden">
 <!-- Chat Interface Section -->
 <section class="flex-1 flex flex-col h-full relative border-r border-outline-variant/10">
@@ -48,12 +48,17 @@
       <div class="bg-surface-container-low/50 rounded-2xl border border-outline-variant/5 p-4">
         <button @click="thinkingCollapsed = !thinkingCollapsed" class="flex items-center gap-2 w-full text-left">
           <div class="intelligence-pulse" x-show="processing"></div>
-          <span x-show="processing" class="text-xs text-secondary font-bold">Analyzing...</span>
+          <span x-show="processing" class="text-xs text-secondary font-bold">
+            <span x-text="activeToolName"></span>
+            <span x-show="toolDuration > 0" class="text-outline/70" x-text="'(' + toolDuration + 's)'"></span>
+          </span>
           <span x-show="!processing" id="thinkingSummary" sse-swap="thinking-done" hx-swap="innerHTML" class="text-xs text-outline font-bold"></span>
           <span class="material-symbols-outlined text-xs transition-transform ml-auto text-outline" :class="thinkingCollapsed ? '' : 'rotate-180'">expand_more</span>
         </button>
         <div x-show="!thinkingCollapsed" class="mt-3">
-          <div id="thinkingStepName" sse-swap="step-name" hx-swap="innerHTML" class="text-xs text-secondary font-bold"></div>
+          <div id="thinkingStepName" sse-swap="step-name" hx-swap="innerHTML"
+               hx-on::after-swap="window.dispatchEvent(new CustomEvent('tool-step', {detail: this.textContent}))"
+               class="text-xs text-secondary font-bold"></div>
           <div id="thinkingContent" sse-swap="step-content" hx-swap="beforeend" class="text-xs text-outline/70 leading-relaxed mt-1"></div>
         </div>
       </div>
@@ -208,6 +213,9 @@ function chatState() {
     previewUrl: null,
     fileName: null,
     messageText: '',
+    activeToolName: 'Analyzing...',
+    toolDuration: 0,
+    toolTimer: null,
 
     handleFileSelect(event) {
       const file = event.target.files[0];
@@ -256,10 +264,20 @@ function chatState() {
       }, 0);
     },
 
+    onStepName(label) {
+      this.activeToolName = label;
+      this.toolDuration = 0;
+      if (this.toolTimer) clearInterval(this.toolTimer);
+      this.toolTimer = setInterval(() => { this.toolDuration++; }, 1000);
+    },
+
     onStreamDone() {
       this.processing = false;
       this.thinkingCollapsed = true;
       this.turnDone = true;
+      if (this.toolTimer) { clearInterval(this.toolTimer); this.toolTimer = null; }
+      this.activeToolName = 'Analyzing...';
+      this.toolDuration = 0;
       // Defer freeze to allow HTMX to complete pending SSE swaps
       setTimeout(() => this.freezeTurn(), 200);
     },
