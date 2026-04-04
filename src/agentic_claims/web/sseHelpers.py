@@ -518,6 +518,9 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     pathwayExtractionDetails: dict | None = None
     hasImage = graphInput.get("hasImage", False)
 
+    # Submission table state (in-memory claims accumulated during the turn)
+    tableClaims: list[dict] = []
+
     if hasImage:
         pathwayToolTimestamps["receiptUploaded"] = _nowTimestamp()
 
@@ -692,6 +695,33 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         yield ServerSentEvent(raw_data=pathwayHtml, event=SseEvent.PATHWAY_UPDATE)
                     except Exception as e:
                         logger.error(f"Error rendering pathway on tool end: {e}", exc_info=True)
+
+                # Table: add/update row after extraction or submission
+                if toolName == "extractReceiptFields":
+                    details = _extractExtractionDetails(toolOutput)
+                    if details:
+                        tableClaims.append({
+                            "merchant": details.get("merchant", "Processing..."),
+                            "receipt_date": details.get("date", "--"),
+                            "total_amount": details.get("amount", "--").replace("SGD ", "").replace("USD ", ""),
+                            "currency": "SGD",
+                            "status": "processing",
+                        })
+                elif toolName == "submitClaim":
+                    if tableClaims:
+                        tableClaims[-1]["status"] = "submitted"
+
+                if toolName in ("extractReceiptFields", "submitClaim"):
+                    try:
+                        sessionTotal = sum(float(c.get("total_amount", 0) or 0) for c in tableClaims if c.get("total_amount") and c["total_amount"] != "--")
+                        tableHtml = templates.get_template("partials/submission_table.html").render(
+                            claims=tableClaims,
+                            sessionTotal=f"SGD {sessionTotal:.2f}",
+                            itemCount=len(tableClaims),
+                        )
+                        yield ServerSentEvent(raw_data=tableHtml, event=SseEvent.TABLE_UPDATE)
+                    except Exception as e:
+                        logger.error(f"Error rendering table on tool end: {e}", exc_info=True)
 
     except Exception as e:
         logger.error(f"Error during graph streaming: {e}", exc_info=True)

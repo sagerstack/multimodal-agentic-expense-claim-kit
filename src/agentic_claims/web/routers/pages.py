@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from starlette.requests import Request
 
 from agentic_claims.core.imageStore import clearImage
+from agentic_claims.web.routers.chat import fetchClaimsForTable
 from agentic_claims.web.session import getSessionIds
 from agentic_claims.web.sessionQueues import removeQueue
 from agentic_claims.web.templating import templates
@@ -39,6 +40,10 @@ async def chatPage(request: Request):
         {"name": "Policy Check", "icon": "rule", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": "Awaiting extraction data..."},
         {"name": "Final Decision", "icon": "verified", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": "Awaiting policy check..."},
     ]
+
+    claims = await fetchClaimsForTable()
+    sessionTotal = sum(float(c.get("total_amount", 0) or 0) for c in claims)
+
     return templates.TemplateResponse(
         request,
         "chat.html",
@@ -47,6 +52,9 @@ async def chatPage(request: Request):
             "threadId": sessionIds["threadId"],
             "claimId": sessionIds["claimId"],
             "steps": initialSteps,
+            "claims": claims,
+            "sessionTotal": f"SGD {sessionTotal:.2f}",
+            "itemCount": len(claims),
         },
     )
 

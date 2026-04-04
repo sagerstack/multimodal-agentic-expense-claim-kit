@@ -1,0 +1,61 @@
+<!-- Session total card -->
+<div class="w-full lg:w-1/4">
+  <div class="bg-surface-container-highest p-5 rounded-2xl border-t border-outline-variant/10 shadow-lg flex items-center justify-between gap-4">
+    <div>
+      <span class="text-[10px] text-secondary font-bold uppercase tracking-widest block mb-1">Current Session</span>
+      <p class="text-3xl font-headline font-extrabold text-on-surface">{{ sessionTotal }}</p>
+      <p class="text-[10px] text-outline">{{ itemCount }} item{{ 's' if itemCount != 1 else '' }}</p>
+    </div>
+  </div>
+</div>
+
+<!-- Claims table -->
+<div class="flex-1 w-full overflow-x-auto hide-scrollbar">
+  <table class="w-full text-left border-separate border-spacing-y-2">
+    <thead>
+      <tr class="text-[10px] text-outline font-bold uppercase tracking-widest">
+        <th class="px-4 py-2">Merchant</th>
+        <th class="px-4 py-2">Date</th>
+        <th class="px-4 py-2">Amount</th>
+        <th class="px-4 py-2">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for claim in claims %}
+      <tr class="{% if claim.status == 'processing' %}bg-surface-container-highest border border-primary/20{% else %}bg-surface-container-highest/50 hover:bg-surface-bright transition-colors cursor-pointer group{% endif %}">
+        <td class="px-4 py-3 rounded-l-xl border-l border-t border-b border-outline-variant/10">
+          <div class="flex items-center gap-3">
+            {% if claim.status == 'processing' %}
+            <span class="material-symbols-outlined text-primary-dim text-sm animate-pulse">receipt</span>
+            <span class="text-sm font-bold italic">{{ claim.merchant or 'Processing...' }}</span>
+            {% else %}
+            <span class="material-symbols-outlined text-secondary text-sm">receipt_long</span>
+            <span class="text-sm font-bold">{{ claim.merchant or 'Unknown' }}</span>
+            {% endif %}
+          </div>
+        </td>
+        <td class="px-4 py-3 text-sm text-on-surface-variant border-t border-b border-outline-variant/10">{{ claim.receipt_date or '--' }}</td>
+        <td class="px-4 py-3 text-sm font-bold border-t border-b border-outline-variant/10">{{ claim.currency or 'SGD' }} {{ claim.total_amount or '--' }}</td>
+        <td class="px-4 py-3 rounded-r-xl border-r border-t border-b border-outline-variant/10">
+          {% if claim.status == 'processing' %}
+            <div class="intelligence-pulse"></div>
+          {% elif claim.status == 'pending' %}
+            <span class="text-[10px] text-secondary font-bold px-2 py-0.5 rounded bg-secondary/10">PENDING</span>
+          {% elif claim.status == 'submitted' %}
+            <span class="text-[10px] text-secondary font-bold px-2 py-0.5 rounded bg-secondary/10">SUBMITTED</span>
+          {% elif claim.status == 'approved' %}
+            <span class="text-[10px] text-secondary font-bold px-2 py-0.5 rounded bg-secondary/10">APPROVED</span>
+          {% else %}
+            <span class="text-[10px] text-outline font-bold px-2 py-0.5 rounded bg-outline-variant/10">{{ (claim.status or 'UNKNOWN')|upper }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      {% if not claims %}
+      <tr>
+        <td colspan="4" class="px-4 py-8 text-center text-xs text-on-surface-variant/50">No claims yet. Upload a receipt to begin.</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>

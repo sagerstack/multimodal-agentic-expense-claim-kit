@@ -10,6 +10,8 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from starlette.requests import Request
 from starlette.responses import Response
 
+from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
+from agentic_claims.core.config import getSettings
 from agentic_claims.core.imageStore import clearImage, getImage, storeImage
 from agentic_claims.web.employeeIdContext import employeeIdVar
 from agentic_claims.web.employeeIdExtractor import extractEmployeeId
@@ -122,3 +124,31 @@ async def resetChat(request: Request):
     request.session.pop("employee_id", None)
 
     return Response(status_code=204, headers={"HX-Redirect": "/"})
+
+
+async def fetchClaimsForTable() -> list[dict]:
+    """Fetch recent claims with receipt data from DB via MCP for the submission table."""
+    try:
+        settings = getSettings()
+        result = await mcpCallTool(
+            serverUrl=settings.db_mcp_url,
+            toolName="executeQuery",
+            arguments={
+                "query": (
+                    "SELECT c.id, c.claim_number, c.employee_id, c.status, "
+                    "c.total_amount, c.currency, c.created_at, "
+                    "r.merchant, r.date as receipt_date "
+                    "FROM claims c LEFT JOIN receipts r ON r.claim_id = c.id "
+                    "ORDER BY c.created_at DESC LIMIT 50"
+                )
+            },
+        )
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and "error" in result:
+            logger.warning("fetchClaimsForTable DB error: %s", result["error"])
+            return []
+        return []
+    except Exception as e:
+        logger.warning("fetchClaimsForTable failed: %s", e)
+        return []

@@ -10,6 +10,7 @@ class SseEvent:
     MESSAGE = "message"
     SUMMARY_UPDATE = "summary-update"
     PATHWAY_UPDATE = "pathway-update"
+    TABLE_UPDATE = "table-update"
     DONE = "done"
     ERROR = "error"
     INTERRUPT = "interrupt"
