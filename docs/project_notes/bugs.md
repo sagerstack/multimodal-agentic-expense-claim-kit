@@ -81,28 +81,42 @@ Bugs discovered during Phase 2.3 UAT testing. Resolved bugs documented for refer
 
 ## Open
 
-### BUG-013: LLM hallucinated claim submission — CLAIM-1523 never persisted
-- **Found**: Phase 7 UAT (browser + DB verification)
-- **Symptom**: Chat shows "Claim Reference: CLAIM-1523" with "successfully submitted" message, but `SELECT * FROM claims` shows only old CLAIM-001 from March 28. CLAIM-1523 does not exist in PostgreSQL.
-- **Root cause**: The LLM (QwQ-32B) skipped the `submitClaim` tool call and hallucinated the entire submission response. Logs confirm "Thought for 28s . 0 tools" — zero tool calls in the submission turn. MCP DB server logs show only health check GETs (406), no actual MCP tool calls. This is a known ReAct agent failure mode where the model generates a plausible tool-result response without invoking the tool.
-- **Severity**: **Critical** — data loss. User believes claim is submitted but nothing was persisted. No error shown.
-- **Contributing factors**:
-  - QwQ-32B's long reasoning chains may cause it to "conclude" the submission happened based on prior context
-  - System prompt says "Call submitClaim" but doesn't enforce verification
-  - No server-side validation that `submitClaim` was actually called before showing success
-- **Fix planned**: Phase 6.1 — multiple mitigations:
-  1. Switch to `qwen/qwen3-235b-a22b-2507` (better tool calling compliance, no reasoning drift)
-  2. Add post-turn validation: check `claimSubmitted` flag in graph state AND verify claim exists in DB before showing success
-  3. Add system prompt guardrail: "NEVER state a claim was submitted unless you received a claim number from the submitClaim tool response"
-  4. Consider: if final response mentions "submitted" but no `submitClaim` in thinkingEntries, inject an error message instead
+### BUG-014: Summary panel category shows "--" instead of extracted category
+- **Found**: Phase 6.1 UAT (browser, QA cycle 4 for Plan 01 and cycle 1 for Plan 02)
+- **Symptom**: Chat response correctly identifies "Meal" as the category, but summary panel shows "--" in both Top Category widget and Batch Details
+- **Root cause**: `_extractSummaryData` in `sseHelpers.py` parses category from thinkingEntries tool output, but the field name/path from the model's extractReceiptFields response doesn't match the expected key. The extraction result includes category but the summary data pipeline doesn't map it through.
+- **Severity**: Low — cosmetic, all other summary panel fields populate correctly
+- **Fix planned**: Phase 6.2 — trace the category field from extractReceiptFields tool result through thinkingEntries to `_extractSummaryData` and fix the key mapping
 
-### BUG-012: Submission Summary panel not updating after claim submission
+### BUG-015: Model uses prompt example employee ID instead of user-provided value
+- **Found**: Phase 6.1 UAT (browser, QA cycles 3 and 4)
+- **Symptom**: User provides "EMP-042" but claim summary and DB show "EMP-001". The model uses the example employee ID from the v2 system prompt instead of the actual value from the user's message.
+- **Root cause**: Prompt-following issue with Qwen3-235B-A22B. Despite replacing all example values with placeholders and adding "Use the actual employee ID the user provided, not an example value", the model occasionally ignores the user-provided ID. Works on retry (Turn 3 if user repeats it).
+- **Severity**: Medium — incorrect data persisted to DB, but user can work around by repeating the value
+- **Fix planned**: Phase 6.2 — consider extracting employee ID server-side from the user message and injecting it into the submitClaim call, rather than relying on the model to propagate it
+
+### BUG-013: LLM hallucinated claim submission — CLAIM-1523 never persisted — **RESOLVED Phase 6.1**
+- **Found**: Phase 7 UAT (browser + DB verification)
+- **Symptom**: Chat shows "Claim Reference: CLAIM-1523" with "successfully submitted" message, but claim does not exist in PostgreSQL.
+- **Root cause**: QwQ-32B skipped `submitClaim` tool call and hallucinated the submission response.
+- **Fix (Phase 6.1)**:
+  1. Switched to `qwen/qwen3-235b-a22b-2507` (better tool compliance)
+  2. V2 system prompt with "Submission Reality" guardrails and Phase 3 self-verification
+  3. BUG-013 dual guard in sseHelpers.py: Layer 1 suppresses submitted=True when no submitClaim in thinkingEntries; Layer 2 replaces hallucinated response with error message
+  4. 3 unit tests covering guard behavior
+- **Verified**: QA Scenario 2 (Phase 6.1 UAT) confirmed submitClaim actually called, claim exists in DB
+
+### BUG-012: Submission Summary panel not updating after claim submission — **RESOLVED Phase 6.1**
 - **Found**: Phase 7 UAT (browser)
-- **Symptom**: After successful claim submission (CLAIM-1523 confirmed in chat), the Submission Summary panel still shows: "Current Session" header, "USD 98.56" (unconverted), "50% Complete", category "--", "Submit Entire Batch" button still visible
-- **Root cause**: `_extractSummaryData` in `sseHelpers.py` reads `claimSubmitted` from graph state but the submission turn may not have `extractReceiptFields` in its `thinkingEntries` — the graph state fallback was added but `progressPct` only reaches 100% if `submitted=True` is detected, and the claim number is never propagated to the summary panel template. Additionally, "Current Session" header is hardcoded in `summary_panel.html`, and the "Submit Entire Batch" button has no conditional hide logic.
-- **Severity**: Medium — functional but misleading UX; user sees stale data after submission
-- **Fix planned**: Phase 6.1 — propagate claim number + submitted status to summary panel, replace "Current Session" with Claim ID after submission, show 100% + correct SGD amount + category, hide submit button
-- **Screenshot**: `qa/screenshots/` — submission summary shows 50% after CLAIM-1523 confirmed
+- **Symptom**: Summary panel shows "Current Session", "USD 98.56" (unconverted), "50% Complete", category "--", submit button visible after submission
+- **Fix (Phase 6.1)**:
+  1. Summary panel header shows CLAIM-XXX after submission (conditional template)
+  2. progressPct milestone-driven: 33/50/66/100%
+  3. SGD converted amount displayed
+  4. Receipt thumbnail via GET /chat/receipt-image
+  5. Submit button hidden after submission (conditional template)
+- **Verified**: QA Scenario 3 (Phase 6.1 UAT) confirmed all fields correct after submission
+- **Residual**: Category still shows "--" (tracked as BUG-014)
 
 ### BUG-010: Post-submission agents produce no visible output
 - **Found**: Phase 2.3 UAT (analysis)
