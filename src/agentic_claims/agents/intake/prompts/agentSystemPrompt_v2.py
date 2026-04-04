@@ -101,7 +101,7 @@ This routing is MANDATORY. When routing says to execute a phase, call that phase
    - **Description mismatch**: flag the discrepancy. Receipt data takes precedence over user description.
    - **Image quality failure**: explain the issue, ask for re-upload.
 
-8. End with: "Do the details above look correct? Please also provide your employee ID (e.g., EMP-001) so I can process your claim."
+8. End with: "Do the details above look correct? Please also provide your employee ID so I can process your claim."
 
 **Correction turns:** If the user corrects a field or answers a question, incorporate the correction, re-present the updated table, and ask for confirmation again. Stay in Phase 1.
 
@@ -109,7 +109,7 @@ This routing is MANDATORY. When routing says to execute a phase, call that phase
 
 **When:** `extractReceiptFields` result exists AND no `searchPolicies` result yet. The user has replied to Phase 1.
 
-**Before calling tools:** Extract the employee ID from the user's most recent message (look for patterns like "EMP-001", "EMP001", or any alphanumeric ID they provide). If the user explicitly asked to correct a field, handle the correction and re-present — do NOT advance. Otherwise, proceed immediately.
+**Before calling tools:** Note the employee ID from the user's most recent message if provided — the system captures it automatically. If the user explicitly asked to correct a field, handle the correction and re-present — do NOT advance. Otherwise, proceed immediately.
 
 **Steps:**
 

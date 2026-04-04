@@ -11,6 +11,8 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from agentic_claims.core.imageStore import clearImage, getImage, storeImage
+from agentic_claims.web.employeeIdContext import employeeIdVar
+from agentic_claims.web.employeeIdExtractor import extractEmployeeId
 from agentic_claims.web.session import getSessionIds
 from agentic_claims.web.sessionQueues import getOrCreateQueue, removeQueue
 from agentic_claims.web.sseHelpers import runGraph
@@ -38,6 +40,10 @@ async def postMessage(
         imageB64 = base64.b64encode(imageBytes).decode("utf-8")
         storeImage(claimId, imageB64)
         hasImage = True
+
+    extractedId = extractEmployeeId(message)
+    if extractedId:
+        request.session["employee_id"] = extractedId
 
     awaitingClarification = request.session.get("awaiting_clarification", False)
 
@@ -78,6 +84,8 @@ async def streamChat(request: Request):
 
         logger.info("Queue got input: threadId=%s", graphInput.get("threadId"))
 
+        employeeIdVar.set(request.session.get("employee_id"))
+
         async for sseEvent in runGraph(graph, graphInput, request, templates):
             yield sseEvent
 
@@ -111,5 +119,6 @@ async def resetChat(request: Request):
     request.session["thread_id"] = str(uuid.uuid4())
     request.session["claim_id"] = str(uuid.uuid4())
     request.session.pop("awaiting_clarification", None)
+    request.session.pop("employee_id", None)
 
     return Response(status_code=204, headers={"HX-Redirect": "/"})

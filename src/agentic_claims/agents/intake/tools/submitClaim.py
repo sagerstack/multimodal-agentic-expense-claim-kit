@@ -8,6 +8,7 @@ from langchain_core.tools import tool
 
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
+from agentic_claims.web.employeeIdContext import employeeIdVar
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,18 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
         or note key if duplicate detected, or error dict if submission fails
     """
     settings = getSettings()
+
+    # Server-side employee ID override (BUG-015 fix)
+    serverEmployeeId = employeeIdVar.get(None)
+    if serverEmployeeId:
+        logger.info(
+            "Server-side employee ID override",
+            extra={
+                "serverEmployeeId": serverEmployeeId,
+                "llmProvidedId": claimData.get("claimantId"),
+            },
+        )
+        claimData["claimantId"] = serverEmployeeId
 
     # Log tool entry
     logger.info(
