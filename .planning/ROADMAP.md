@@ -21,6 +21,7 @@ See MILESTONES.md for archived v1.0 details.
 - [x] **Phase 6: FastAPI Scaffold + Static Shell** -- Replace Chainlit, all 4 pages served as static shells, lifespan singleton, session middleware
 - [x] **Phase 7: SSE Streaming + Full Chat Page** -- SSE event taxonomy, streaming pipeline, V1 migration, complete Chat Page feature set
 - [x] **Phase 6.1: Model Upgrade + UX Fixes** -- Switch LLM from QwQ-32B to Qwen3-235B-A22B (fast MoE, no CoT chains), swap to v2 system prompt, fix submission summary panel (100% on submit, show Claim ID, correct amounts)
+- [ ] **Phase 6.2: Chat UI Refresh + Employee ID Fix** -- Apply Stitch "Updated Branding" design to Chat Page (Decision Pathway sidebar, bottom submission table, message styling, top nav) and fix BUG-015 (server-side employee ID extraction)
 - [ ] **Phase 8: Dashboard + Audit Log Pages** -- Approver Dashboard (KPIs, claims table) and Audit & Transparency Log (decision timeline)
 - [ ] **Phase 9: Claim Review Page** -- Escalated claim display, approve/reject actions, receipt zoom, claim navigation
 - [ ] **Phase 10: Browser E2E Tests** -- Playwright test suite covering all 4 pages against a live server
@@ -102,6 +103,29 @@ Plans:
 
 ---
 
+### Phase 6.2: Chat UI Refresh + Employee ID Fix
+
+**Goal:** The Chat Page visually matches the Stitch "AI Chat Submission (Updated Branding)" design -- with a Decision Pathway sidebar replacing the current summary panel, a horizontal bottom submission summary table, updated message bubble styling with avatars and timestamps, and the top nav bar updated to match the new branding -- and BUG-015 is resolved by extracting the employee ID server-side from the user message instead of relying on the LLM to propagate it.
+
+**Depends on:** Phase 6.1
+
+**Requirements:** CHAT-06, CHAT-07, CHAT-09, CHAT-10
+
+**Success Criteria** (what must be TRUE when Phase 6.2 completes):
+1. The Chat Page right panel shows a "Decision Pathway" vertical timeline with 4 steps (Receipt Uploaded, AI Extraction, Policy Check, Final Decision) that update in real-time as SSE events arrive -- each step shows a timestamp, status badge (Completed/In Progress/Pending), and the AI Extraction step shows the confidence score
+2. The bottom of the Chat Page shows a horizontal Submission Summary section with session total, item count, and a table of processed receipts (Merchant, Date, Amount, Status) -- replacing the current right-panel summary
+3. Chat messages use updated styling with bot/user avatars, rounded message bubbles, and timestamps matching the Stitch design
+4. A user providing any format of employee ID (EMP-042, 1010736, or any alphanumeric string) has it correctly captured and persisted to the database -- the ID is extracted server-side from the user message, not by the LLM
+5. All existing tests pass without regression; new unit tests cover the employee ID extraction logic
+
+**Plans:** TBD
+
+Plans:
+- [ ] 06.2-01-PLAN.md -- TBD
+- [ ] 06.2-02-PLAN.md -- TBD
+
+---
+
 ### Phase 8: Dashboard + Audit Log Pages
 
 **Goal:** The Approver Dashboard (Page 2) displays live KPI counts and a filterable recent claims table, and the Audit & Transparency Log (Page 3) shows a decision pathway timeline for each claim -- both pages use HTMX partial swaps for filtering and selection with data served from JSON API endpoints backed by the existing PostgreSQL claims and audit_log tables.
@@ -176,17 +200,18 @@ Plans:
 ## Progress
 
 **Execution Order:**
-v2.0 phases execute in numeric order: 6 -> 7 -> 6.1 -> 8 -> 9 -> 10
+v2.0 phases execute in numeric order: 6 -> 7 -> 6.1 -> 6.2 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 6. FastAPI Scaffold + Static Shell | 3/3 | Complete (v2 redo) | 2026-04-02 |
 | 7. SSE Streaming + Full Chat Page | 3/3 | Complete | 2026-04-02 |
 | 6.1. Model Upgrade + UX Fixes | 2/2 | Complete | 2026-04-04 |
+| 6.2. Chat UI Refresh + Employee ID Fix | 0/2 | Not started | -- |
 | 8. Dashboard + Audit Log Pages | 0/3 | Not started | -- |
 | 9. Claim Review Page | 0/3 | Not started | -- |
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
 
-**v2.0 total:** 8/16 plans complete
+**v2.0 total:** 8/18 plans complete
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)
