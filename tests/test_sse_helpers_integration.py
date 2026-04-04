@@ -95,7 +95,13 @@ async def testRunGraphYieldsThinkingStartFirst():
 
 
 @pytest.mark.asyncio
-async def testRunGraphYieldsTokenEvents():
+async def testRunGraphYieldsTokenEvents(monkeypatch):
+    """TOKEN events are only emitted when enable_response_streaming is True."""
+    from agentic_claims.core.config import getSettings
+    realSettings = getSettings()
+    realSettings.enable_response_streaming = True
+    monkeypatch.setattr("agentic_claims.web.sseHelpers.getSettings", lambda: realSettings)
+
     events = [
         {"event": "on_chat_model_stream", "data": {"chunk": _makeChunk("Hello")}},
         {"event": "on_chat_model_stream", "data": {"chunk": _makeChunk(" world")}},
@@ -252,7 +258,13 @@ def testExtractSummaryDataReturnsNoneForEmpty():
 
 
 @pytest.mark.asyncio
-async def testRunGraphBreaksOnDisconnect():
+async def testRunGraphBreaksOnDisconnect(monkeypatch):
+    """Disconnected run should have fewer events when streaming is enabled."""
+    from agentic_claims.core.config import getSettings
+    realSettings = getSettings()
+    realSettings.enable_response_streaming = True
+    monkeypatch.setattr("agentic_claims.web.sseHelpers.getSettings", lambda: realSettings)
+
     events = [
         {"event": "on_chat_model_stream", "data": {"chunk": _makeChunk("token1")}},
         {"event": "on_chat_model_stream", "data": {"chunk": _makeChunk("token2")}},

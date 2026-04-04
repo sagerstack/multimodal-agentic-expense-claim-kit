@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 
 import httpx
 from langchain_core.runnables import RunnableConfig
@@ -86,6 +87,9 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
     Returns:
         Partial state update with new messages and optional status/fields
     """
+    nodeStart = time.time()
+    logger.info("intakeNode started", extra={"claimId": state.get("claimId"), "messageCount": len(state.get("messages", []))})
+
     settings = getSettings()
 
     # Get the ReAct agent
@@ -116,6 +120,8 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
         else:
             raise
 
+    logger.info("intakeNode agent.ainvoke completed", extra={"elapsed": f"{time.time() - nodeStart:.2f}s", "resultMessageCount": len(result.get("messages", []))})
+
     # Build state update
     stateUpdate = {"messages": result["messages"]}
 
@@ -138,7 +144,14 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
                 stateUpdate["extractedReceipt"] = content
             elif msg.name == "convertCurrency":
                 stateUpdate["currencyConversion"] = content
+            elif msg.name == "searchPolicies":
+                results = content.get("results", content.get("policies", []))
+                if isinstance(results, list):
+                    stateUpdate["violations"] = results
+                else:
+                    stateUpdate["violations"] = []
         except (json.JSONDecodeError, TypeError):
             pass
 
+    logger.info("intakeNode completed", extra={"elapsed": f"{time.time() - nodeStart:.2f}s", "stateUpdateKeys": list(stateUpdate.keys())})
     return stateUpdate

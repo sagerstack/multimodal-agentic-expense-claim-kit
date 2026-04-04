@@ -17,7 +17,12 @@
 <!-- TopNavBar -->
 <header class="fixed top-0 w-full z-50 flex justify-between items-center px-8 h-16 bg-[#060e20] shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
   <div class="flex items-center gap-8">
-    <span class="text-xl font-bold bg-gradient-to-r from-[#cc97ff] to-[#62fae3] bg-clip-text text-transparent font-manrope tracking-tight">Expense AI</span>
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-dim flex items-center justify-center">
+        <span class="material-symbols-outlined text-on-primary text-sm" style="font-variation-settings: 'FILL' 1;">bolt</span>
+      </div>
+      <span class="text-xl font-bold bg-gradient-to-r from-[#cc97ff] to-[#62fae3] bg-clip-text text-transparent font-manrope tracking-tight">Expense AI</span>
+    </div>
     <nav class="hidden md:flex gap-6">
       <a href="/dashboard" class="text-[#dee5ff] opacity-70 font-manrope tracking-tight font-bold hover:text-[#62fae3] transition-colors duration-300">Dashboard</a>
       <a href="/audit" class="text-[#dee5ff] opacity-70 font-manrope tracking-tight font-bold hover:text-[#62fae3] transition-colors duration-300">Audit Log</a>
@@ -40,15 +45,6 @@
 <!-- SideNavBar -->
 <aside class="fixed left-0 top-0 h-full flex flex-col py-8 bg-[#091328] w-64 hidden md:flex z-40">
   <div class="px-6 mb-10 mt-16">
-    <div class="flex items-center gap-3 mb-6">
-      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-dim flex items-center justify-center">
-        <span class="material-symbols-outlined text-on-primary" style="font-variation-settings: 'FILL' 1;">bolt</span>
-      </div>
-      <div>
-        <h3 class="font-inter text-sm font-bold tracking-wide text-on-surface">Luminous Intelligence</h3>
-        <p class="text-[10px] text-secondary opacity-80 uppercase tracking-widest">Expense Engine Active</p>
-      </div>
-    </div>
     <button hx-post="/chat/reset" hx-swap="none" hx-confirm="Start a new expense? Current chat history will be cleared."
             class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-primary to-primary-dim text-on-primary font-bold text-sm transition-all hover:shadow-[0_0_20px_rgba(204,151,255,0.4)] active:scale-95 flex items-center justify-center gap-2">
       <span class="material-symbols-outlined text-sm">add</span>
@@ -56,7 +52,7 @@
     </button>
   </div>
   <nav class="flex-1 space-y-1">
-    <a href="/"
+    <a href="javascript:void(0)"
        class="flex items-center gap-3 bg-[#1f2b49] text-[#62fae3] rounded-r-full py-3 px-6 shadow-[0_0_15px_rgba(98,250,227,0.2)] transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide">
       <span class="material-symbols-outlined">description</span>
       My Claims

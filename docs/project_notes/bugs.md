@@ -81,19 +81,14 @@ Bugs discovered during Phase 2.3 UAT testing. Resolved bugs documented for refer
 
 ## Open
 
-### BUG-014: Summary panel category shows "--" instead of extracted category
-- **Found**: Phase 6.1 UAT (browser, QA cycle 4 for Plan 01 and cycle 1 for Plan 02)
-- **Symptom**: Chat response correctly identifies "Meal" as the category, but summary panel shows "--" in both Top Category widget and Batch Details
-- **Root cause**: `_extractSummaryData` in `sseHelpers.py` parses category from thinkingEntries tool output, but the field name/path from the model's extractReceiptFields response doesn't match the expected key. The extraction result includes category but the summary data pipeline doesn't map it through.
-- **Severity**: Low — cosmetic, all other summary panel fields populate correctly
-- **Fix planned**: Phase 6.2 — trace the category field from extractReceiptFields tool result through thinkingEntries to `_extractSummaryData` and fix the key mapping
-
-### BUG-015: Model uses prompt example employee ID instead of user-provided value
-- **Found**: Phase 6.1 UAT (browser, QA cycles 3 and 4)
-- **Symptom**: User provides "EMP-042" but claim summary and DB show "EMP-001". The model uses the example employee ID from the v2 system prompt instead of the actual value from the user's message.
-- **Root cause**: Prompt-following issue with Qwen3-235B-A22B. Despite replacing all example values with placeholders and adding "Use the actual employee ID the user provided, not an example value", the model occasionally ignores the user-provided ID. Works on retry (Turn 3 if user repeats it).
-- **Severity**: Medium — incorrect data persisted to DB, but user can work around by repeating the value
-- **Fix planned**: Phase 6.2 — consider extracting employee ID server-side from the user message and injecting it into the submitClaim call, rather than relying on the model to propagate it
+### BUG-015: Model fails to use user-provided employee ID
+- **Found**: Phase 6.1 UAT (browser, QA cycles 3-4 + post-delivery testing)
+- **Symptom**: Two failure modes observed:
+  1. User provides "EMP-042" → model ignores it and uses prompt example "EMP-001" in claim summary and DB
+  2. User provides plain numeric ID "1010736" → model doesn't recognize it as an employee ID, re-asks ("You haven't provided your employee ID yet")
+- **Root cause**: Prompt-following issue with Qwen3-235B-A22B. The Phase 2 instruction says "look for patterns like EMP-001, EMP001, or any alphanumeric ID" but the model either ignores the value or fails to match non-EMP formats. The turn routing advances to Phase 2 correctly (extractReceiptFields exists) but the model generates a text response (0 tools) instead of calling searchPolicies.
+- **Severity**: Medium — blocks submission flow or persists wrong data to DB
+- **Fix planned**: Phase 6.2 — extract employee ID server-side from the user message and inject into submitClaim, rather than relying on the model to propagate it. Remove EMP-001 example from prompt entirely.
 
 ### BUG-013: LLM hallucinated claim submission — CLAIM-1523 never persisted — **RESOLVED Phase 6.1**
 - **Found**: Phase 7 UAT (browser + DB verification)

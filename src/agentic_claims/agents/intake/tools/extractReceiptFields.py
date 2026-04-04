@@ -3,6 +3,7 @@
 import base64
 import json
 import logging
+import time
 
 import httpx
 from langchain_core.messages import HumanMessage
@@ -29,10 +30,11 @@ async def extractReceiptFields(claimId: str) -> dict:
         - Success: {"fields": {...}, "confidence": {...}}
         - Error: {"error": "reason"}
     """
-    # Get settings
+    toolStart = time.time()
+    logger.info("extractReceiptFields started", extra={"claimId": claimId})
+
     settings = getSettings()
 
-    # Retrieve image from store
     imageB64 = getImage(claimId)
     if not imageB64:
         return {"error": "No receipt image found. Please upload an image first."}
@@ -49,11 +51,12 @@ async def extractReceiptFields(claimId: str) -> dict:
             minHeight=settings.image_min_height,
         )
 
-        # Step 2: Reject if quality is insufficient
         if not qualityCheck["acceptable"]:
             return {
                 "error": f"Image quality check failed: {qualityCheck['reason']}. Please upload a clearer, higher-resolution image."
             }
+
+        logger.info("extractReceiptFields quality check passed", extra={"elapsed": f"{time.time() - toolStart:.2f}s", "qualityScore": qualityCheck.get("score")})
 
         # Step 3: Instantiate VLM using ChatOpenRouter
         vlm = ChatOpenRouter(
@@ -113,7 +116,8 @@ async def extractReceiptFields(claimId: str) -> dict:
             else:
                 raise
 
-        # Step 6: Parse JSON response (strip markdown code block wrapping if present)
+        logger.info("extractReceiptFields VLM call completed", extra={"elapsed": f"{time.time() - toolStart:.2f}s"})
+
         rawContent = response.content.strip()
         if rawContent.startswith("```"):
             # Remove opening ```json or ``` and closing ```
@@ -125,6 +129,7 @@ async def extractReceiptFields(claimId: str) -> dict:
 
         try:
             result = json.loads(rawContent)
+            logger.info("extractReceiptFields completed", extra={"elapsed": f"{time.time() - toolStart:.2f}s", "hasFields": "fields" in result})
             return result
         except json.JSONDecodeError as e:
             return {"error": f"Failed to parse VLM response as JSON: {str(e)}"}

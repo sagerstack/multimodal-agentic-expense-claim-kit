@@ -10,6 +10,7 @@ import logging
 import re
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi.sse import ServerSentEvent
 from langchain_core.messages import HumanMessage
@@ -17,6 +18,7 @@ from langgraph.types import Command
 from starlette.requests import Request
 from starlette.templating import Jinja2Templates
 
+from agentic_claims.core.config import getSettings
 from agentic_claims.web.sseEvents import SseEvent
 
 logger = logging.getLogger(__name__)
@@ -113,9 +115,11 @@ def _summarizeToolOutput(toolName: str, toolOutput) -> str:
             return "Policy search completed"
 
         if toolName == "convertCurrency":
+            fromAmount = data.get("fromAmount", data.get("originalAmount", "?"))
+            fromCurrency = data.get("fromCurrency", data.get("originalCurrency", "?"))
             amountSgd = data.get("amountSgd", data.get("convertedAmount", "?"))
             rate = data.get("rate", data.get("exchangeRate", "?"))
-            return f"Converted to SGD {amountSgd} (rate: {rate})"
+            return f"Converted {fromCurrency} {fromAmount} → SGD {amountSgd} (rate: {rate})"
 
         if toolName == "submitClaim":
             if "error" in data:
@@ -144,7 +148,8 @@ PATHWAY_WAITING_TEXT = {
 
 
 def _nowTimestamp() -> str:
-    return datetime.now().strftime("%I:%M:%S %p")
+    sgt = ZoneInfo("Asia/Singapore")
+    return datetime.now(sgt).strftime("%I:%M:%S %p")
 
 
 def _buildPathwaySteps(
@@ -497,6 +502,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     into the SseEvent taxonomy. Checks request.is_disconnected() at each
     iteration to break on client disconnect.
     """
+    settings = getSettings()
     logger.info(
         "runGraph started: threadId=%s, isResume=%s",
         graphInput.get("threadId"),
@@ -521,8 +527,42 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     # Submission table state (in-memory claims accumulated during the turn)
     tableClaims: list[dict] = []
 
+
     if hasImage:
         pathwayToolTimestamps["receiptUploaded"] = _nowTimestamp()
+
+    threadId = graphInput["threadId"]
+    config = {"configurable": {"thread_id": threadId}}
+
+    # Reconstruct pathway state from graph state (preserves progress across turns)
+    try:
+        t0 = time.time()
+        priorState = await graph.aget_state(config=config)
+        logger.info("aget_state took %.2fs", time.time() - t0)
+        if priorState and priorState.values:
+            sv = priorState.values
+            if sv.get("extractedReceipt"):
+                pathwayCompletedTools.add("extractReceiptFields")
+                hasImage = True  # receipt was uploaded in a prior turn
+                pathwayExtractionDetails = _extractExtractionDetails(sv["extractedReceipt"])
+                if "extractReceiptFields" not in pathwayToolTimestamps:
+                    pathwayToolTimestamps["extractReceiptFields"] = _nowTimestamp()
+                if "receiptUploaded" not in pathwayToolTimestamps:
+                    pathwayToolTimestamps["receiptUploaded"] = _nowTimestamp()
+            if sv.get("violations") is not None:
+                pathwayCompletedTools.add("searchPolicies")
+                if "searchPolicies" not in pathwayToolTimestamps:
+                    pathwayToolTimestamps["searchPolicies"] = _nowTimestamp()
+            if sv.get("claimSubmitted"):
+                pathwayCompletedTools.add("submitClaim")
+                if "submitClaim" not in pathwayToolTimestamps:
+                    pathwayToolTimestamps["submitClaim"] = _nowTimestamp()
+                if "searchPolicies" not in pathwayCompletedTools:
+                    pathwayCompletedTools.add("searchPolicies")
+                if "searchPolicies" not in pathwayToolTimestamps:
+                    pathwayToolTimestamps["searchPolicies"] = _nowTimestamp()
+    except Exception as e:
+        logger.debug(f"Could not reconstruct pathway from graph state: {e}")
 
     yield ServerSentEvent(raw_data="<!-- thinking -->", event=SseEvent.THINKING_START)
 
@@ -533,9 +573,6 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
         yield ServerSentEvent(raw_data=pathwayHtml, event=SseEvent.PATHWAY_UPDATE)
     except Exception as e:
         logger.error(f"Error rendering initial pathway: {e}", exc_info=True)
-
-    threadId = graphInput["threadId"]
-    config = {"configurable": {"thread_id": threadId}}
 
     if graphInput.get("isResume"):
         invokeInput = Command(resume=graphInput["resumeData"])
@@ -557,12 +594,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 chunk = event.get("data", {}).get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     tokenBuffer += chunk.content
-                    # Only stream tokens to the chat area if this could be the
-                    # final response (no tool calls seen yet, or tools are done
-                    # and model is generating). Intermediate reasoning between
-                    # tool calls is buffered silently — it flashes confusingly
-                    # if streamed live.
-                    if not hadAnyToolCall or pendingToolCalls == 0:
+                    if settings.enable_response_streaming and (not hadAnyToolCall or pendingToolCalls == 0):
                         yield ServerSentEvent(raw_data=chunk.content, event=SseEvent.TOKEN)
 
                 if chunk:
@@ -639,6 +671,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             raw_data=f'<div class="text-xs text-outline/50 italic mt-1">{preview}</div>',
                             event=SseEvent.STEP_CONTENT,
                         )
+                    yield ServerSentEvent(raw_data="Preparing response...", event=SseEvent.STEP_NAME)
                     finalResponse = _stripToolCallJson(tokenBuffer)
                     tokenBuffer = ""
                     reasoningBuffer = ""
@@ -687,6 +720,9 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     pathwayActiveTools.discard(toolName)
                     pathwayCompletedTools.add(toolName)
                     pathwayToolTimestamps[toolName] = _nowTimestamp()
+                    if toolName == "submitClaim" and "searchPolicies" not in pathwayCompletedTools:
+                        pathwayCompletedTools.add("searchPolicies")
+                        pathwayToolTimestamps["searchPolicies"] = _nowTimestamp()
                     if toolName == "extractReceiptFields":
                         pathwayExtractionDetails = _extractExtractionDetails(toolOutput)
                     try:
@@ -706,6 +742,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             "total_amount": details.get("amount", "--").replace("SGD ", "").replace("USD ", ""),
                             "currency": "SGD",
                             "status": "processing",
+                            "created_at": datetime.now(ZoneInfo("Asia/Singapore")).strftime("%Y-%m-%d %H:%M"),
                         })
                 elif toolName == "submitClaim":
                     if tableClaims:
@@ -818,7 +855,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     isAi=True,
                     confidenceScores=None,
                     violations=None,
-                    timestamp=datetime.now().strftime("%-I:%M %p"),
+                    timestamp=datetime.now(ZoneInfo("Asia/Singapore")).strftime("%-I:%M %p"),
                 )
             except Exception:
                 errorHtml = '<div class="ai-message">I encountered an issue submitting your claim. Please try again by typing "submit".</div>'

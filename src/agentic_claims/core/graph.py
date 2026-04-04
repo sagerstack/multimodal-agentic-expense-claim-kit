@@ -1,6 +1,10 @@
 """LangGraph StateGraph definition with parallel fan-out and Postgres checkpointer."""
 
+import logging
+
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+logger = logging.getLogger(__name__)
 from langgraph.graph import END, START, StateGraph
 from psycopg_pool import AsyncConnectionPool
 
@@ -22,9 +26,9 @@ def evaluatorGate(state: ClaimState) -> str:
         "submitted" if claim was submitted (route to compliance+fraud),
         "pending" if still in intake conversation (route to END)
     """
-    if state.get("claimSubmitted", False):
-        return "submitted"
-    return "pending"
+    result = "submitted" if state.get("claimSubmitted", False) else "pending"
+    logger.info("evaluatorGate decision", extra={"decision": result, "claimId": state.get("claimId")})
+    return result
 
 
 def buildGraph() -> StateGraph:

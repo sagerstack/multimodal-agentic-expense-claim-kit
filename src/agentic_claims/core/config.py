@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     # Session configuration
     session_secret_key: str = Field(..., description="Secret key for signing session cookies")
 
+    # Streaming configuration
+    enable_response_streaming: bool = Field(default=False, description="Enable token-level response streaming in chat")
+
     # Logging configuration
     log_level: str = Field(..., description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)")
     log_file_path: str = Field(..., description="File path for log output (empty string means no file handler)")

@@ -21,7 +21,7 @@ See MILESTONES.md for archived v1.0 details.
 - [x] **Phase 6: FastAPI Scaffold + Static Shell** -- Replace Chainlit, all 4 pages served as static shells, lifespan singleton, session middleware
 - [x] **Phase 7: SSE Streaming + Full Chat Page** -- SSE event taxonomy, streaming pipeline, V1 migration, complete Chat Page feature set
 - [x] **Phase 6.1: Model Upgrade + UX Fixes** -- Switch LLM from QwQ-32B to Qwen3-235B-A22B (fast MoE, no CoT chains), swap to v2 system prompt, fix submission summary panel (100% on submit, show Claim ID, correct amounts)
-- [ ] **Phase 6.2: Chat UI Refresh + Employee ID Fix** -- Apply Stitch "Updated Branding" design to Chat Page (Decision Pathway sidebar, bottom submission table, message styling, top nav) and fix BUG-015 (server-side employee ID extraction)
+- [x] **Phase 6.2: Chat UI Refresh + Employee ID Fix** -- Apply Stitch "Updated Branding" design to Chat Page (Decision Pathway sidebar, bottom submission table, message styling, top nav) and fix BUG-015 (server-side employee ID extraction)
 - [ ] **Phase 8: Dashboard + Audit Log Pages** -- Approver Dashboard (KPIs, claims table) and Audit & Transparency Log (decision timeline)
 - [ ] **Phase 9: Claim Review Page** -- Escalated claim display, approve/reject actions, receipt zoom, claim navigation
 - [ ] **Phase 10: Browser E2E Tests** -- Playwright test suite covering all 4 pages against a live server
@@ -121,10 +121,10 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 06.2-01-PLAN.md -- TDD: Employee ID server-side extraction module + wire into chat flow and submitClaim pipeline, remove EMP-001 from system prompt
-- [ ] 06.2-02-PLAN.md -- Decision Pathway sidebar: partial template with 4 steps, SSE pathway-update events, replace right-panel summary
-- [ ] 06.2-03-PLAN.md -- Bottom Submission Table: horizontal claims table from DB, session total card, SSE real-time row updates
-- [ ] 06.2-04-PLAN.md -- Branding refresh (Expense AI logo, sidebar nav reduction) + message bubble styling (Analysis Complete badge, timestamps, quick-reply buttons)
+- [x] 06.2-01-PLAN.md -- TDD: Employee ID server-side extraction module + wire into chat flow and submitClaim pipeline, remove EMP-001 from system prompt
+- [x] 06.2-02-PLAN.md -- Decision Pathway sidebar: partial template with 4 steps, SSE pathway-update events, replace right-panel summary
+- [x] 06.2-03-PLAN.md -- Bottom Submission Table: horizontal claims table from DB, session total card, SSE real-time row updates
+- [x] 06.2-04-PLAN.md -- Branding refresh (Expense AI logo, sidebar nav reduction) + message bubble styling (Analysis Complete badge, timestamps, quick-reply buttons)
 
 ---
 

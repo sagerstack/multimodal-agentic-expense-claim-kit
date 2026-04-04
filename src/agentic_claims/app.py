@@ -418,9 +418,11 @@ def _summarizeToolOutput(toolName: str, toolOutput) -> str:
             return "Policy search completed"
 
         if toolName == "convertCurrency":
+            fromAmount = data.get("fromAmount", data.get("originalAmount", "?"))
+            fromCurrency = data.get("fromCurrency", data.get("originalCurrency", "?"))
             amountSgd = data.get("amountSgd", data.get("convertedAmount", "?"))
             rate = data.get("rate", data.get("exchangeRate", "?"))
-            return f"Converted to SGD {amountSgd} (rate: {rate})"
+            return f"Converted {fromCurrency} {fromAmount} → SGD {amountSgd} (rate: {rate})"
 
         if toolName == "submitClaim":
             if "error" in data:

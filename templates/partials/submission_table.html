@@ -2,7 +2,7 @@
 <div class="w-full lg:w-1/4">
   <div class="bg-surface-container-highest p-5 rounded-2xl border-t border-outline-variant/10 shadow-lg flex items-center justify-between gap-4">
     <div>
-      <span class="text-[10px] text-secondary font-bold uppercase tracking-widest block mb-1">Current Session</span>
+      <span class="text-[10px] text-secondary font-bold uppercase tracking-widest block mb-1">Current Report</span>
       <p class="text-3xl font-headline font-extrabold text-on-surface">{{ sessionTotal }}</p>
       <p class="text-[10px] text-outline">{{ itemCount }} item{{ 's' if itemCount != 1 else '' }}</p>
     </div>
@@ -19,6 +19,7 @@
         <th class="px-4 py-2">Date</th>
         <th class="px-4 py-2">Amount</th>
         <th class="px-4 py-2">Status</th>
+        <th class="px-4 py-2">Submitted</th>
       </tr>
     </thead>
     <tbody>
@@ -38,7 +39,7 @@
         </td>
         <td class="px-4 py-3 text-sm text-on-surface-variant border-t border-b border-outline-variant/10">{{ claim.receipt_date or '--' }}</td>
         <td class="px-4 py-3 text-sm font-bold border-t border-b border-outline-variant/10">{{ claim.currency or 'SGD' }} {{ claim.total_amount or '--' }}</td>
-        <td class="px-4 py-3 rounded-r-xl border-r border-t border-b border-outline-variant/10">
+        <td class="px-4 py-3 border-t border-b border-outline-variant/10">
           {% if claim.status == 'processing' %}
             <div class="intelligence-pulse"></div>
           {% elif claim.status == 'pending' %}
@@ -51,11 +52,12 @@
             <span class="text-[10px] text-outline font-bold px-2 py-0.5 rounded bg-outline-variant/10">{{ (claim.status or 'UNKNOWN')|upper }}</span>
           {% endif %}
         </td>
+        <td class="px-4 py-3 rounded-r-xl border-r border-t border-b border-outline-variant/10 text-xs text-on-surface-variant">{{ claim.created_at or '--' }}</td>
       </tr>
       {% endfor %}
       {% if not claims %}
       <tr>
-        <td colspan="5" class="px-4 py-8 text-center text-xs text-on-surface-variant/50">No claims yet. Upload a receipt to begin.</td>
+        <td colspan="6" class="px-4 py-8 text-center text-xs text-on-surface-variant/50">No claims yet. Upload a receipt to begin.</td>
       </tr>
       {% endif %}
     </tbody>

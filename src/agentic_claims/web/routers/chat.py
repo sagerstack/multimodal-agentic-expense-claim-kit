@@ -144,6 +144,17 @@ async def fetchClaimsForTable() -> list[dict]:
             },
         )
         if isinstance(result, list):
+            for row in result:
+                rawTs = row.get("created_at", "")
+                if rawTs and isinstance(rawTs, str) and "T" in rawTs:
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(rawTs.replace("Z", "+00:00"))
+                        from zoneinfo import ZoneInfo
+                        sgt = dt.astimezone(ZoneInfo("Asia/Singapore"))
+                        row["created_at"] = sgt.strftime("%Y-%m-%d %H:%M")
+                    except Exception:
+                        row["created_at"] = rawTs[:16].replace("T", " ")
             return result
         if isinstance(result, dict) and "error" in result:
             logger.warning("fetchClaimsForTable DB error: %s", result["error"])

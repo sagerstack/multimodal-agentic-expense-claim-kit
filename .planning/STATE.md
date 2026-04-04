@@ -11,13 +11,15 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 Phase: 8 — Dashboard + Audit Log Pages
 Plan: Not started
-Status: Phase 7 complete (SSE streaming, V1 migration, Chat Page wired), ready for Phase 8 planning
-Last activity: 2026-04-02 — Phase 7 delivered by maverick team (3 plans, 36 tests, browser UAT passed)
+Status: Phase 6.2 complete (Chat UI refresh, Decision Pathway, employee ID fix), ready for Phase 8 planning
+Last activity: 2026-04-04 — Phase 6.2 delivered by maverick team (4 plans, browser UAT passed, 1 CSS fix cycle)
 
 ```
-v2.0 Progress: [######....] 6/14 plans
+v2.0 Progress: [##########] 10/18 plans
 Phase 6:       [##########] 3/3 plans (complete)
 Phase 7:       [##########] 3/3 plans (complete)
+Phase 6.1:     [##########] complete
+Phase 6.2:     [##########] 4/4 plans (complete)
 Phase 8:       [..........] 0/3 plans
 ```
 
@@ -97,7 +99,7 @@ From research (see .planning/research/PITFALLS.md):
 
 - Verify actual requirement count: REQUIREMENTS.md header says 54 but enumeration yields 61. Update header during Phase 7.
 - Phase 2.5 has 2 skipped plans (CSS reasoning block styles, E2E browser verification) — these are superseded by the new v2.0 UI and Playwright suite respectively.
-- Pre-existing test failure: `testSubmitClaimCallsInsertClaimAndInsertReceipt` (KeyError: employeeId) — not related to v2.0 work.
+- Pre-existing test failure: `testSubmitClaimCallsInsertClaimAndInsertReceipt` — FIXED in Phase 6.2 (commit ed1e16d, field key alignment).
 
 ### Blockers/Concerns
 

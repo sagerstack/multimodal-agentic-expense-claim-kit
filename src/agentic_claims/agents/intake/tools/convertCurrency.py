@@ -1,6 +1,10 @@
 """Currency conversion tool using Currency MCP server."""
 
+import logging
+import time
 from langchain_core.tools import tool
+
+logger = logging.getLogger(__name__)
 
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
@@ -19,6 +23,9 @@ async def convertCurrency(amount: float, fromCurrency: str, toCurrency: str) -> 
         Conversion result with originalAmount, convertedAmount, rate, and date,
         or error dict if conversion fails
     """
+    toolStart = time.time()
+    logger.info("convertCurrency started", extra={"amount": amount, "fromCurrency": fromCurrency, "toCurrency": toCurrency})
+
     settings = getSettings()
 
     result = await mcpCallTool(
@@ -27,4 +34,5 @@ async def convertCurrency(amount: float, fromCurrency: str, toCurrency: str) -> 
         arguments={"amount": amount, "fromCurrency": fromCurrency, "toCurrency": toCurrency},
     )
 
+    logger.info("convertCurrency completed", extra={"elapsed": f"{time.time() - toolStart:.2f}s"})
     return result
