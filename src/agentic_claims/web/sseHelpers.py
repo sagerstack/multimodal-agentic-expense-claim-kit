@@ -146,7 +146,38 @@ async def _getFallbackMessage(graph, config: dict) -> str:
     return ""
 
 
-def _extractSummaryData(thinkingEntries: list, graphState: dict | None = None) -> dict | None:
+def _calcProgressPct(thinkingEntries: list, graphState: dict | None) -> int:
+    """Calculate progress from tool milestones.
+    extractReceiptFields completed -> 33%
+    searchPolicies completed -> 50%
+    User confirmed (ready for submission) -> 66%
+    submitClaim completed -> 100%
+    """
+    completedTools = set()
+    for e in thinkingEntries:
+        if e.get("type") == "tool" and e.get("name"):
+            completedTools.add(e["name"])
+
+    if graphState:
+        if graphState.get("extractedReceipt"):
+            completedTools.add("extractReceiptFields")
+        if graphState.get("currencyConversion"):
+            completedTools.add("convertCurrency")
+        if graphState.get("claimSubmitted"):
+            completedTools.add("submitClaim")
+
+    if "submitClaim" in completedTools:
+        return 100
+    if "askHuman" in completedTools or "convertCurrency" in completedTools:
+        return 66
+    if "searchPolicies" in completedTools:
+        return 50
+    if "extractReceiptFields" in completedTools:
+        return 33
+    return 0
+
+
+def _extractSummaryData(thinkingEntries: list, graphState: dict | None = None, claimId: str = "") -> dict | None:
     """Extract summary panel data from tool outputs and graph state.
 
     Uses thinkingEntries (current turn's tool outputs) first, then falls
@@ -160,6 +191,12 @@ def _extractSummaryData(thinkingEntries: list, graphState: dict | None = None) -
     warningCount = 0
     submitted = False
     convertedAmount = ""
+    extractedClaimNumber = ""
+
+    submitCallInEntries = any(
+        e.get("name") == "submitClaim" and e.get("type") == "tool"
+        for e in thinkingEntries
+    )
 
     hasReceiptData = False
 
@@ -204,6 +241,8 @@ def _extractSummaryData(thinkingEntries: list, graphState: dict | None = None) -
             elif toolName == "submitClaim":
                 if "error" not in data:
                     submitted = True
+                    claimData = data.get("claim", {})
+                    extractedClaimNumber = claimData.get("claim_number", "")
 
         except Exception:
             continue
@@ -226,16 +265,24 @@ def _extractSummaryData(thinkingEntries: list, graphState: dict | None = None) -
         if graphState.get("claimSubmitted"):
             submitted = True
 
+    if not extractedClaimNumber and graphState:
+        extractedClaimNumber = graphState.get("claimNumber", "") or ""
+
+    # BUG-013: If graphState says submitted but no submitClaim tool call
+    # exists in THIS turn's thinkingEntries, trust the graphState (prior turn
+    # did submit). But if submitted was set from thinkingEntries parsing and
+    # there's no actual submitClaim entry, suppress it (hallucination).
+    if submitted and not submitCallInEntries and not graphState.get("claimSubmitted"):
+        logger.warning("BUG-013: _extractSummaryData suppressing submitted=True — no submitClaim in thinkingEntries and graphState not submitted")
+        submitted = False
+        extractedClaimNumber = ""
+
     if not hasReceiptData:
         return None
 
     displayAmount = f"SGD {convertedAmount}" if convertedAmount else f"{currency} {totalAmount}"
 
-    progressPct = 25
-    if hasReceiptData:
-        progressPct = 50
-    if submitted:
-        progressPct = 100
+    progressPct = _calcProgressPct(thinkingEntries, graphState)
 
     return {
         "totalAmount": displayAmount,
@@ -243,6 +290,9 @@ def _extractSummaryData(thinkingEntries: list, graphState: dict | None = None) -
         "topCategory": category or "--",
         "warningCount": warningCount,
         "progressPct": progressPct,
+        "claimNumber": extractedClaimNumber or "",
+        "submitted": submitted,
+        "claimId": claimId,
         "batchItems": [
             {
                 "merchant": merchant or "Unknown",
@@ -528,7 +578,8 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
         logger.error(f"Error fetching graph state: {e}", exc_info=True)
 
     # Summary panel update (uses graph state for cross-turn receipt data)
-    summaryData = _extractSummaryData(thinkingEntries, graphState=graphStateValues)
+    claimId = graphInput.get("claimId", "")
+    summaryData = _extractSummaryData(thinkingEntries, graphState=graphStateValues, claimId=claimId)
     if summaryData:
         try:
             summaryTemplate = templates.get_template("partials/summary_panel.html")
@@ -575,6 +626,29 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     break
         if not finalText:
             finalText = await _getFallbackMessage(graph, config)
+
+    # BUG-013: Detect hallucinated claim submission (second layer — message)
+    if finalText:
+        submittedInText = "submitted" in finalText.lower() or "CLAIM-" in finalText
+        submitCallMade = any(
+            e.get("name") == "submitClaim"
+            for e in thinkingEntries
+            if e.get("type") == "tool"
+        )
+        if submittedInText and not submitCallMade:
+            logger.warning("BUG-013: Hallucinated submission detected — AI claimed submission without submitClaim tool call")
+            try:
+                template = templates.get_template("partials/message_bubble.html")
+                errorHtml = template.render(
+                    content="I encountered an issue submitting your claim. The submission did not complete. Please try again by typing 'submit' or 'yes'.",
+                    isAi=True,
+                    confidenceScores=None,
+                    violations=None,
+                )
+            except Exception:
+                errorHtml = '<div class="ai-message">I encountered an issue submitting your claim. Please try again by typing "submit".</div>'
+            yield ServerSentEvent(raw_data=errorHtml, event=SseEvent.MESSAGE)
+            return
 
     if finalText:
         confidenceScores = _extractConfidenceScores(thinkingEntries)
