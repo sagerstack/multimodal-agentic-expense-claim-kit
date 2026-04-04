@@ -355,6 +355,8 @@ function chatState() {
         const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         contentHtml += `<p class="text-on-surface text-sm leading-relaxed whitespace-pre-wrap text-left">${escaped}</p>`;
       }
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit', hour12: true});
       const html = `<div class="flex gap-4 max-w-2xl ml-auto flex-row-reverse">
         <div class="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0 border border-primary/30">
           <span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 1;">person</span>
@@ -363,6 +365,7 @@ function chatState() {
           <div class="bg-primary/10 p-4 rounded-2xl rounded-tr-none border border-primary/10 shadow-xl">
             ${contentHtml}
           </div>
+          <span class="text-[10px] text-outline px-1">${timeStr}</span>
         </div>
       </div>`;
       const thinkingPanel = document.getElementById('thinkingPanel');

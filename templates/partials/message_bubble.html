@@ -5,12 +5,28 @@
   </div>
   <div class="space-y-2 min-w-0 flex-1">
     <div class="bg-surface-container-low p-4 rounded-2xl rounded-tl-none border border-outline-variant/5 shadow-xl">
+      {% if confidenceScores %}
+      <div class="flex items-center gap-2 mb-2">
+        <div class="intelligence-pulse"></div>
+        <span class="text-[10px] font-bold text-secondary tracking-widest uppercase">Analysis Complete</span>
+      </div>
+      {% endif %}
       <div class="ai-markdown text-on-surface text-sm leading-relaxed">{{ content }}</div>
       {% if confidenceScores %}
       <div class="flex flex-wrap gap-1 mt-2">
         {% for field, score in confidenceScores.items() %}
         <span class="text-[10px] bg-secondary/10 text-secondary px-2 py-0.5 rounded-full">{{ field }}: {{ score }}%</span>
         {% endfor %}
+      </div>
+      <div class="flex gap-2 mt-3">
+        <button onclick="document.querySelector('textarea[name=message]').value = 'Yes, looks correct'; document.querySelector('#chatForm').requestSubmit();"
+                class="px-4 py-2 rounded-full bg-secondary/10 border border-secondary/20 text-secondary text-xs font-bold hover:bg-secondary/20 transition-colors">
+          Yes, looks correct
+        </button>
+        <button onclick="document.querySelector('textarea[name=message]').value = 'I need to edit some details'; document.querySelector('#chatForm').requestSubmit();"
+                class="px-4 py-2 rounded-full bg-surface-container-highest border border-outline-variant/20 text-on-surface-variant text-xs font-bold hover:bg-surface-bright transition-colors">
+          Edit details
+        </button>
       </div>
       {% endif %}
       {% if violations %}

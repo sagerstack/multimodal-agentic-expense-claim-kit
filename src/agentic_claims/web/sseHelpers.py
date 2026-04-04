@@ -812,6 +812,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     isAi=True,
                     confidenceScores=None,
                     violations=None,
+                    timestamp=datetime.now().strftime("%-I:%M %p"),
                 )
             except Exception:
                 errorHtml = '<div class="ai-message">I encountered an issue submitting your claim. Please try again by typing "submit".</div>'
@@ -828,6 +829,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 isAi=True,
                 confidenceScores=confidenceScores,
                 violations=violations,
+                timestamp=datetime.now().strftime("%-I:%M %p"),
             )
         except Exception:
             messageHtml = f'<div class="ai-message">{finalText}</div>'
