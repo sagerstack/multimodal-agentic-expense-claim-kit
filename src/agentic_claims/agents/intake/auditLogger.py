@@ -47,9 +47,7 @@ def bufferStep(sessionClaimId: str, action: str, details: dict) -> None:
     )
 
 
-async def flushSteps(
-    sessionClaimId: str, dbClaimId: int, actor: str = "intake_agent"
-) -> None:
+async def flushSteps(sessionClaimId: str, dbClaimId: int, actor: str = "intake_agent") -> None:
     """Flush all buffered audit steps to the DB for a given session.
 
     Called after the claim is successfully inserted and the DB claim ID is known.

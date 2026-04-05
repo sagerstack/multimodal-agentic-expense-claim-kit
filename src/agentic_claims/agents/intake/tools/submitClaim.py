@@ -33,7 +33,13 @@ RECEIPT_FIELD_MAP = {
 
 
 @tool
-async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict | None = None, threadId: str | None = None, sessionClaimId: str | None = None) -> dict:
+async def submitClaim(
+    claimData: dict,
+    receiptData: dict,
+    intakeFindings: dict | None = None,
+    threadId: str | None = None,
+    sessionClaimId: str | None = None,
+) -> dict:
     """Submit a claim and its receipt to the database atomically.
 
     Args:
@@ -80,7 +86,7 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
             "claimDataKeys": list(claimData.keys()),
             "receiptDataKeys": list(receiptData.keys()),
             "hasFindingsData": intakeFindings is not None,
-        }
+        },
     )
 
     # Build MCP arguments by mapping agent vocabulary to MCP parameter names
@@ -104,7 +110,7 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
         mergedArgs["claimNumber"] = claimData["claimNumber"]
         logger.warning(
             "Agent provided claimNumber (legacy behavior, DB should generate it)",
-            extra={"claimNumber": claimData["claimNumber"]}
+            extra={"claimNumber": claimData["claimNumber"]},
         )
 
     # Map claim fields through CLAIM_FIELD_MAP
@@ -116,8 +122,15 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
         if agentKey in CLAIM_FIELD_MAP:
             mcpKey = CLAIM_FIELD_MAP[agentKey]
             mergedArgs[mcpKey] = value
-        elif agentKey in ("currency", "originalAmount", "originalCurrency", "convertedAmount",
-                          "convertedCurrency", "exchangeRate", "conversionDate"):
+        elif agentKey in (
+            "currency",
+            "originalAmount",
+            "originalCurrency",
+            "convertedAmount",
+            "convertedCurrency",
+            "exchangeRate",
+            "conversionDate",
+        ):
             # Pass through known MCP-accepted currency conversion fields
             mergedArgs[agentKey] = value
         else:
@@ -153,13 +166,22 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
         else:
             # Fallback if date missing
             import hashlib
+
             keyHash = hashlib.md5(mergedArgs["idempotencyKey"].encode()).hexdigest()[:8]
             mergedArgs["receiptNumber"] = f"REC-{keyHash}"
 
     # Normalize receiptDate to YYYY-MM-DD format (PostgreSQL DATE column requirement)
     if "receiptDate" in mergedArgs and mergedArgs["receiptDate"]:
         rawDate = str(mergedArgs["receiptDate"])
-        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%B %d, %Y", "%b %d, %Y", "%d %B %Y", "%d %b %Y"):
+        for fmt in (
+            "%Y-%m-%d",
+            "%d/%m/%Y",
+            "%m/%d/%Y",
+            "%B %d, %Y",
+            "%b %d, %Y",
+            "%d %B %Y",
+            "%d %b %Y",
+        ):
             try:
                 parsed = datetime.strptime(rawDate, fmt)
                 mergedArgs["receiptDate"] = parsed.strftime("%Y-%m-%d")
@@ -178,14 +200,12 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
             "serverUrl": settings.db_mcp_url,
             "toolName": "insertClaim",
             "argumentKeys": list(mergedArgs.keys()),
-        }
+        },
     )
 
     # Single atomic MCP call to insert both claim and receipt
     result = await mcpCallTool(
-        serverUrl=settings.db_mcp_url,
-        toolName="insertClaim",
-        arguments=mergedArgs
+        serverUrl=settings.db_mcp_url, toolName="insertClaim", arguments=mergedArgs
     )
 
     # Log result type
@@ -194,7 +214,7 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
         extra={
             "resultType": type(result).__name__,
             "resultPreview": str(result)[:200] if not isinstance(result, dict) else None,
-        }
+        },
     )
 
     # Handle string response: try parsing as JSON
@@ -215,7 +235,7 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
                 "success": "error" not in result,
                 "hasClaimData": "claim" in result,
                 "hasReceiptData": "receipt" in result,
-            }
+            },
         )
         # Flush buffered audit steps now that the DB claim ID is known
         if sessionClaimId and "claim" in result and isinstance(result["claim"], dict):
@@ -224,8 +244,7 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
                 await flushSteps(sessionClaimId=sessionClaimId, dbClaimId=dbClaimId)
     else:
         logger.warning(
-            "submitClaim tool returned unexpected type",
-            extra={"resultType": type(result).__name__}
+            "submitClaim tool returned unexpected type", extra={"resultType": type(result).__name__}
         )
 
     return result

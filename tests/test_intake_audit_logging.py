@@ -10,6 +10,7 @@ import pytest
 def clearAuditBuffer():
     """Clear the audit buffer before each test."""
     from agentic_claims.agents.intake import auditLogger
+
     auditLogger._auditBuffer.clear()
     yield
     auditLogger._auditBuffer.clear()
@@ -22,7 +23,7 @@ def clearAuditBuffer():
 
 def testBufferStepAccumulatesEntries():
     """bufferStep appends entries to the buffer for the given session."""
-    from agentic_claims.agents.intake.auditLogger import bufferStep, _auditBuffer
+    from agentic_claims.agents.intake.auditLogger import _auditBuffer, bufferStep
 
     sessionId = "session-abc-123"
 
@@ -38,7 +39,7 @@ def testBufferStepAccumulatesEntries():
 
 def testAuditBufferIsolatedBySession():
     """Buffer entries for different session IDs do not interfere."""
-    from agentic_claims.agents.intake.auditLogger import bufferStep, _auditBuffer
+    from agentic_claims.agents.intake.auditLogger import _auditBuffer, bufferStep
 
     bufferStep("session-A", "receipt_uploaded", {"imagePath": "a.jpg"})
     bufferStep("session-B", "receipt_uploaded", {"imagePath": "b.jpg"})
@@ -87,7 +88,7 @@ async def testFlushStepsCallsMcpForEachEntry():
 @pytest.mark.asyncio
 async def testFlushStepsClearsBuffer():
     """Buffer for the session is empty after flushSteps completes."""
-    from agentic_claims.agents.intake.auditLogger import bufferStep, flushSteps, _auditBuffer
+    from agentic_claims.agents.intake.auditLogger import _auditBuffer, bufferStep, flushSteps
 
     sessionId = "session-flush-2"
     bufferStep(sessionId, "receipt_uploaded", {"imagePath": "y.jpg"})
@@ -101,7 +102,7 @@ async def testFlushStepsClearsBuffer():
 @pytest.mark.asyncio
 async def testFlushStepsHandlesMcpFailureGracefully():
     """flushSteps continues and clears buffer even if an MCP call raises."""
-    from agentic_claims.agents.intake.auditLogger import bufferStep, flushSteps, _auditBuffer
+    from agentic_claims.agents.intake.auditLogger import _auditBuffer, bufferStep, flushSteps
 
     sessionId = "session-flush-error"
     bufferStep(sessionId, "receipt_uploaded", {"imagePath": "z.jpg"})

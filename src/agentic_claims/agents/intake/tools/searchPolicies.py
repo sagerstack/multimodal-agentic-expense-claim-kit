@@ -2,13 +2,14 @@
 
 import logging
 import time
-from langchain_core.tools import tool
 
-logger = logging.getLogger(__name__)
+from langchain_core.tools import tool
 
 from agentic_claims.agents.intake.auditLogger import bufferStep
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
+
+logger = logging.getLogger(__name__)
 
 
 @tool
@@ -35,7 +36,13 @@ async def searchPolicies(query: str, limit: int = 5, claimId: str | None = None)
         arguments={"query": query, "limit": limit},
     )
 
-    logger.info("searchPolicies completed", extra={"elapsed": f"{time.time() - toolStart:.2f}s", "resultCount": len(result) if isinstance(result, list) else 0})
+    logger.info(
+        "searchPolicies completed",
+        extra={
+            "elapsed": f"{time.time() - toolStart:.2f}s",
+            "resultCount": len(result) if isinstance(result, list) else 0,
+        },
+    )
 
     # Buffer policy check audit step if a session claimId was provided
     if claimId and isinstance(result, list):

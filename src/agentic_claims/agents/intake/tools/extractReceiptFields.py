@@ -57,7 +57,13 @@ async def extractReceiptFields(claimId: str) -> dict:
                 "error": f"Image quality check failed: {qualityCheck['reason']}. Please upload a clearer, higher-resolution image."
             }
 
-        logger.info("extractReceiptFields quality check passed", extra={"elapsed": f"{time.time() - toolStart:.2f}s", "qualityScore": qualityCheck.get("score")})
+        logger.info(
+            "extractReceiptFields quality check passed",
+            extra={
+                "elapsed": f"{time.time() - toolStart:.2f}s",
+                "qualityScore": qualityCheck.get("score"),
+            },
+        )
 
         # Step 3: Instantiate VLM using ChatOpenRouter
         vlm = ChatOpenRouter(
@@ -117,7 +123,10 @@ async def extractReceiptFields(claimId: str) -> dict:
             else:
                 raise
 
-        logger.info("extractReceiptFields VLM call completed", extra={"elapsed": f"{time.time() - toolStart:.2f}s"})
+        logger.info(
+            "extractReceiptFields VLM call completed",
+            extra={"elapsed": f"{time.time() - toolStart:.2f}s"},
+        )
 
         rawContent = response.content.strip()
         if rawContent.startswith("```"):
@@ -130,7 +139,13 @@ async def extractReceiptFields(claimId: str) -> dict:
 
         try:
             result = json.loads(rawContent)
-            logger.info("extractReceiptFields completed", extra={"elapsed": f"{time.time() - toolStart:.2f}s", "hasFields": "fields" in result})
+            logger.info(
+                "extractReceiptFields completed",
+                extra={
+                    "elapsed": f"{time.time() - toolStart:.2f}s",
+                    "hasFields": "fields" in result,
+                },
+            )
 
             # Buffer audit steps — flushed to DB when claim is submitted
             if "fields" in result:

@@ -6,11 +6,13 @@ from decimal import Decimal
 from typing import Any
 
 import psycopg
-from psycopg.types.json import Json
 from fastmcp import FastMCP
+from psycopg.types.json import Json
 
 # Environment configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://agentic:password@localhost:5432/agentic_claims")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql://agentic:password@localhost:5432/agentic_claims"
+)
 
 # Initialize FastMCP server
 mcp = FastMCP("db-server")
@@ -30,9 +32,13 @@ def getConnection() -> psycopg.Connection:
 def serializeRow(row: dict) -> dict:
     """Convert non-JSON-serializable values (datetime, Decimal) to strings."""
     return {
-        k: (v.isoformat() if isinstance(v, (datetime, date))
-             else float(v) if isinstance(v, Decimal)
-             else v)
+        k: (
+            v.isoformat()
+            if isinstance(v, (datetime, date))
+            else float(v)
+            if isinstance(v, Decimal)
+            else v
+        )
         for k, v in row.items()
     }
 
@@ -192,7 +198,7 @@ def insertClaim(
                                created_at, updated_at
                         FROM claims WHERE idempotency_key = %s
                         """,
-                        (idempotencyKey,)
+                        (idempotencyKey,),
                     )
                     claimColumns = [desc[0] for desc in cur.description]
                     claimRow = cur.fetchone()
@@ -204,8 +210,8 @@ def insertClaim(
                     conn.rollback()  # No changes to commit
                     return {
                         "error": f"Duplicate receipt detected. This receipt was already submitted as {claimRecord.get('claim_number', 'unknown')} "
-                                 f"on {claimRecord.get('created_at', 'unknown date')}. "
-                                 f"Each receipt can only be submitted once.",
+                        f"on {claimRecord.get('created_at', 'unknown date')}. "
+                        f"Each receipt can only be submitted once.",
                         "existingClaimNumber": claimRecord.get("claim_number"),
                     }
 
@@ -313,7 +319,9 @@ def insertClaim(
 
 
 @mcp.tool()
-def insertAuditLog(claimId: int, action: str, newValue: str, actor: str, oldValue: str = "") -> dict[str, Any]:
+def insertAuditLog(
+    claimId: int, action: str, newValue: str, actor: str, oldValue: str = ""
+) -> dict[str, Any]:
     """
     Insert an audit log entry for a claim.
 
@@ -422,16 +430,18 @@ def getClaimSchema() -> dict[str, Any]:
                     WHERE table_name = %s AND table_schema = 'public'
                     ORDER BY ordinal_position
                     """,
-                    (tableName,)
+                    (tableName,),
                 )
                 columns = []
                 for row in cur.fetchall():
-                    columns.append({
-                        "name": row[0],
-                        "type": row[1],
-                        "nullable": row[2] == "YES",
-                        "hasDefault": row[3] is not None,
-                    })
+                    columns.append(
+                        {
+                            "name": row[0],
+                            "type": row[1],
+                            "nullable": row[2] == "YES",
+                            "hasDefault": row[3] is not None,
+                        }
+                    )
                 schema[tableName] = columns
             return schema
     except Exception as e:
@@ -482,7 +492,9 @@ def getClaimWithReceipts(claimId: int) -> dict[str, Any]:
             receiptColumns = [desc[0] for desc in cur.description]
             receiptRows = cur.fetchall()
 
-            claim["receipts"] = [serializeRow(dict(zip(receiptColumns, row))) for row in receiptRows]
+            claim["receipts"] = [
+                serializeRow(dict(zip(receiptColumns, row))) for row in receiptRows
+            ]
 
             return claim
     except Exception as e:
