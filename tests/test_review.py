@@ -1,6 +1,5 @@
 """Tests for the Claim Review router — page handler and API endpoints."""
 
-import json
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -36,7 +35,9 @@ _FAKE_CLAIM_ROW = {
     "total_amount": Decimal("120.00"),
     "currency": "SGD",
     "created_at": None,
-    "intake_findings": {"violations": [{"description": "Amount exceeds policy limit", "score": 0.92}]},
+    "intake_findings": {
+        "violations": [{"description": "Amount exceeds policy limit", "score": 0.92}]
+    },
     "receipt_id": 10,
     "merchant": "Starbucks",
     "date": "2026-04-01",
@@ -96,8 +97,9 @@ def employeeClient():
 
 def testClaimDetailEndpointReturnsFullData(client):
     """GET /api/review/{claimId} returns JSON with claim, receipt, flagReason, aiInsight."""
-    with patch("agentic_claims.web.routers.review._fetchClaimDetail", new=AsyncMock(return_value=_FAKE_CLAIM_ROW)):
-        with patch("agentic_claims.web.routers.review._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
+    _path = "agentic_claims.web.routers.review"
+    with patch(f"{_path}._fetchClaimDetail", new=AsyncMock(return_value=_FAKE_CLAIM_ROW)):
+        with patch(f"{_path}._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
             response = client.get("/api/review/42")
     assert response.status_code == 200
     data = response.json()
@@ -129,7 +131,8 @@ def testClaimDetailEndpointReturnsFullData(client):
 
 def testClaimDetailReturns404ForMissingClaim(client):
     """GET /api/review/{claimId} returns 404 when claim not found."""
-    with patch("agentic_claims.web.routers.review._fetchClaimDetail", new=AsyncMock(return_value=None)):
+    _path = "agentic_claims.web.routers.review"
+    with patch(f"{_path}._fetchClaimDetail", new=AsyncMock(return_value=None)):
         response = client.get("/api/review/999")
     assert response.status_code == 404
 
@@ -243,8 +246,9 @@ def testReceiptImageEndpointRedirectsToStaticUrl(client):
 
 def testReviewPageReturns200WithClaimData(client):
     """GET /review/{claimId} renders HTML page with claim context."""
-    with patch("agentic_claims.web.routers.review._fetchClaimDetail", new=AsyncMock(return_value=_FAKE_CLAIM_ROW)):
-        with patch("agentic_claims.web.routers.review._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
+    _path = "agentic_claims.web.routers.review"
+    with patch(f"{_path}._fetchClaimDetail", new=AsyncMock(return_value=_FAKE_CLAIM_ROW)):
+        with patch(f"{_path}._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
             response = client.get("/review/42")
     assert response.status_code == 200
     assert "Review Flagged Claim" in response.text
@@ -274,6 +278,7 @@ def testReviewPageRedirectsNonReviewer():
 def testReviewRouteNotInPagesRouter():
     """/review/{claimId} route no longer exists in pages.py router."""
     from agentic_claims.web.routers import pages
+
     routes = [r.path for r in pages.router.routes]
     assert "/review/{claimId}" not in routes
 
@@ -281,9 +286,8 @@ def testReviewRouteNotInPagesRouter():
 def testParseFlagReasonWithViolations():
     """_parseFlagReason extracts explanation and confidence from violations list."""
     from agentic_claims.web.routers.review import _parseFlagReason
-    findings = {
-        "violations": [{"description": "Exceeds limit", "score": 0.88}]
-    }
+
+    findings = {"violations": [{"description": "Exceeds limit", "score": 0.88}]}
     result = _parseFlagReason(findings)
     assert result is not None
     assert result["explanation"] == "Exceeds limit"
@@ -293,6 +297,7 @@ def testParseFlagReasonWithViolations():
 def testParseFlagReasonNullWhenEmpty():
     """_parseFlagReason returns None when no violations or explanation."""
     from agentic_claims.web.routers.review import _parseFlagReason
+
     assert _parseFlagReason({}) is None
     assert _parseFlagReason(None) is None
     assert _parseFlagReason({"violations": []}) is None

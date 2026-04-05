@@ -241,5 +241,6 @@ def testDashboardPageRedirectsNonReviewer():
 def testDashboardPageNotInPagesRouter():
     """/dashboard route no longer exists in pages.py router."""
     from agentic_claims.web.routers import pages
+
     routes = [r.path for r in pages.router.routes]
     assert "/dashboard" not in routes

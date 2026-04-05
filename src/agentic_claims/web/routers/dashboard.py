@@ -1,7 +1,6 @@
 """Dashboard router — page handler and API endpoints for the Approver Dashboard."""
 
 import logging
-from datetime import datetime, timezone
 
 from fastapi import APIRouter
 from sqlalchemy import func, select, text
@@ -66,19 +65,30 @@ async def _queryClaims() -> list[dict]:
 
     claims = []
     for row in rows:
-        claimId, claimNumber, employeeId, status, totalAmount, currency, createdAt, displayName = row
+        (
+            claimId,
+            claimNumber,
+            employeeId,
+            status,
+            totalAmount,
+            currency,
+            createdAt,
+            displayName,
+        ) = row
         employeeName = f"{displayName} ({employeeId})" if displayName else employeeId
-        claims.append({
-            "id": claimId,
-            "claimNumber": claimNumber,
-            "employeeId": employeeId,
-            "employeeName": employeeName,
-            "category": "General",
-            "totalAmount": float(totalAmount) if totalAmount else 0.0,
-            "currency": currency or "SGD",
-            "status": status,
-            "createdAt": createdAt.isoformat() if createdAt else None,
-        })
+        claims.append(
+            {
+                "id": claimId,
+                "claimNumber": claimNumber,
+                "employeeId": employeeId,
+                "employeeName": employeeName,
+                "category": "General",
+                "totalAmount": float(totalAmount) if totalAmount else 0.0,
+                "currency": currency or "SGD",
+                "status": status,
+                "createdAt": createdAt.isoformat() if createdAt else None,
+            }
+        )
 
     return claims
 

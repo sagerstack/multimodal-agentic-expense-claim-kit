@@ -27,7 +27,10 @@ _REJECTION_REASONS = {
 
 
 async def _fetchClaimDetail(claimId: int) -> dict | None:
-    """Fetch claim with receipt and intake_findings via raw SQL (ORM model lacks intake_findings)."""
+    """Fetch claim with receipt and intake_findings via raw SQL.
+
+    ORM model lacks intake_findings column, so raw SQL is required.
+    """
     async with getAsyncSession() as session:
         result = await session.execute(
             text(
@@ -132,8 +135,12 @@ def _buildClaimContext(row: dict) -> tuple[dict, dict | None]:
             "lineItems": lineItems,
             "category": category,
             "originalCurrency": row.get("original_currency"),
-            "originalAmount": float(row["original_amount"]) if row.get("original_amount") else None,
-            "convertedAmountSgd": float(row["converted_amount_sgd"]) if row.get("converted_amount_sgd") else None,
+            "originalAmount": (
+                float(row["original_amount"]) if row.get("original_amount") else None
+            ),
+            "convertedAmountSgd": (
+                float(row["converted_amount_sgd"]) if row.get("converted_amount_sgd") else None
+            ),
         }
     return claim, receipt
 
@@ -218,7 +225,14 @@ async def reviewDetailApi(request: Request, claimId: int):
     flagReason = _parseFlagReason(intakeFindings)
     aiInsight = await _fetchAiInsight(row["employee_id"])
 
-    return JSONResponse({"claim": claim, "receipt": receipt, "flagReason": flagReason, "aiInsight": aiInsight})
+    return JSONResponse(
+        {
+            "claim": claim,
+            "receipt": receipt,
+            "flagReason": flagReason,
+            "aiInsight": aiInsight,
+        }
+    )
 
 
 @router.post("/api/review/{claimId}/decision")
@@ -239,17 +253,24 @@ async def reviewDecisionApi(
 
     if action == "reject" and rejectionReason not in _REJECTION_REASONS:
         return JSONResponse(
-            {"error": f"rejectionReason required for reject action. Must be one of: {', '.join(_REJECTION_REASONS)}"},
+            {
+                "error": (
+                    "rejectionReason required for reject action. "
+                    f"Must be one of: {', '.join(_REJECTION_REASONS)}"
+                )
+            },
             status_code=422,
         )
 
     newStatus = "approved" if action == "approve" else "rejected"
     auditAction = "claim_approved" if action == "approve" else "claim_rejected"
-    newValue = json.dumps({
-        "action": action,
-        **({"rejectionReason": rejectionReason} if action == "reject" else {}),
-        **({"reviewerNotes": reviewerNotes} if reviewerNotes else {}),
-    })
+    newValue = json.dumps(
+        {
+            "action": action,
+            **({"rejectionReason": rejectionReason} if action == "reject" else {}),
+            **({"reviewerNotes": reviewerNotes} if reviewerNotes else {}),
+        }
+    )
     actor = currentUser["displayName"] or currentUser["username"]
     nowUtc = datetime.now(timezone.utc)
 
