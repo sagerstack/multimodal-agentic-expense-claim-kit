@@ -22,9 +22,7 @@ See MILESTONES.md for archived v1.0 details.
 - [x] **Phase 7: SSE Streaming + Full Chat Page** -- SSE event taxonomy, streaming pipeline, V1 migration, complete Chat Page feature set
 - [x] **Phase 6.1: Model Upgrade + UX Fixes** -- Switch LLM from QwQ-32B to Qwen3-235B-A22B (fast MoE, no CoT chains), swap to v2 system prompt, fix submission summary panel (100% on submit, show Claim ID, correct amounts)
 - [x] **Phase 6.2: Chat UI Refresh + Employee ID Fix** -- Apply Stitch "Updated Branding" design to Chat Page (Decision Pathway sidebar, bottom submission table, message styling, top nav) and fix BUG-015 (server-side employee ID extraction)
-- [ ] **Phase 6.3: User Authentication + Dual Roles** -- Login page (Stitch design), user/reviewer roles, session-based auth, role-based routing, employee ID from authenticated user
-- [ ] **Phase 8: Dashboard + Audit Log Pages** -- Approver Dashboard (KPIs, claims table) and Audit & Transparency Log (decision timeline)
-- [ ] **Phase 9: Claim Review Page** -- Escalated claim display, approve/reject actions, receipt zoom, claim navigation
+- [ ] **Phase 6.3: User Authentication + Dual Roles + Reviewer Pages** -- Login, auth, roles, Dashboard, Audit Log, Claim Review (absorbs Phase 8 + 9)
 - [ ] **Phase 10: Browser E2E Tests** -- Playwright test suite covering all 4 pages against a live server
 
 ---
@@ -129,73 +127,34 @@ Plans:
 
 ---
 
-### Phase 6.3: User Authentication + Dual Roles
+### Phase 6.3: User Authentication + Dual Roles + Reviewer Pages
 
-**Goal:** The application requires authentication before accessing any page. A login page matching the Stitch "Login - Expense AI" design authenticates users with username/password. Two roles exist — **user** (claimant, routed to Chat Page) and **reviewer** (approver, routed to Dashboard). Role-based access controls restrict page visibility. The authenticated user's employee_id replaces manual extraction from chat messages.
+**Goal:** The application requires authentication before accessing any page. A login page matching the Stitch design authenticates users with username/password. Two roles (user/reviewer) control route access and sidebar visibility. The Dashboard, Audit Log, and Claim Review pages are fully implemented with live data, HTMX partial swaps, and approve/reject workflows. Intake agent processing writes audit_log entries for the decision timeline. This phase absorbs the scope of Phase 8 (Dashboard + Audit Log) and Phase 9 (Claim Review).
 
 **Depends on:** Phase 6.2
 
-**Requirements:** AUTH-01 (login page), AUTH-02 (dual roles), AUTH-03 (session auth), AUTH-04 (role routing), AUTH-05 (employee ID from auth)
+**Requirements:** AUTH-01, AUTH-02, AUTH-03, AUTH-04, AUTH-05, DASH-01, DASH-02, DASH-03, DASH-04, DASH-05, AUDT-01, AUDT-02, AUDT-03, AUDT-04, AUDT-05, AUDT-06, AUDT-07, REVW-01, REVW-02, REVW-03, REVW-04, REVW-05, REVW-06, REVW-07, REVW-08
 
 **Success Criteria** (what must be TRUE when Phase 6.3 completes):
 1. Visiting any page while unauthenticated redirects to `/login`, which renders the Stitch login design with username/password fields matching the dark theme
 2. Logging in as a user role redirects to `/` (Chat Page); logging in as a reviewer role redirects to `/dashboard`
 3. Users cannot access `/dashboard`, `/audit`, or `/review` pages; reviewers can access all pages
-4. The authenticated user's `employee_id` is automatically used for claim submission — no manual employee ID extraction from chat messages
-5. Logging out clears the session and redirects to `/login`; all existing tests pass without regression
+4. Sidebar shows exactly 2 entries: Claims (both roles) and Review (reviewer only)
+5. Dashboard shows 3 KPI cards with live counts, claims table with dual navigation (row -> review, audit icon -> audit), and AI Efficiency chart
+6. Audit Log page shows list-detail layout with HTMX claim selection, decision timeline with 4 steps, confidence scores, and policy references
+7. Claim Review page shows receipt with zoom, extracted fields, flag reason, AI insight, and working approve/reject with audit logging
+8. Intake agent writes audit_log entries for receipt upload, AI extraction, and policy check steps
+9. Logging out clears the session and redirects to `/login`; all existing tests pass without regression
 
-**Plans:** TBD
-
-Plans:
-- [ ] 06.3-01-PLAN.md -- TBD
-
----
-
-### Phase 8: Dashboard + Audit Log Pages
-
-**Goal:** The Approver Dashboard (Page 2) displays live KPI counts and a filterable recent claims table, and the Audit & Transparency Log (Page 3) shows a decision pathway timeline for each claim -- both pages use HTMX partial swaps for filtering and selection with data served from JSON API endpoints backed by the existing PostgreSQL claims and audit_log tables.
-
-**Depends on:** Phase 7
-
-**Requirements:** DASH-01, DASH-02, DASH-03, DASH-04, DASH-05, AUDT-01, AUDT-02, AUDT-03, AUDT-04, AUDT-05, AUDT-06, AUDT-07
-
-**Success Criteria** (what must be TRUE when Phase 8 completes):
-1. The Dashboard page loads with three KPI cards showing live counts from the database: Total Pending, Auto-Approved, and Escalated -- refreshing the page after submitting a claim reflects the updated count
-2. The Recent Claims table shows claim number, employee ID, category, amount, and a color-coded status badge for each claim; clicking a row navigates to the Claim Review page for that specific claim
-3. The status filter buttons (Pending, Approved, Escalated) trigger an HTMX partial swap that replaces only the claims table rows without a full page reload -- the KPI cards and sidebar remain stable
-4. The Audit Log page lists all claims in the left panel with status badge and amount; selecting a claim replaces the right panel with a vertical decision timeline showing Upload, AI Extraction, Policy Check, and Final Decision steps with timestamps
-5. The AI Extraction timeline step shows the VLM confidence score; the Policy Check step shows the matched policy reference with a "View Policy Reference" link; the receipt image is accessible via the "View Receipt" button
-
-**Plans:** 3 plans
+**Plans:** 6 plans
 
 Plans:
-- [ ] 08-01-PLAN.md -- `GET /api/dashboard` JSON endpoint (KPI counts, claims table data with status filter), Dashboard Jinja2 template with KPI cards, status filter HTMX wiring, row navigation link
-- [ ] 08-02-PLAN.md -- `GET /api/audit/{claim_id}` JSON endpoint (decision timeline from audit_log + claims), AI Efficiency panel (auto-approval rate)
-- [ ] 08-03-PLAN.md -- Audit Log Jinja2 template: claim list panel, decision timeline right panel, confidence score display, policy citation link, View Receipt button
-
----
-
-### Phase 9: Claim Review Page
-
-**Goal:** The Claim Review Page (Page 4) allows a reviewer to inspect an escalated claim -- seeing the receipt image with zoom controls, extracted fields, the AI flag reason with confidence score, and pre-populated rejection reason options -- and submit an Approve or Reject decision with notes that updates the claim status in the database.
-
-**Depends on:** Phase 8
-
-**Requirements:** REVW-01, REVW-02, REVW-03, REVW-04, REVW-05, REVW-06, REVW-07, REVW-08
-
-**Success Criteria** (what must be TRUE when Phase 9 completes):
-1. Opening the Claim Review page for a specific claim displays the receipt image in the left column and extracted fields (merchant, date, amount, category) as read-only labeled cards in the right column -- data loaded from the database, not hardcoded
-2. The flag reason card shows the AI-generated explanation and confidence score for why the claim was escalated
-3. Clicking "Approve" with optional reviewer notes submits a PATCH request that updates the claim status to "approved" in the database and redirects to the next escalated claim; clicking "Reject" requires selecting a pre-defined rejection reason (Duplicate, Incomplete, Policy violation) before the button activates
-4. The receipt image responds to zoom-in and zoom-out button clicks via Alpine.js CSS `transform: scale()` -- starting at 1x, incrementing/decrementing by 0.25x, bounded between 0.5x and 3x
-5. Previous/Next navigation buttons cycle through escalated claims without returning to the dashboard -- the URL and displayed claim update in place via HTMX partial swap
-
-**Plans:** 3 plans
-
-Plans:
-- [ ] 09-01-PLAN.md -- `GET /api/review/{claim_id}` and `PATCH /api/review/{claim_id}/decision` endpoints, escalated claims list endpoint for Previous/Next navigation
-- [ ] 09-02-PLAN.md -- Claim Review Jinja2 template: receipt image display, extracted fields panel, flag reason card, approve/reject form with reviewer notes, rejection reason radio buttons
-- [ ] 09-03-PLAN.md -- Alpine.js zoom controls (zoom in/out buttons, scale state, bounded range), Previous/Next navigation HTMX wiring
+- [ ] 06.3-01-PLAN.md -- Auth foundation: Users table + migration + seed data, User model, auth middleware, login/logout endpoints, login template (Stitch design), auth tests
+- [ ] 06.3-02-PLAN.md -- Sidebar + role routing: Update base.html to 2-entry sidebar, role-based route protection, profile dropdown with logout
+- [ ] 06.3-03-PLAN.md -- Dashboard page: KPI API endpoints, claims table with dual navigation, AI Efficiency chart, Stitch template
+- [ ] 06.3-04-PLAN.md -- Audit Log page: Timeline API endpoints, list-detail template with HTMX, decision timeline, confidence scores, intelligence insights
+- [ ] 06.3-05-PLAN.md -- Claim Review page: Claim detail + decision API endpoints, receipt zoom, extracted fields, approve/reject with audit logging
+- [ ] 06.3-06-PLAN.md -- Intake audit logging: Buffer + flush pattern for audit_log entries during intake agent processing
 
 ---
 
@@ -203,7 +162,7 @@ Plans:
 
 **Goal:** A Playwright test suite covers the happy path through all 4 pages and one escalation path -- all tests use sentinel elements and `waitForSelector` (never `waitForTimeout`), run against a live uvicorn server in a background thread, and pass reliably in CI.
 
-**Depends on:** Phase 9
+**Depends on:** Phase 6.3
 
 **Requirements:** TEST-01, TEST-02, TEST-03, TEST-04, TEST-05
 
@@ -225,18 +184,17 @@ Plans:
 ## Progress
 
 **Execution Order:**
-v2.0 phases execute in numeric order: 6 -> 7 -> 6.1 -> 6.2 -> 8 -> 9 -> 10
+v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
 | 6. FastAPI Scaffold + Static Shell | 3/3 | Complete (v2 redo) | 2026-04-02 |
 | 7. SSE Streaming + Full Chat Page | 3/3 | Complete | 2026-04-02 |
 | 6.1. Model Upgrade + UX Fixes | 2/2 | Complete | 2026-04-04 |
-| 6.2. Chat UI Refresh + Employee ID Fix | 0/4 | Not started | -- |
-| 8. Dashboard + Audit Log Pages | 0/3 | Not started | -- |
-| 9. Claim Review Page | 0/3 | Not started | -- |
+| 6.2. Chat UI Refresh + Employee ID Fix | 4/4 | Complete | 2026-04-05 |
+| 6.3. User Auth + Dual Roles + Reviewer Pages | 0/6 | Not started | -- |
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
 
-**v2.0 total:** 8/20 plans complete
+**v2.0 total:** 12/20 plans complete
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)
