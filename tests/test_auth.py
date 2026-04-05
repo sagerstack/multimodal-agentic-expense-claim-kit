@@ -183,7 +183,10 @@ def testUnauthenticatedRootRedirectsToLogin(client):
 
 def testLoginPostInvalidCredentialsShowsError(client):
     """POST /login with wrong credentials renders login page with error."""
-    with patch("agentic_claims.web.routers.auth.authenticateUser", new=AsyncMock(return_value=None)):
+    mockAuth = patch(
+        "agentic_claims.web.routers.auth.authenticateUser", new=AsyncMock(return_value=None)
+    )
+    with mockAuth:
         response = client.post(
             "/login",
             data={"username": "sagar", "password": "wrongpassword"},
@@ -198,7 +201,10 @@ def testLoginPostInvalidCredentialsShowsError(client):
 def testLoginPostValidCredentialsUserRedirectsToRoot(client):
     """POST /login with valid user credentials redirects to /."""
     mockUser = _makeUser(role="user")
-    with patch("agentic_claims.web.routers.auth.authenticateUser", new=AsyncMock(return_value=mockUser)):
+    mockAuth = patch(
+        "agentic_claims.web.routers.auth.authenticateUser", new=AsyncMock(return_value=mockUser)
+    )
+    with mockAuth:
         response = client.post(
             "/login",
             data={"username": "sagar", "password": "sagar123"},
@@ -210,8 +216,14 @@ def testLoginPostValidCredentialsUserRedirectsToRoot(client):
 
 def testLoginPostValidCredentialsReviewerRedirectsToDashboard(client):
     """POST /login with valid reviewer credentials redirects to /dashboard."""
-    mockUser = _makeUser(username="james", role="reviewer", employeeId="909090", displayName="James")
-    with patch("agentic_claims.web.routers.auth.authenticateUser", new=AsyncMock(return_value=mockUser)):
+    mockUser = _makeUser(
+        username="james", role="reviewer", employeeId="909090", displayName="James"
+    )
+    mockAuth = patch(
+        "agentic_claims.web.routers.auth.authenticateUser",
+        new=AsyncMock(return_value=mockUser),
+    )
+    with mockAuth:
         response = client.post(
             "/login",
             data={"username": "james", "password": "james123"},

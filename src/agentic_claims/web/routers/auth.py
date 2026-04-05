@@ -50,10 +50,8 @@ async def loginPost(
     request.session["role"] = user.role
     request.session["employee_id"] = user.employeeId
     request.session["display_name"] = user.displayName
-
-    # Extend session cookie lifetime if remember_me checked (7 days)
-    if remember_me:
-        request.session["remember_me"] = True
+    # Store remember_me flag in session so RememberMeMiddleware can patch Max-Age
+    request.session["remember_me"] = bool(remember_me)
 
     redirectTarget = _ROLE_DEFAULTS.get(user.role, "/")
     return RedirectResponse(redirectTarget, status_code=302)
