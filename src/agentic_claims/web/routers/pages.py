@@ -1,11 +1,13 @@
-"""Page route handlers for all 4 application pages."""
+"""Page route handlers for all application pages."""
 
 import uuid
 
 from fastapi import APIRouter
 from starlette.requests import Request
+from starlette.responses import RedirectResponse
 
 from agentic_claims.core.imageStore import clearImage
+from agentic_claims.web.auth import getCurrentUser
 from agentic_claims.web.routers.chat import fetchClaimsForTable
 from agentic_claims.web.session import getSessionIds
 from agentic_claims.web.sessionQueues import removeQueue
@@ -34,6 +36,8 @@ async def chatPage(request: Request):
     request.session.pop("awaiting_clarification", None)
 
     sessionIds = getSessionIds(request)
+    currentUser = getCurrentUser(request)
+
     initialSteps = [
         {"name": "Receipt Uploaded", "icon": "cloud_upload", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": ""},
         {"name": "AI Extraction", "icon": "troubleshoot", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": "Awaiting receipt upload..."},
@@ -55,13 +59,21 @@ async def chatPage(request: Request):
             "claims": claims,
             "sessionTotal": f"SGD {sessionTotal:.2f}",
             "itemCount": len(claims),
+            "userRole": currentUser["role"],
+            "displayName": currentUser["displayName"],
+            "employeeId": currentUser["employeeId"],
+            "username": currentUser["username"],
         },
     )
 
 
 @router.get("/dashboard")
 async def dashboardPage(request: Request):
-    """Render the Approver Dashboard page."""
+    """Render the Approver Dashboard page. Reviewer-only."""
+    currentUser = getCurrentUser(request)
+    if currentUser["role"] != "reviewer":
+        return RedirectResponse("/", status_code=302)
+
     sessionIds = getSessionIds(request)
     return templates.TemplateResponse(
         request,
@@ -70,28 +82,44 @@ async def dashboardPage(request: Request):
             "activePage": "dashboard",
             "threadId": sessionIds["threadId"],
             "claimId": sessionIds["claimId"],
+            "userRole": currentUser["role"],
+            "displayName": currentUser["displayName"],
+            "employeeId": currentUser["employeeId"],
+            "username": currentUser["username"],
         },
     )
 
 
-@router.get("/audit")
-async def auditPage(request: Request):
-    """Render the Audit & Transparency Log page."""
+@router.get("/audit/{claimId}")
+async def auditPage(request: Request, claimId: str):
+    """Render the Audit & Transparency Log page for a specific claim. Reviewer-only."""
+    currentUser = getCurrentUser(request)
+    if currentUser["role"] != "reviewer":
+        return RedirectResponse("/", status_code=302)
+
     sessionIds = getSessionIds(request)
     return templates.TemplateResponse(
         request,
         "audit.html",
         context={
             "activePage": "audit",
+            "claimId": claimId,
             "threadId": sessionIds["threadId"],
-            "claimId": sessionIds["claimId"],
+            "userRole": currentUser["role"],
+            "displayName": currentUser["displayName"],
+            "employeeId": currentUser["employeeId"],
+            "username": currentUser["username"],
         },
     )
 
 
 @router.get("/review/{claimId}")
 async def reviewPage(request: Request, claimId: str):
-    """Render the Claim Review page for a specific claim."""
+    """Render the Claim Review page for a specific claim. Reviewer-only."""
+    currentUser = getCurrentUser(request)
+    if currentUser["role"] != "reviewer":
+        return RedirectResponse("/", status_code=302)
+
     sessionIds = getSessionIds(request)
     return templates.TemplateResponse(
         request,
@@ -100,5 +128,9 @@ async def reviewPage(request: Request, claimId: str):
             "activePage": "review",
             "claimId": claimId,
             "threadId": sessionIds["threadId"],
+            "userRole": currentUser["role"],
+            "displayName": currentUser["displayName"],
+            "employeeId": currentUser["employeeId"],
+            "username": currentUser["username"],
         },
     )

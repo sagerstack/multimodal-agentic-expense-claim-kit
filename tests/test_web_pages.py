@@ -1,9 +1,17 @@
 """Smoke tests for all 4 page routes and session cookie."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from starlette.testclient import TestClient
+
+_FAKE_USER = {
+    "userId": 1,
+    "username": "testuser",
+    "role": "reviewer",
+    "employeeId": "EMP001",
+    "displayName": "Test User",
+}
 
 
 @pytest.fixture
@@ -32,8 +40,9 @@ def client():
     testApp.include_router(pagesRouter)
     testApp.state.graph = MagicMock()
 
-    with TestClient(testApp) as c:
-        yield c
+    with patch("agentic_claims.web.routers.pages.getCurrentUser", return_value=_FAKE_USER):
+        with TestClient(testApp) as c:
+            yield c
 
 
 def testChatPageReturns200(client):
@@ -51,8 +60,8 @@ def testDashboardPageReturns200(client):
 
 
 def testAuditPageReturns200(client):
-    """GET /audit returns 200 with audit page content."""
-    response = client.get("/audit")
+    """GET /audit/test-claim-123 returns 200 with audit page content."""
+    response = client.get("/audit/test-claim-123")
     assert response.status_code == 200
     assert "Audit" in response.text
 
