@@ -26,6 +26,7 @@ def client():
     from starlette.staticfiles import StaticFiles
 
     from agentic_claims.web.main import projectRoot
+    from agentic_claims.web.routers.audit import router as auditRouter
     from agentic_claims.web.routers.chat import router as chatRouter
     from agentic_claims.web.routers.dashboard import router as dashboardRouter
     from agentic_claims.web.routers.pages import router as pagesRouter
@@ -38,6 +39,7 @@ def client():
         session_cookie="agentic_session",
     )
     testApp.mount("/static", StaticFiles(directory=str(projectRoot / "static")), name="static")
+    testApp.include_router(auditRouter)
     testApp.include_router(chatRouter)
     testApp.include_router(dashboardRouter)
     testApp.include_router(reviewRouter)
@@ -54,15 +56,21 @@ def client():
         "line_items": {}, "original_currency": None, "original_amount": None,
         "converted_amount_sgd": None, "display_name": "Test User",
     }
-    with patch("agentic_claims.web.routers.dashboard.getCurrentUser", return_value=_FAKE_USER):
-        with patch("agentic_claims.web.routers.dashboard._queryKpis", new=AsyncMock(return_value=emptyKpis)):
-            with patch("agentic_claims.web.routers.dashboard._queryClaims", new=AsyncMock(return_value=[])):
-                with patch("agentic_claims.web.routers.review.getCurrentUser", return_value=_FAKE_USER):
-                    with patch("agentic_claims.web.routers.review._fetchClaimDetail", new=AsyncMock(return_value=fakeClaimRow)):
-                        with patch("agentic_claims.web.routers.review._fetchAiInsight", new=AsyncMock(return_value=None)):
-                            with patch("agentic_claims.web.routers.pages.getCurrentUser", return_value=_FAKE_USER):
-                                with TestClient(testApp) as c:
-                                    yield c
+    emptyInsights = {"anomalyCount": 0, "costBenchmark": None}
+    with patch("agentic_claims.web.routers.audit.getCurrentUser", return_value=_FAKE_USER):
+        with patch("agentic_claims.web.routers.audit._fetchAllClaims", new=AsyncMock(return_value=[])):
+            with patch("agentic_claims.web.routers.audit._fetchTimeline", new=AsyncMock(return_value=[])):
+                with patch("agentic_claims.web.routers.audit._fetchInsights", new=AsyncMock(return_value=emptyInsights)):
+                    with patch("agentic_claims.web.routers.audit._fetchClaimSummary", new=AsyncMock(return_value=None)):
+                        with patch("agentic_claims.web.routers.dashboard.getCurrentUser", return_value=_FAKE_USER):
+                            with patch("agentic_claims.web.routers.dashboard._queryKpis", new=AsyncMock(return_value=emptyKpis)):
+                                with patch("agentic_claims.web.routers.dashboard._queryClaims", new=AsyncMock(return_value=[])):
+                                    with patch("agentic_claims.web.routers.review.getCurrentUser", return_value=_FAKE_USER):
+                                        with patch("agentic_claims.web.routers.review._fetchClaimDetail", new=AsyncMock(return_value=fakeClaimRow)):
+                                            with patch("agentic_claims.web.routers.review._fetchAiInsight", new=AsyncMock(return_value=None)):
+                                                with patch("agentic_claims.web.routers.pages.getCurrentUser", return_value=_FAKE_USER):
+                                                    with TestClient(testApp) as c:
+                                                        yield c
 
 
 def testChatPageReturns200(client):

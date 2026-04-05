@@ -1,0 +1,206 @@
+<!-- Audit timeline partial — rendered server-side and swapped by HTMX on claim selection -->
+{% if claim %}
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 pb-6 border-b border-outline-variant/10">
+  <div class="flex items-center gap-4">
+    <div class="w-12 h-12 rounded-2xl bg-surface-container-highest flex items-center justify-center border border-outline-variant/20">
+      <span class="material-symbols-outlined text-primary">description</span>
+    </div>
+    <div>
+      <h2 class="text-2xl font-headline font-bold text-on-surface">{{ claim.claimNumber }}</h2>
+      <p class="text-sm text-on-surface-variant">{{ claim.merchant }} &bull; {{ claim.currency }} {{ "%.2f"|format(claim.totalAmount) }}</p>
+    </div>
+  </div>
+  <a href="/api/audit/{{ claim.id }}/receipt"
+     target="_blank"
+     class="px-4 py-2 rounded-xl bg-surface-container-highest text-on-surface text-sm font-bold border border-outline-variant/20 hover:bg-surface-bright transition-all flex items-center gap-2">
+    <span class="material-symbols-outlined text-sm">image</span>
+    View Receipt
+  </a>
+</div>
+{% else %}
+<div class="mb-8 pb-6 border-b border-outline-variant/10">
+  <h2 class="text-2xl font-headline font-bold text-on-surface-variant">Select a Claim</h2>
+  <p class="text-sm text-on-surface-variant/60 mt-1">Choose a decision from the list to view its audit trail.</p>
+</div>
+{% endif %}
+
+<!-- Decision Pathway -->
+<div class="mb-10">
+  <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-secondary mb-8">Decision Pathway</h3>
+  <div class="relative flex flex-col gap-10">
+    <!-- Connecting vertical line -->
+    <div class="absolute left-6 top-2 bottom-2 w-px bg-gradient-to-b from-secondary to-primary/20"></div>
+
+    {% for step in timelineSteps %}
+    {% set isComplete = step.status == "completed" %}
+    {% set isPending = step.status == "pending" %}
+    <div class="flex gap-6 relative">
+      <!-- Step node icon -->
+      <div class="w-12 h-12 rounded-full flex items-center justify-center z-10 flex-shrink-0
+        {% if isComplete %}
+          {% if step.name == 'Final Decision' and step.outcome and 'Reject' in step.outcome %}
+            bg-error/10 border border-error/40 shadow-[0_0_12px_rgba(255,110,132,0.15)]
+          {% elif step.name == 'Policy Check' and not step.compliant %}
+            bg-tertiary/10 border border-tertiary/40
+          {% else %}
+            bg-surface-container-highest border border-secondary/40 shadow-[0_0_15px_rgba(98,250,227,0.15)]
+          {% endif %}
+        {% else %}
+          bg-surface-container-highest border border-outline-variant/20
+        {% endif %}">
+        <span class="material-symbols-outlined
+          {% if isComplete %}
+            {% if step.name == 'Final Decision' and step.outcome and 'Reject' in step.outcome %}text-error
+            {% elif step.name == 'Policy Check' and not step.compliant %}text-tertiary
+            {% else %}text-secondary{% endif %}
+          {% else %}text-on-surface-variant/40{% endif %}">
+          {{ step.icon }}
+        </span>
+      </div>
+
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between mb-1 gap-2">
+          <h4 class="font-bold text-on-surface">{{ step.name }}</h4>
+          <span class="text-[10px] text-on-surface-variant font-mono flex-shrink-0">
+            {% if step.timestamp %}
+              {{ step.timestamp[:19].replace("T", " ") }}
+            {% else %}
+              --:--:-- --
+            {% endif %}
+          </span>
+        </div>
+
+        {% if step.name == "Receipt Uploaded" %}
+          {% if isComplete %}
+            <p class="text-sm text-on-surface-variant">Receipt image received and queued for AI extraction.</p>
+          {% else %}
+            <p class="text-sm text-on-surface-variant/40 italic">Awaiting claim submission.</p>
+          {% endif %}
+
+        {% elif step.name == "AI Extraction" %}
+          {% if isComplete %}
+            <div class="bg-surface-container-lowest/50 p-4 rounded-xl border border-outline-variant/10">
+              {% if step.confidence is not none %}
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs font-medium text-on-surface-variant">Confidence Score</span>
+                  <span class="text-xs font-bold text-on-surface">{{ (step.confidence * 100)|int }}%</span>
+                </div>
+                <div class="h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+                  <div class="h-full rounded-full
+                    {% if step.confidence >= 0.8 %}bg-secondary
+                    {% elif step.confidence >= 0.5 %}bg-primary
+                    {% else %}bg-error{% endif %}"
+                    style="width: {{ (step.confidence * 100)|int }}%"></div>
+                </div>
+                {% if step.merchant %}
+                  <p class="text-xs text-on-surface-variant mt-2">Extracted: {{ step.merchant }}{% if step.amount %} &bull; {{ step.amount }}{% endif %}</p>
+                {% endif %}
+              {% else %}
+                <p class="text-sm text-on-surface-variant">AI extraction completed.</p>
+              {% endif %}
+            </div>
+          {% else %}
+            <p class="text-sm text-on-surface-variant/40 italic">Awaiting receipt upload.</p>
+          {% endif %}
+
+        {% elif step.name == "Policy Check" %}
+          {% if isComplete %}
+            <div class="p-3 rounded-xl flex items-center justify-between
+              {% if step.compliant %}bg-secondary/5 border border-secondary/20
+              {% else %}bg-tertiary/5 border border-tertiary/20{% endif %}">
+              <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-sm
+                  {% if step.compliant %}text-secondary{% else %}text-tertiary{% endif %}">
+                  {% if step.compliant %}task_alt{% else %}warning{% endif %}
+                </span>
+                <span class="text-sm font-medium">
+                  {% if step.compliant %}Policy compliant{% else %}{{ step.violations|length }} violation{{ "s" if step.violations|length != 1 else "" }} found{% endif %}
+                </span>
+              </div>
+              {% if step.policyRef %}
+                <span class="text-[10px] text-primary underline cursor-pointer flex-shrink-0">{{ step.policyRef }}</span>
+              {% endif %}
+            </div>
+          {% else %}
+            <p class="text-sm text-on-surface-variant/40 italic">Awaiting AI extraction.</p>
+          {% endif %}
+
+        {% elif step.name == "Final Decision" %}
+          {% if isComplete %}
+            <div class="flex items-center gap-2">
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest
+                {% if step.outcome and 'Reject' in step.outcome %}bg-error/10 text-error
+                {% elif step.outcome and 'Approv' in step.outcome %}bg-secondary/10 text-secondary
+                {% else %}bg-primary/10 text-primary{% endif %}">
+                {{ step.outcome or "Processed" }}
+              </span>
+              {% if step.rejectionReason %}
+                <span class="text-xs text-on-surface-variant">— {{ step.rejectionReason }}</span>
+              {% endif %}
+            </div>
+            {% if step.reviewerNotes %}
+              <p class="text-xs text-on-surface-variant mt-1 italic">Notes: {{ step.reviewerNotes }}</p>
+            {% endif %}
+          {% else %}
+            <p class="text-sm text-on-surface-variant/40 italic">Awaiting processing.</p>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Intelligence Insights -->
+<div class="grid grid-cols-2 gap-4">
+  <!-- Anomaly Detection -->
+  <div class="bg-surface-container-highest/40 p-4 rounded-2xl border border-outline-variant/10">
+    <h5 class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-3">Anomaly Detection</h5>
+    <div class="flex items-center gap-3">
+      <span class="material-symbols-outlined
+        {% if insights.anomalyCount > 0 %}text-error{% else %}text-secondary{% endif %}">
+        {% if insights.anomalyCount > 0 %}warning{% else %}security{% endif %}
+      </span>
+      <div>
+        <span class="text-xl font-headline font-bold text-on-surface">{{ insights.anomalyCount }}</span>
+        <span class="text-xs text-on-surface-variant ml-1">
+          anomal{{ "ies" if insights.anomalyCount != 1 else "y" }}
+        </span>
+      </div>
+    </div>
+    {% if insights.anomalyCount > 0 %}
+      <p class="text-xs text-error mt-2">Policy violations detected</p>
+    {% else %}
+      <p class="text-xs text-secondary/70 mt-2">No anomalies detected</p>
+    {% endif %}
+  </div>
+  <!-- Cost Benchmark -->
+  <div class="bg-surface-container-highest/40 p-4 rounded-2xl border border-outline-variant/10">
+    <h5 class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-3">Cost Benchmark</h5>
+    {% if insights.costBenchmark %}
+      {% set cb = insights.costBenchmark %}
+      {% set ratio = (cb.claimAmount / cb.categoryAverage) if cb.categoryAverage > 0 else 1.0 %}
+      <div class="flex items-center gap-3">
+        <span class="material-symbols-outlined {% if ratio > 1.2 %}text-tertiary{% else %}text-secondary{% endif %}">
+          {% if ratio > 1.2 %}trending_up{% else %}trending_down{% endif %}
+        </span>
+        <div>
+          <span class="text-xl font-headline font-bold text-on-surface">{{ "%.0f"|format(ratio * 100) }}%</span>
+          <span class="text-xs text-on-surface-variant ml-1">of avg</span>
+        </div>
+      </div>
+      <div class="mt-2 h-1 bg-surface-container rounded-full overflow-hidden">
+        <div class="h-full {% if ratio > 1.2 %}bg-tertiary{% else %}bg-secondary{% endif %} rounded-full"
+             style="width: {{ [ratio * 50, 100]|min }}%"></div>
+      </div>
+      <p class="text-xs text-on-surface-variant mt-1">
+        SGD {{ "%.2f"|format(cb.claimAmount) }} vs avg SGD {{ "%.2f"|format(cb.categoryAverage) }}
+      </p>
+    {% else %}
+      <div class="flex items-center gap-3">
+        <span class="material-symbols-outlined text-on-surface-variant/40">trending_flat</span>
+        <span class="text-sm text-on-surface-variant/40">No data</span>
+      </div>
+    {% endif %}
+  </div>
+</div>

@@ -1,0 +1,41 @@
+<!-- Audit claim list partial — left panel claim cards -->
+{% if allClaims %}
+  {% for c in allClaims %}
+  <div class="group relative p-5 rounded-2xl cursor-pointer transition-all
+    {% if c.id == selectedClaimId %}
+      bg-surface-bright border-l-4 border-secondary shadow-[0_4px_20px_rgba(0,0,0,0.3)]
+    {% else %}
+      bg-surface-container-low border border-outline-variant/10 hover:bg-surface-bright hover:border-secondary/30
+    {% endif %}"
+    hx-get="/api/audit/{{ c.id }}/timeline"
+    hx-target="#timeline-detail"
+    hx-swap="innerHTML"
+    hx-indicator="#timeline-loading"
+    @click="selectedClaimId = {{ c.id }}">
+    <div class="flex justify-between items-start mb-3">
+      <div>
+        <h4 class="font-headline font-bold text-lg text-on-surface">{{ c.claimNumber }}</h4>
+        <p class="text-xs text-on-surface-variant">
+          {{ c.createdAt[:10] if c.createdAt else "Unknown date" }}
+        </p>
+      </div>
+      {% if c.status in ["submitted", "pending"] %}
+        <span class="px-2 py-1 rounded bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">Pending</span>
+      {% elif c.status == "approved" %}
+        <span class="px-2 py-1 rounded bg-secondary/10 text-secondary text-[10px] font-bold uppercase tracking-wider">Approved</span>
+      {% elif c.status in ["escalated", "flagged"] %}
+        <span class="px-2 py-1 rounded bg-tertiary/10 text-tertiary text-[10px] font-bold uppercase tracking-wider">Escalated</span>
+      {% elif c.status == "rejected" %}
+        <span class="px-2 py-1 rounded bg-error/10 text-error text-[10px] font-bold uppercase tracking-wider">Rejected</span>
+      {% else %}
+        <span class="px-2 py-1 rounded bg-outline-variant/20 text-on-surface-variant text-[10px] font-bold uppercase tracking-wider">{{ c.status | title }}</span>
+      {% endif %}
+    </div>
+    <span class="text-xl font-headline font-extrabold text-on-surface">
+      {{ c.currency }} {{ "%.2f"|format(c.totalAmount) }}
+    </span>
+  </div>
+  {% endfor %}
+{% else %}
+  <p class="text-xs text-on-surface-variant/50 text-center py-12">No decisions recorded yet.</p>
+{% endif %}
