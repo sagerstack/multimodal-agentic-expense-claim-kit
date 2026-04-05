@@ -137,15 +137,17 @@ def insertClaim(
                     # Legacy path: claimNumber provided (backwards compatibility)
                     claimSql = """
                         INSERT INTO claims (
-                            claim_number, employee_id, status, total_amount, currency,
-                            intake_findings, original_amount, original_currency, converted_amount_sgd,
-                            idempotency_key
+                            claim_number, employee_id, status,
+                            total_amount, currency, intake_findings,
+                            original_amount, original_currency,
+                            converted_amount_sgd, idempotency_key
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (idempotency_key) DO NOTHING
-                        RETURNING id, claim_number, employee_id, status, total_amount, currency,
-                                  intake_findings, original_amount, original_currency, converted_amount_sgd,
-                                  created_at, updated_at
+                        RETURNING id, claim_number, employee_id, status,
+                                  total_amount, currency, intake_findings,
+                                  original_amount, original_currency,
+                                  converted_amount_sgd, created_at, updated_at
                     """
                     claimParams = (
                         claimNumber,
@@ -164,14 +166,15 @@ def insertClaim(
                     claimSql = """
                         INSERT INTO claims (
                             employee_id, status, total_amount, currency,
-                            intake_findings, original_amount, original_currency, converted_amount_sgd,
-                            idempotency_key
+                            intake_findings, original_amount, original_currency,
+                            converted_amount_sgd, idempotency_key
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (idempotency_key) DO NOTHING
-                        RETURNING id, claim_number, employee_id, status, total_amount, currency,
-                                  intake_findings, original_amount, original_currency, converted_amount_sgd,
-                                  created_at, updated_at
+                        RETURNING id, claim_number, employee_id, status,
+                                  total_amount, currency, intake_findings,
+                                  original_amount, original_currency,
+                                  converted_amount_sgd, created_at, updated_at
                     """
                     claimParams = (
                         employeeId,
@@ -193,9 +196,10 @@ def insertClaim(
                 if not claimRow:
                     cur.execute(
                         """
-                        SELECT id, claim_number, employee_id, status, total_amount, currency,
-                               intake_findings, original_amount, original_currency, converted_amount_sgd,
-                               created_at, updated_at
+                        SELECT id, claim_number, employee_id, status,
+                               total_amount, currency, intake_findings,
+                               original_amount, original_currency,
+                               converted_amount_sgd, created_at, updated_at
                         FROM claims WHERE idempotency_key = %s
                         """,
                         (idempotencyKey,),
@@ -208,10 +212,14 @@ def insertClaim(
 
                     claimRecord = serializeRow(dict(zip(claimColumns, claimRow)))
                     conn.rollback()  # No changes to commit
+                    claimNum = claimRecord.get("claim_number", "unknown")
+                    claimDate = claimRecord.get("created_at", "unknown date")
                     return {
-                        "error": f"Duplicate receipt detected. This receipt was already submitted as {claimRecord.get('claim_number', 'unknown')} "
-                        f"on {claimRecord.get('created_at', 'unknown date')}. "
-                        f"Each receipt can only be submitted once.",
+                        "error": (
+                            f"Duplicate receipt detected. This receipt was already "
+                            f"submitted as {claimNum} on {claimDate}. "
+                            f"Each receipt can only be submitted once."
+                        ),
                         "existingClaimNumber": claimRecord.get("claim_number"),
                     }
 
@@ -221,13 +229,15 @@ def insertClaim(
                 if claimNumber:
                     claimSql = """
                         INSERT INTO claims (
-                            claim_number, employee_id, status, total_amount, currency,
-                            intake_findings, original_amount, original_currency, converted_amount_sgd
+                            claim_number, employee_id, status,
+                            total_amount, currency, intake_findings,
+                            original_amount, original_currency, converted_amount_sgd
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id, claim_number, employee_id, status, total_amount, currency,
-                                  intake_findings, original_amount, original_currency, converted_amount_sgd,
-                                  created_at, updated_at
+                        RETURNING id, claim_number, employee_id, status,
+                                  total_amount, currency, intake_findings,
+                                  original_amount, original_currency,
+                                  converted_amount_sgd, created_at, updated_at
                     """
                     claimParams = (
                         claimNumber,
@@ -245,12 +255,14 @@ def insertClaim(
                     claimSql = """
                         INSERT INTO claims (
                             employee_id, status, total_amount, currency,
-                            intake_findings, original_amount, original_currency, converted_amount_sgd
+                            intake_findings, original_amount,
+                            original_currency, converted_amount_sgd
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id, claim_number, employee_id, status, total_amount, currency,
-                                  intake_findings, original_amount, original_currency, converted_amount_sgd,
-                                  created_at, updated_at
+                        RETURNING id, claim_number, employee_id, status,
+                                  total_amount, currency, intake_findings,
+                                  original_amount, original_currency,
+                                  converted_amount_sgd, created_at, updated_at
                     """
                     claimParams = (
                         employeeId,
@@ -279,13 +291,15 @@ def insertClaim(
                 cur.execute(
                     """
                     INSERT INTO receipts (
-                        claim_id, receipt_number, merchant, date, total_amount, currency,
-                        line_items, image_path, original_amount, original_currency, converted_amount_sgd
+                        claim_id, receipt_number, merchant, date,
+                        total_amount, currency, line_items, image_path,
+                        original_amount, original_currency, converted_amount_sgd
                     )
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id, claim_id, receipt_number, merchant, date, total_amount, currency,
-                              line_items, image_path, original_amount, original_currency, converted_amount_sgd,
-                              created_at, updated_at
+                    RETURNING id, claim_id, receipt_number, merchant, date,
+                              total_amount, currency, line_items, image_path,
+                              original_amount, original_currency,
+                              converted_amount_sgd, created_at, updated_at
                     """,
                     (
                         claimId,
@@ -339,7 +353,9 @@ def insertAuditLog(
         conn = getConnection()
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO audit_log (claim_id, action, old_value, new_value, actor) VALUES (%s, %s, %s, %s, %s) RETURNING id, timestamp",
+                "INSERT INTO audit_log "
+                "(claim_id, action, old_value, new_value, actor) "
+                "VALUES (%s, %s, %s, %s, %s) RETURNING id, timestamp",
                 (claimId, action, oldValue, newValue, actor),
             )
             conn.commit()
@@ -381,7 +397,8 @@ def updateClaimStatus(claimId: int, newStatus: str, actor: str) -> dict[str, Any
                 UPDATE claims
                 SET status = %s, updated_at = NOW()
                 WHERE id = %s
-                RETURNING id, claim_number, employee_id, status, total_amount, currency, created_at, updated_at
+                RETURNING id, claim_number, employee_id, status,
+                          total_amount, currency, created_at, updated_at
                 """,
                 (newStatus, claimId),
             )
@@ -465,7 +482,8 @@ def getClaimWithReceipts(claimId: int) -> dict[str, Any]:
             # Get claim
             cur.execute(
                 """
-                SELECT id, claim_number, employee_id, status, total_amount, currency, created_at, updated_at
+                SELECT id, claim_number, employee_id, status,
+                       total_amount, currency, created_at, updated_at
                 FROM claims
                 WHERE id = %s
                 """,
@@ -482,7 +500,9 @@ def getClaimWithReceipts(claimId: int) -> dict[str, Any]:
             # Get receipts
             cur.execute(
                 """
-                SELECT id, claim_id, receipt_number, merchant, date, total_amount, currency, image_path, line_items, created_at, updated_at
+                SELECT id, claim_id, receipt_number, merchant, date,
+                       total_amount, currency, image_path, line_items,
+                       created_at, updated_at
                 FROM receipts
                 WHERE claim_id = %s
                 ORDER BY date

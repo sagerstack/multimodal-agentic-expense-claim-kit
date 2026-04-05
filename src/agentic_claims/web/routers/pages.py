@@ -4,7 +4,6 @@ import uuid
 
 from fastapi import APIRouter
 from starlette.requests import Request
-from starlette.responses import RedirectResponse
 
 from agentic_claims.core.imageStore import clearImage
 from agentic_claims.web.auth import getCurrentUser
@@ -38,11 +37,27 @@ async def chatPage(request: Request):
     sessionIds = getSessionIds(request)
     currentUser = getCurrentUser(request)
 
+    _pending = {"status": "pending", "timestamp": None, "details": None, "description": None}
     initialSteps = [
-        {"name": "Receipt Uploaded", "icon": "cloud_upload", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": ""},
-        {"name": "AI Extraction", "icon": "troubleshoot", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": "Awaiting receipt upload..."},
-        {"name": "Policy Check", "icon": "rule", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": "Awaiting extraction data..."},
-        {"name": "Final Decision", "icon": "verified", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": "Awaiting policy check..."},
+        {**_pending, "name": "Receipt Uploaded", "icon": "cloud_upload", "waitingText": ""},
+        {
+            **_pending,
+            "name": "AI Extraction",
+            "icon": "troubleshoot",
+            "waitingText": "Awaiting receipt upload...",
+        },
+        {
+            **_pending,
+            "name": "Policy Check",
+            "icon": "rule",
+            "waitingText": "Awaiting extraction data...",
+        },
+        {
+            **_pending,
+            "name": "Final Decision",
+            "icon": "verified",
+            "waitingText": "Awaiting policy check...",
+        },
     ]
 
     claims = await fetchClaimsForTable()
@@ -65,28 +80,3 @@ async def chatPage(request: Request):
             "username": currentUser["username"],
         },
     )
-
-
-@router.get("/audit/{claimId}")
-async def auditPage(request: Request, claimId: str):
-    """Render the Audit & Transparency Log page for a specific claim. Reviewer-only."""
-    currentUser = getCurrentUser(request)
-    if currentUser["role"] != "reviewer":
-        return RedirectResponse("/", status_code=302)
-
-    sessionIds = getSessionIds(request)
-    return templates.TemplateResponse(
-        request,
-        "audit.html",
-        context={
-            "activePage": "audit",
-            "claimId": claimId,
-            "threadId": sessionIds["threadId"],
-            "userRole": currentUser["role"],
-            "displayName": currentUser["displayName"],
-            "employeeId": currentUser["employeeId"],
-            "username": currentUser["username"],
-        },
-    )
-
-

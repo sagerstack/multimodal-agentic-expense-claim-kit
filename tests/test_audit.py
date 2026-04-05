@@ -80,9 +80,15 @@ def testTimelineEndpointReturnsSteps(client):
     """GET /api/audit/{claimId}/timeline returns HTML partial with 4 steps."""
     auditRows = [
         _makeAuditRow("receipt_uploaded", "{}"),
-        _makeAuditRow("ai_extraction", '{"confidence": 0.95, "extracted": {"merchant": "Starbucks"}}'),
-        _makeAuditRow("policy_check", '{"compliant": true, "policyRefs": [{"section": "Meals 3.2"}], "violations": []}'),
-        _makeAuditRow("claim_submitted", '{}'),
+        _makeAuditRow(
+            "ai_extraction",
+            '{"confidence": 0.95, "extracted": {"merchant": "Starbucks"}}',
+        ),
+        _makeAuditRow(
+            "policy_check",
+            '{"compliant": true, "policyRefs": [{"section": "Meals 3.2"}], "violations": []}',
+        ),
+        _makeAuditRow("claim_submitted", "{}"),
     ]
     mockScalars = MagicMock()
     mockScalars.all.return_value = auditRows
@@ -100,7 +106,8 @@ def testTimelineEndpointReturnsSteps(client):
     mockClaimResult.first.return_value = mockClaimRow
 
     mockInsightRow = MagicMock()
-    mockInsightRow.get = lambda k, d=None: {"total_amount": 45.0, "currency": "SGD", "intake_findings": {}}.get(k, d)
+    _insightData = {"total_amount": 45.0, "currency": "SGD", "intake_findings": {}}
+    mockInsightRow.get = lambda k, d=None: _insightData.get(k, d)
     mockInsightMappings = MagicMock()
     mockInsightMappings.first.return_value = mockInsightRow
     mockInsightResult = MagicMock()
@@ -125,13 +132,13 @@ def testTimelineEndpointReturnsSteps(client):
                 nonlocal callCount
                 callCount += 1
                 if callCount == 1:
-                    return mockResult          # audit_log query
+                    return mockResult  # audit_log query
                 elif callCount == 2:
-                    return mockClaimResult     # claim summary
+                    return mockClaimResult  # claim summary
                 elif callCount == 3:
-                    return mockInsightResult   # insights claim
+                    return mockInsightResult  # insights claim
                 else:
-                    return mockAvgResult       # avg query
+                    return mockAvgResult  # avg query
 
         return _CM()
 
@@ -147,6 +154,7 @@ def testTimelineEndpointReturnsSteps(client):
 def testTimelineEndpointHandlesMissingSteps(client):
     """No audit entries returns all 4 steps as pending."""
     from agentic_claims.web.routers.audit import _buildTimelineSteps
+
     steps = _buildTimelineSteps([])
     assert len(steps) == 4
     for step in steps:
@@ -250,10 +258,12 @@ def testClaimsListForbiddenForNonReviewer(employeeClient):
 
 def testAuditPageReturns200(client):
     """GET /audit/{claimId} renders HTML page."""
-    with patch("agentic_claims.web.routers.audit._fetchAllClaims", new=AsyncMock(return_value=[])):
-        with patch("agentic_claims.web.routers.audit._fetchTimeline", new=AsyncMock(return_value=[])):
-            with patch("agentic_claims.web.routers.audit._fetchInsights", new=AsyncMock(return_value={"anomalyCount": 0, "costBenchmark": None})):
-                with patch("agentic_claims.web.routers.audit._fetchClaimSummary", new=AsyncMock(return_value=None)):
+    _p = "agentic_claims.web.routers.audit"
+    _emptyInsights = {"anomalyCount": 0, "costBenchmark": None}
+    with patch(f"{_p}._fetchAllClaims", new=AsyncMock(return_value=[])):
+        with patch(f"{_p}._fetchTimeline", new=AsyncMock(return_value=[])):
+            with patch(f"{_p}._fetchInsights", new=AsyncMock(return_value=_emptyInsights)):
+                with patch(f"{_p}._fetchClaimSummary", new=AsyncMock(return_value=None)):
                     response = client.get("/audit/1")
     assert response.status_code == 200
     assert "Audit Log" in response.text
@@ -281,6 +291,7 @@ def testAuditPageRedirectsNonReviewer():
 def testAuditRouteNotInPagesRouter():
     """/audit/{claimId} route no longer exists in pages.py router."""
     from agentic_claims.web.routers import pages
+
     routes = [r.path for r in pages.router.routes]
     assert "/audit/{claimId}" not in routes
 
@@ -288,6 +299,7 @@ def testAuditRouteNotInPagesRouter():
 def testBuildTimelineStepsWithConfidence():
     """_buildTimelineSteps correctly maps AI extraction confidence."""
     from agentic_claims.web.routers.audit import _buildTimelineSteps
+
     rows = [
         _makeAuditRow("ai_extraction", '{"confidence": 0.87}'),
     ]
@@ -300,6 +312,7 @@ def testBuildTimelineStepsWithConfidence():
 def testBuildTimelineStepsPolicyCompliant():
     """_buildTimelineSteps marks policy_check as compliant correctly."""
     from agentic_claims.web.routers.audit import _buildTimelineSteps
+
     rows = [
         _makeAuditRow("policy_check", '{"compliant": true, "policyRefs": [], "violations": []}'),
     ]

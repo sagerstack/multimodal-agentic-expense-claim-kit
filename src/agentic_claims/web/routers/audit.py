@@ -92,13 +92,15 @@ def _buildTimelineSteps(auditRows: list) -> list[dict]:
         if name in stepMap:
             steps.append(stepMap[name])
         else:
-            steps.append({
-                "name": name,
-                "icon": _STEP_ICONS.get(name, "circle"),
-                "status": "pending",
-                "timestamp": None,
-                "details": {},
-            })
+            steps.append(
+                {
+                    "name": name,
+                    "icon": _STEP_ICONS.get(name, "circle"),
+                    "status": "pending",
+                    "timestamp": None,
+                    "details": {},
+                }
+            )
     return steps
 
 
@@ -106,9 +108,7 @@ async def _fetchTimeline(claimId: int) -> list[dict]:
     """Fetch audit_log entries and build 4-step timeline."""
     async with getAsyncSession() as session:
         result = await session.execute(
-            select(AuditLog)
-            .where(AuditLog.claimId == claimId)
-            .order_by(AuditLog.timestamp.asc())
+            select(AuditLog).where(AuditLog.claimId == claimId).order_by(AuditLog.timestamp.asc())
         )
         rows = result.scalars().all()
     return _buildTimelineSteps(list(rows))
@@ -119,9 +119,7 @@ async def _fetchInsights(claimId: int) -> dict:
     async with getAsyncSession() as session:
         # Get claim with intake_findings via raw SQL
         claimResult = await session.execute(
-            text(
-                "SELECT total_amount, currency, intake_findings FROM claims WHERE id = :cid"
-            ),
+            text("SELECT total_amount, currency, intake_findings FROM claims WHERE id = :cid"),
             {"cid": claimId},
         )
         claimRow = claimResult.mappings().first()
@@ -141,9 +139,7 @@ async def _fetchInsights(claimId: int) -> dict:
 
     # Cost benchmark: average total_amount across all claims
     async with getAsyncSession() as session:
-        avgResult = await session.execute(
-            select(func.avg(Claim.totalAmount).label("avg"))
-        )
+        avgResult = await session.execute(select(func.avg(Claim.totalAmount).label("avg")))
         avgRow = avgResult.first()
 
     categoryAverage = float(avgRow.avg) if avgRow and avgRow.avg else 0.0
@@ -193,8 +189,11 @@ async def _fetchClaimSummary(claimId: int) -> dict | None:
     async with getAsyncSession() as session:
         result = await session.execute(
             select(
-                Claim.id, Claim.claimNumber, Claim.status,
-                Claim.totalAmount, Claim.currency,
+                Claim.id,
+                Claim.claimNumber,
+                Claim.status,
+                Claim.totalAmount,
+                Claim.currency,
                 Receipt.merchant,
             )
             .outerjoin(Receipt, Receipt.claimId == Claim.id)
