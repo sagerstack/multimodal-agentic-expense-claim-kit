@@ -67,29 +67,6 @@ async def chatPage(request: Request):
     )
 
 
-@router.get("/dashboard")
-async def dashboardPage(request: Request):
-    """Render the Approver Dashboard page. Reviewer-only."""
-    currentUser = getCurrentUser(request)
-    if currentUser["role"] != "reviewer":
-        return RedirectResponse("/", status_code=302)
-
-    sessionIds = getSessionIds(request)
-    return templates.TemplateResponse(
-        request,
-        "dashboard.html",
-        context={
-            "activePage": "dashboard",
-            "threadId": sessionIds["threadId"],
-            "claimId": sessionIds["claimId"],
-            "userRole": currentUser["role"],
-            "displayName": currentUser["displayName"],
-            "employeeId": currentUser["employeeId"],
-            "username": currentUser["username"],
-        },
-    )
-
-
 @router.get("/audit/{claimId}")
 async def auditPage(request: Request, claimId: str):
     """Render the Audit & Transparency Log page for a specific claim. Reviewer-only."""

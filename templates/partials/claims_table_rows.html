@@ -1,0 +1,50 @@
+{% if claims %}
+  {% for claim in claims %}
+  <tr class="hover:bg-surface-bright/50 transition-colors group cursor-pointer"
+      onclick="if(event.target.tagName !== 'A' && !event.target.closest('a')) window.location='/review/{{ claim.id }}'">
+    <td class="px-8 py-5">
+      <p class="font-bold text-sm text-on-surface">{{ claim.employeeName }}</p>
+    </td>
+    <td class="px-8 py-5">
+      <span class="text-sm text-on-surface">{{ claim.category }}</span>
+    </td>
+    <td class="px-8 py-5 font-headline font-bold text-sm">
+      {{ claim.currency }} {{ "%.2f"|format(claim.totalAmount) }}
+    </td>
+    <td class="px-8 py-5">
+      {% if claim.status in ["submitted", "pending"] %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest">
+          <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>Pending
+        </span>
+      {% elif claim.status == "approved" %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary/10 text-secondary text-[10px] font-bold uppercase tracking-widest">
+          <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>Approved
+        </span>
+      {% elif claim.status in ["escalated", "flagged"] %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-bold uppercase tracking-widest">
+          <span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>Escalated
+        </span>
+      {% elif claim.status == "rejected" %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-error/10 text-error text-[10px] font-bold uppercase tracking-widest">
+          <span class="w-1.5 h-1.5 rounded-full bg-error"></span>Rejected
+        </span>
+      {% else %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-outline-variant/20 text-on-surface-variant text-[10px] font-bold uppercase tracking-widest">
+          <span class="w-1.5 h-1.5 rounded-full bg-on-surface-variant"></span>{{ claim.status | title }}
+        </span>
+      {% endif %}
+    </td>
+    <td class="px-8 py-5">
+      <a href="/audit/{{ claim.id }}"
+         class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors"
+         title="View audit log">manage_search</a>
+    </td>
+  </tr>
+  {% endfor %}
+{% else %}
+  <tr>
+    <td colspan="5" class="px-8 py-12 text-center text-on-surface-variant/50 text-sm">
+      No claims to display. Submit an expense to get started.
+    </td>
+  </tr>
+{% endif %}

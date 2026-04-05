@@ -15,6 +15,7 @@ from agentic_claims.core.graph import getCompiledGraph
 from agentic_claims.core.logging import setupLogging
 from agentic_claims.web.routers.auth import router as authRouter
 from agentic_claims.web.routers.chat import router as chatRouter
+from agentic_claims.web.routers.dashboard import router as dashboardRouter
 from agentic_claims.web.routers.pages import router as pagesRouter
 
 logger = logging.getLogger(__name__)
@@ -125,4 +126,5 @@ app.mount("/static", StaticFiles(directory=str(projectRoot / "static")), name="s
 
 app.include_router(authRouter)
 app.include_router(chatRouter)
+app.include_router(dashboardRouter)
 app.include_router(pagesRouter)

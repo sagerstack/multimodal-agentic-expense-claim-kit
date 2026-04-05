@@ -1,6 +1,6 @@
 """Smoke tests for all 4 page routes and session cookie."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from starlette.testclient import TestClient
@@ -27,6 +27,7 @@ def client():
 
     from agentic_claims.web.main import projectRoot
     from agentic_claims.web.routers.chat import router as chatRouter
+    from agentic_claims.web.routers.dashboard import router as dashboardRouter
     from agentic_claims.web.routers.pages import router as pagesRouter
 
     testApp = FastAPI()
@@ -37,12 +38,17 @@ def client():
     )
     testApp.mount("/static", StaticFiles(directory=str(projectRoot / "static")), name="static")
     testApp.include_router(chatRouter)
+    testApp.include_router(dashboardRouter)
     testApp.include_router(pagesRouter)
     testApp.state.graph = MagicMock()
 
-    with patch("agentic_claims.web.routers.pages.getCurrentUser", return_value=_FAKE_USER):
-        with TestClient(testApp) as c:
-            yield c
+    emptyKpis = {"pending": 0, "autoApproved": 0, "escalated": 0}
+    with patch("agentic_claims.web.routers.dashboard.getCurrentUser", return_value=_FAKE_USER):
+        with patch("agentic_claims.web.routers.dashboard._queryKpis", new=AsyncMock(return_value=emptyKpis)):
+            with patch("agentic_claims.web.routers.dashboard._queryClaims", new=AsyncMock(return_value=[])):
+                with patch("agentic_claims.web.routers.pages.getCurrentUser", return_value=_FAKE_USER):
+                    with TestClient(testApp) as c:
+                        yield c
 
 
 def testChatPageReturns200(client):
