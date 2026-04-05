@@ -134,10 +134,18 @@ echo -e "\n${YELLOW}[6/6] Verifying all components...${NC}"
 
 VERIFY_FAILED=false
 
-# Verify app responds on all 4 page routes
+# Verify app responds — auth-protected pages return 302 (redirect to /login), login returns 200
+httpCode=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000/login" 2>/dev/null || echo "000")
+if [ "$httpCode" = "200" ]; then
+    echo -e "  ${GREEN}GET /login -> ${httpCode}${NC}"
+else
+    echo -e "  ${RED}GET /login -> ${httpCode}${NC}"
+    VERIFY_FAILED=true
+fi
+
 for path in "/" "/dashboard" "/audit" "/review/test-claim"; do
     httpCode=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000${path}" 2>/dev/null || echo "000")
-    if [ "$httpCode" = "200" ]; then
+    if [ "$httpCode" = "302" ] || [ "$httpCode" = "200" ]; then
         echo -e "  ${GREEN}GET ${path} -> ${httpCode}${NC}"
     else
         echo -e "  ${RED}GET ${path} -> ${httpCode}${NC}"

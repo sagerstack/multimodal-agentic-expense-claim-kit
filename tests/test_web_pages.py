@@ -1,7 +1,6 @@
 """Smoke tests for all 4 page routes and session cookie."""
 
-import os
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from starlette.testclient import TestClient
@@ -9,21 +8,32 @@ from starlette.testclient import TestClient
 
 @pytest.fixture
 def client():
-    """TestClient with mocked lifespan (no DB required)."""
-    # Ensure test env vars are set before import
-    os.environ.setdefault("SESSION_SECRET_KEY", "test-secret-key")
+    """Lightweight TestClient with session middleware but no auth middleware.
 
-    # Mock getCompiledGraph to avoid DB connection during import
-    with patch("agentic_claims.core.graph.getCompiledGraph") as mockGetGraph:
-        mockGraph = AsyncMock()
-        mockPool = AsyncMock()
-        mockGetGraph.return_value = (mockGraph, mockPool)
+    Mirrors test_chat_page.py pattern — builds a minimal app without AuthMiddleware
+    so page content tests are not coupled to the auth flow.
+    """
+    from fastapi import FastAPI
+    from starlette.middleware.sessions import SessionMiddleware
+    from starlette.staticfiles import StaticFiles
 
-        # Now import the app — getSettings() will load from .env.test via conftest
-        from agentic_claims.web.main import app
+    from agentic_claims.web.main import projectRoot
+    from agentic_claims.web.routers.chat import router as chatRouter
+    from agentic_claims.web.routers.pages import router as pagesRouter
 
-        with TestClient(app) as c:
-            yield c
+    testApp = FastAPI()
+    testApp.add_middleware(
+        SessionMiddleware,
+        secret_key="test-secret-key",
+        session_cookie="agentic_session",
+    )
+    testApp.mount("/static", StaticFiles(directory=str(projectRoot / "static")), name="static")
+    testApp.include_router(chatRouter)
+    testApp.include_router(pagesRouter)
+    testApp.state.graph = MagicMock()
+
+    with TestClient(testApp) as c:
+        yield c
 
 
 def testChatPageReturns200(client):
