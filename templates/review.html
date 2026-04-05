@@ -1,202 +1,316 @@
 {% extends "base.html" %}
 {% block title %}Claim Review{% endblock %}
 {% block content %}
-<div class="pt-8 pb-12 px-8 overflow-y-auto h-full">
-<!-- Page Header -->
-<header class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
-  <div>
-    <div class="flex items-center gap-3 mb-2">
-      <span class="bg-error/10 text-error text-[10px] font-bold px-2 py-0.5 rounded-full border border-error/20 flex items-center gap-1">
-        <span class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span>
-        ESCALATION
-      </span>
-      <span class="text-on-surface-variant/40 text-xs">Claim ID: {{ claimId }}</span>
-    </div>
-    <h1 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface leading-none">Review Flagged Claim</h1>
-    <p class="text-on-surface-variant mt-2 max-w-xl">Manual override required. Select a claim to review AI extraction and flag details.</p>
-  </div>
-  <div class="flex gap-3">
-    <button class="px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-surface-bright transition-all font-bold flex items-center gap-2">
-      <span class="material-symbols-outlined text-lg">history</span>
-      View History
-    </button>
-    <button class="px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-surface-bright transition-all font-bold flex items-center gap-2">
-      <span class="material-symbols-outlined text-lg">share</span>
-      Reassign
-    </button>
-  </div>
-</header>
-<!-- Main Bento Grid Layout -->
-<div class="grid grid-cols-12 gap-6">
-  <!-- Side-by-Side View (Primary Content) -->
-  <section class="col-span-12 xl:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-    <!-- Original Receipt -->
-    <div class="bg-surface-container-low rounded-2xl overflow-hidden shadow-2xl relative group h-[600px] flex flex-col">
-      <div class="p-4 flex justify-between items-center bg-surface-container-high/50">
-        <span class="text-xs font-bold text-on-surface-variant flex items-center gap-2 uppercase tracking-widest">
-          <span class="material-symbols-outlined text-sm">image</span>
-          Original Receipt
+<div class="pt-8 pb-12 px-8 overflow-y-auto h-full" x-data="{ rejectionReason: '', showRejectOptions: false }">
+
+  <!-- Page Header -->
+  <header class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-3 mb-2">
+        <span class="bg-error/10 text-error text-[10px] font-bold px-2 py-0.5 rounded-full border border-error/20 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span>
+          ESCALATION
         </span>
-        <div class="flex gap-2">
-          <button class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors">
-            <span class="material-symbols-outlined text-lg">zoom_in</span>
-          </button>
-          <button class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors">
-            <span class="material-symbols-outlined text-lg">download</span>
-          </button>
-        </div>
-      </div>
-      <div class="flex-1 overflow-auto bg-[#000000] p-8 flex justify-center items-center">
-        <div class="w-64 h-80 rounded-lg border border-outline-variant/20 flex flex-col items-center justify-center gap-4 bg-surface-container-lowest/20">
-          <span class="material-symbols-outlined text-on-surface-variant/30 text-6xl">receipt_long</span>
-          <p class="text-on-surface-variant/40 text-xs text-center px-4">Receipt image will appear here when a claim is loaded.</p>
-        </div>
-      </div>
-    </div>
-    <!-- Extracted Data -->
-    <div class="bg-surface-container-low rounded-2xl p-6 shadow-2xl h-[600px] flex flex-col border-t border-outline-variant/10">
-      <div class="flex justify-between items-center mb-6">
-        <span class="text-xs font-bold text-on-surface-variant flex items-center gap-2 uppercase tracking-widest">
-          <span class="material-symbols-outlined text-sm">data_object</span>
-          Extracted Entity Data
+        <span class="text-on-surface-variant/40 text-xs">
+          {% if claim %}{{ claim.claimNumber }}{% else %}Claim #{{ claimId }}{% endif %}
         </span>
-        <div class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(98,250,227,0.6)]"></div>
       </div>
-      <div class="space-y-4 flex-1 overflow-auto pr-2">
-        <!-- Vendor Name -->
-        <div class="space-y-1.5">
-          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Vendor Name</label>
-          <div class="bg-surface-container-highest p-3 rounded-xl flex justify-between items-center group">
-            <span class="font-headline font-bold text-on-surface">--</span>
-            <span class="material-symbols-outlined text-secondary opacity-0 group-hover:opacity-100 transition-opacity text-sm">edit</span>
-          </div>
-        </div>
-        <!-- Date -->
-        <div class="space-y-1.5">
-          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Date of Transaction</label>
-          <div class="bg-surface-container-highest p-3 rounded-xl flex justify-between items-center">
-            <span class="font-headline font-bold text-on-surface">--</span>
-          </div>
-        </div>
-        <!-- Amount + Currency -->
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-1.5">
-            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Total Amount</label>
-            <div class="bg-surface-container-highest p-3 rounded-xl">
-              <span class="font-headline font-bold text-on-surface text-xl">$0.00</span>
-            </div>
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Currency</label>
-            <div class="bg-surface-container-highest p-3 rounded-xl">
-              <span class="font-headline font-bold text-on-surface">SGD</span>
-            </div>
-          </div>
-        </div>
-        <!-- Category -->
-        <div class="space-y-1.5">
-          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Category</label>
-          <div class="bg-surface-container-highest p-3 rounded-xl flex items-center gap-2">
-            <span class="material-symbols-outlined text-sm text-primary">restaurant</span>
-            <span class="font-headline font-bold text-on-surface">--</span>
-          </div>
-        </div>
-        <!-- Submitter -->
-        <div class="space-y-1.5">
-          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Submitter</label>
-          <div class="bg-surface-container-highest p-3 rounded-xl flex items-center gap-3">
-            <div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
-              <span class="material-symbols-outlined text-primary text-sm">person</span>
-            </div>
-            <span class="font-headline font-bold text-on-surface text-sm">--</span>
-          </div>
-        </div>
-      </div>
+      <h1 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface leading-none">Review Flagged Claim</h1>
+      <p class="text-on-surface-variant mt-2 max-w-xl">Inspect AI extraction results and approve or reject the claim below.</p>
     </div>
-  </section>
-  <!-- Intelligence Panel (Right Column) -->
-  <section class="col-span-12 xl:col-span-4 space-y-6">
-    <!-- Flag Reason Card -->
-    <div class="bg-surface-container-highest rounded-2xl p-6 border-t border-error/30 relative overflow-hidden shadow-2xl">
-      <div class="absolute top-0 right-0 p-4">
-        <span class="material-symbols-outlined text-error/20 text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">security</span>
+    <a href="/dashboard"
+       class="px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-surface-bright transition-all font-bold flex items-center gap-2 self-start">
+      <span class="material-symbols-outlined text-lg">arrow_back</span>
+      Back to Dashboard
+    </a>
+  </header>
+
+  {% if not claim %}
+  <div class="bg-surface-container-low rounded-2xl p-12 text-center text-on-surface-variant">
+    <span class="material-symbols-outlined text-5xl mb-4 block">search_off</span>
+    <p class="text-lg font-bold">Claim not found</p>
+    <p class="text-sm mt-1">The claim #{{ claimId }} does not exist or was not found.</p>
+  </div>
+  {% else %}
+
+  <!-- Main Layout: Split view -->
+  <div class="grid grid-cols-12 gap-6">
+
+    <!-- Left: Receipt Image + Extracted Data (col-span-8) -->
+    <section class="col-span-12 xl:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <!-- Receipt Image with Zoom -->
+      <div class="bg-surface-container-low rounded-2xl overflow-hidden shadow-2xl relative h-[600px] flex flex-col"
+           x-data="{ scale: 1 }">
+        <div class="p-4 flex justify-between items-center bg-surface-container-high/50 flex-shrink-0">
+          <span class="text-xs font-bold text-on-surface-variant flex items-center gap-2 uppercase tracking-widest">
+            <span class="material-symbols-outlined text-sm">image</span>
+            Original Receipt
+          </span>
+          <div class="flex gap-1.5">
+            <button @click="scale = Math.max(scale - 0.25, 0.5)"
+                    class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors"
+                    title="Zoom out">
+              <span class="material-symbols-outlined text-lg">zoom_out</span>
+            </button>
+            <button @click="scale = 1"
+                    class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors text-xs font-bold px-3"
+                    title="Reset zoom">1×</button>
+            <button @click="scale = Math.min(scale + 0.25, 3)"
+                    class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors"
+                    title="Zoom in">
+              <span class="material-symbols-outlined text-lg">zoom_in</span>
+            </button>
+          </div>
+        </div>
+        <div class="flex-1 overflow-auto bg-[#000000] p-8 flex justify-center items-start">
+          {% if receipt and receipt.imagePath %}
+            <img src="/api/review/{{ claim.id }}/receipt-image"
+                 alt="Receipt"
+                 :style="'transform: scale(' + scale + '); transform-origin: top center; transition: transform 0.15s ease;'"
+                 class="max-w-full rounded-lg shadow-lg" />
+          {% else %}
+            <div class="w-64 h-80 rounded-lg border border-outline-variant/20 flex flex-col items-center justify-center gap-4 bg-surface-container-lowest/20">
+              <span class="material-symbols-outlined text-on-surface-variant/30 text-6xl">receipt_long</span>
+              <p class="text-on-surface-variant/40 text-xs text-center px-4">No receipt image available.</p>
+            </div>
+          {% endif %}
+        </div>
       </div>
-      <div class="relative z-10">
-        <h4 class="text-error font-headline font-bold text-lg mb-4 flex items-center gap-2">
-          <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">report</span>
-          Flag Reason
+
+      <!-- Extracted Entity Data -->
+      <div class="bg-surface-container-low rounded-2xl p-6 shadow-2xl h-[600px] flex flex-col border-t border-outline-variant/10">
+        <div class="flex justify-between items-center mb-6">
+          <span class="text-xs font-bold text-on-surface-variant flex items-center gap-2 uppercase tracking-widest">
+            <span class="material-symbols-outlined text-sm">data_object</span>
+            Extracted Entity Data
+          </span>
+          <div class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(98,250,227,0.6)]"></div>
+        </div>
+        <div class="space-y-4 flex-1 overflow-auto pr-1">
+          <!-- Merchant -->
+          <div class="space-y-1.5">
+            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
+              <span class="material-symbols-outlined text-xs">store</span>Vendor Name
+            </label>
+            <div class="bg-surface-container-highest p-3 rounded-xl">
+              <span class="font-headline font-bold text-on-surface">{{ receipt.merchant if receipt else "—" }}</span>
+            </div>
+          </div>
+          <!-- Date -->
+          <div class="space-y-1.5">
+            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
+              <span class="material-symbols-outlined text-xs">calendar_today</span>Date of Transaction
+            </label>
+            <div class="bg-surface-container-highest p-3 rounded-xl">
+              <span class="font-headline font-bold text-on-surface">{{ receipt.date if receipt and receipt.date else "—" }}</span>
+            </div>
+          </div>
+          <!-- Amount -->
+          <div class="space-y-1.5">
+            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
+              <span class="material-symbols-outlined text-xs">payments</span>Amount
+            </label>
+            <div class="bg-surface-container-highest p-3 rounded-xl">
+              {% if receipt %}
+                <span class="font-headline font-bold text-on-surface text-xl">{{ receipt.currency }} {{ "%.2f"|format(receipt.totalAmount) }}</span>
+                {% if receipt.originalCurrency and receipt.originalCurrency != receipt.currency %}
+                  <span class="text-xs text-on-surface-variant ml-2">({{ receipt.originalCurrency }} {{ "%.2f"|format(receipt.originalAmount) }})</span>
+                {% endif %}
+              {% else %}
+                <span class="font-headline font-bold text-on-surface text-xl">—</span>
+              {% endif %}
+            </div>
+          </div>
+          <!-- Category -->
+          <div class="space-y-1.5">
+            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
+              <span class="material-symbols-outlined text-xs">category</span>Category
+            </label>
+            <div class="bg-surface-container-highest p-3 rounded-xl flex items-center gap-2">
+              <span class="material-symbols-outlined text-sm text-primary">restaurant</span>
+              <span class="font-headline font-bold text-on-surface">{{ receipt.category if receipt else "General" }}</span>
+            </div>
+          </div>
+          <!-- Submitter -->
+          <div class="space-y-1.5">
+            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
+              <span class="material-symbols-outlined text-xs">person</span>Submitter
+            </label>
+            <div class="bg-surface-container-highest p-3 rounded-xl flex items-center gap-3">
+              <div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+                <span class="material-symbols-outlined text-primary text-sm">person</span>
+              </div>
+              <span class="font-headline font-bold text-on-surface text-sm">{{ claim.employeeName }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Intelligence Panel -->
+    <section class="col-span-12 xl:col-span-4 space-y-6">
+
+      <!-- Flag Reason Card -->
+      <div class="bg-surface-container-highest rounded-2xl p-6 border-t border-error/30 relative overflow-hidden shadow-2xl">
+        <div class="absolute top-0 right-0 p-4">
+          <span class="material-symbols-outlined text-error/20 text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">security</span>
+        </div>
+        <div class="relative z-10">
+          <h4 class="text-error font-headline font-bold text-lg mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">report</span>
+            Flag Reason
+          </h4>
+          <div class="p-4 bg-error-container/10 rounded-xl border border-error/20">
+            {% if flagReason %}
+              <p class="text-on-surface text-sm font-medium leading-relaxed">{{ flagReason.explanation }}</p>
+              <div class="mt-3 flex items-center gap-2">
+                <span class="text-xs text-error/80 font-bold uppercase tracking-tighter">
+                  AI Confidence: {{ (flagReason.confidence * 100)|int }}%
+                </span>
+                <div class="h-1 flex-1 bg-error/20 rounded-full overflow-hidden">
+                  <div class="h-full bg-error rounded-full" style="width: {{ (flagReason.confidence * 100)|int }}%"></div>
+                </div>
+              </div>
+            {% else %}
+              <p class="text-on-surface-variant text-sm italic">No flag reason available. No policy violations were detected during AI intake.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Reviewer Decision Form -->
+      <div class="bg-surface-container-low rounded-2xl p-6 shadow-xl border border-outline-variant/10">
+        <h4 class="text-on-surface font-headline font-bold mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined text-secondary">notes</span>
+          Reviewer Decision
         </h4>
-        <div class="p-4 bg-error-container/10 rounded-xl border border-error/20">
-          <p class="text-on-surface text-sm font-medium leading-relaxed">
-            No flag reason available. Select an escalated claim to review.
-          </p>
-          <div class="mt-3 flex items-center gap-2">
-            <span class="text-xs text-error/80 font-bold uppercase tracking-tighter">AI Confidence: --%</span>
-            <div class="h-1 flex-1 bg-error/20 rounded-full overflow-hidden">
-              <div class="h-full bg-error w-0"></div>
-            </div>
+        <form id="decisionForm" class="space-y-4">
+          <input type="hidden" name="action" id="decisionAction" value="">
+          <!-- Reviewer Notes -->
+          <div class="space-y-2">
+            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Internal Notes</label>
+            <textarea name="reviewerNotes"
+                      class="w-full bg-surface-container-lowest border-none rounded-xl text-on-surface text-sm p-4 focus:ring-2 focus:ring-secondary/50 h-28 placeholder:text-on-surface-variant/30 resize-none"
+                      placeholder="State the reasoning for approval or rejection..."></textarea>
           </div>
-        </div>
-      </div>
-    </div>
-    <!-- Reviewer Decision Section -->
-    <div class="bg-surface-container-low rounded-2xl p-6 shadow-xl border border-outline-variant/10">
-      <h4 class="text-on-surface font-headline font-bold mb-4 flex items-center gap-2">
-        <span class="material-symbols-outlined text-secondary">notes</span>
-        Reviewer Decision
-      </h4>
-      <div class="space-y-4">
-        <div class="space-y-2">
-          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Internal Notes</label>
-          <textarea class="w-full bg-surface-container-lowest border-none rounded-xl text-on-surface text-sm p-4 focus:ring-2 focus:ring-secondary/50 h-32 placeholder:text-on-surface-variant/30" placeholder="State the reasoning for approval or rejection..."></textarea>
-        </div>
-        <div class="space-y-4">
-          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Action Required</label>
-          <!-- Rejection Options -->
-          <div class="p-4 bg-surface-container-highest rounded-xl border border-outline-variant/10 space-y-3">
-            <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Rejection Reason (If Applicable)</p>
+          <!-- Rejection Reasons -->
+          <div x-show="showRejectOptions" x-cloak class="p-4 bg-surface-container-highest rounded-xl border border-outline-variant/10 space-y-3">
+            <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Rejection Reason (Required)</p>
             <div class="grid grid-cols-1 gap-2">
               <label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
-                <input class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-offset-surface focus:ring-error" name="reason" type="radio"/>
+                <input type="radio" name="rejectionReason" value="Duplicate submission"
+                       x-model="rejectionReason"
+                       class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-error">
                 <span class="text-sm text-on-surface-variant group-hover:text-on-surface">Duplicate submission</span>
               </label>
               <label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
-                <input class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-offset-surface focus:ring-error" name="reason" type="radio"/>
+                <input type="radio" name="rejectionReason" value="Incomplete receipt details"
+                       x-model="rejectionReason"
+                       class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-error">
                 <span class="text-sm text-on-surface-variant group-hover:text-on-surface">Incomplete receipt details</span>
               </label>
               <label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
-                <input class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-offset-surface focus:ring-error" name="reason" type="radio"/>
+                <input type="radio" name="rejectionReason" value="Policy violation"
+                       x-model="rejectionReason"
+                       class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-error">
                 <span class="text-sm text-on-surface-variant group-hover:text-on-surface">Policy violation</span>
               </label>
             </div>
           </div>
-          <div class="flex flex-col gap-3 pt-4">
-            <button class="w-full py-4 bg-error-dim hover:bg-error text-white font-headline font-extrabold rounded-xl shadow-lg shadow-error/10 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
-              <span class="material-symbols-outlined">cancel</span>
-              Reject Claim
-            </button>
-            <button class="w-full py-4 bg-gradient-to-r from-secondary to-secondary-dim text-on-secondary-fixed font-headline font-extrabold rounded-xl shadow-lg shadow-secondary/20 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
+          <!-- Action Buttons -->
+          <div class="flex flex-col gap-3 pt-2">
+            <!-- Reject -->
+            <template x-if="!showRejectOptions">
+              <button type="button"
+                      @click="showRejectOptions = true; rejectionReason = ''"
+                      class="w-full py-4 bg-error-dim hover:bg-error text-white font-headline font-extrabold rounded-xl shadow-lg shadow-error/10 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined">cancel</span>
+                Reject Claim
+              </button>
+            </template>
+            <template x-if="showRejectOptions">
+              <button type="button"
+                      :disabled="!rejectionReason"
+                      @click="if(rejectionReason) submitDecision('reject')"
+                      :class="rejectionReason ? 'bg-error hover:scale-[1.01] cursor-pointer' : 'bg-error/30 cursor-not-allowed'"
+                      class="w-full py-4 text-white font-headline font-extrabold rounded-xl shadow-lg uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95">
+                <span class="material-symbols-outlined">cancel</span>
+                Confirm Rejection
+              </button>
+            </template>
+            <!-- Approve -->
+            <button type="button"
+                    @click="submitDecision('approve')"
+                    class="w-full py-4 bg-gradient-to-r from-secondary to-secondary-dim text-on-secondary-fixed font-headline font-extrabold rounded-xl shadow-lg shadow-secondary/20 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
               <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">check_circle</span>
               Approve Claim
             </button>
           </div>
-        </div>
+        </form>
       </div>
-    </div>
-    <!-- AI Insight Card -->
-    <div class="glass-card rounded-2xl p-6 border border-secondary/10 relative overflow-hidden">
-      <div class="flex items-center gap-3 mb-4">
-        <div class="relative">
-          <span class="material-symbols-outlined text-secondary">psychology</span>
-          <div class="absolute -top-1 -right-1 w-2 h-2 bg-secondary rounded-full animate-ping"></div>
+
+      <!-- AI Insight Card -->
+      <div class="bg-surface-container-low rounded-2xl p-6 border border-secondary/10 relative overflow-hidden shadow-xl">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="relative">
+            <span class="material-symbols-outlined text-secondary">psychology</span>
+            <div class="absolute -top-1 -right-1 w-2 h-2 bg-secondary rounded-full animate-ping"></div>
+          </div>
+          <h5 class="text-secondary font-headline font-bold">AI Insight</h5>
         </div>
-        <h5 class="text-secondary font-headline font-bold">Luminous Intelligence Insight</h5>
+        {% if aiInsight %}
+          <p class="text-on-surface text-sm leading-relaxed">
+            <span class="font-bold text-on-surface">{{ aiInsight.employeeName }}</span> has
+            <span class="text-primary font-bold">{{ aiInsight.submissionCount }}</span> previous
+            submission{{ "s" if aiInsight.submissionCount != 1 else "" }} with a
+            <span class="text-secondary font-bold">{{ aiInsight.approvalRate }}%</span> approval rate.
+          </p>
+        {% else %}
+          <p class="text-on-surface-variant text-sm italic leading-relaxed">No prior submission history available for this employee.</p>
+        {% endif %}
       </div>
-      <p class="text-on-surface-variant text-sm italic leading-relaxed">
-        AI insight will appear here once the claim has been analyzed by the compliance and fraud agents.
-      </p>
-    </div>
-  </section>
+    </section>
+  </div>
+  {% endif %}
 </div>
-</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function submitDecision(action) {
+  const form = document.getElementById("decisionForm");
+  if (!form) return;
+
+  const formData = new FormData(form);
+  formData.set("action", action);
+
+  // Remove rejectionReason if approving
+  if (action === "approve") {
+    formData.delete("rejectionReason");
+  }
+
+  try {
+    const resp = await fetch("/api/review/{{ claimId }}/decision", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (resp.ok) {
+      const redirect = resp.headers.get("HX-Redirect");
+      if (redirect) {
+        window.location.href = redirect;
+      } else {
+        window.location.href = "/dashboard";
+      }
+    } else {
+      const data = await resp.json().catch(() => ({}));
+      alert("Error: " + (data.error || "Failed to process decision"));
+    }
+  } catch (e) {
+    console.error("Decision submit failed", e);
+    alert("Network error. Please try again.");
+  }
+}
+</script>
 {% endblock %}

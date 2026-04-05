@@ -29,6 +29,7 @@ def client():
     from agentic_claims.web.routers.chat import router as chatRouter
     from agentic_claims.web.routers.dashboard import router as dashboardRouter
     from agentic_claims.web.routers.pages import router as pagesRouter
+    from agentic_claims.web.routers.review import router as reviewRouter
 
     testApp = FastAPI()
     testApp.add_middleware(
@@ -39,16 +40,29 @@ def client():
     testApp.mount("/static", StaticFiles(directory=str(projectRoot / "static")), name="static")
     testApp.include_router(chatRouter)
     testApp.include_router(dashboardRouter)
+    testApp.include_router(reviewRouter)
     testApp.include_router(pagesRouter)
     testApp.state.graph = MagicMock()
 
     emptyKpis = {"pending": 0, "autoApproved": 0, "escalated": 0}
+    fakeClaimRow = {
+        "id": 1, "claim_number": "CLM-0001", "employee_id": "EMP001",
+        "status": "submitted", "total_amount": 45.0, "currency": "SGD",
+        "created_at": None, "intake_findings": {},
+        "receipt_id": 1, "merchant": "Test", "date": "2026-04-01",
+        "receipt_amount": 45.0, "receipt_currency": "SGD", "image_path": None,
+        "line_items": {}, "original_currency": None, "original_amount": None,
+        "converted_amount_sgd": None, "display_name": "Test User",
+    }
     with patch("agentic_claims.web.routers.dashboard.getCurrentUser", return_value=_FAKE_USER):
         with patch("agentic_claims.web.routers.dashboard._queryKpis", new=AsyncMock(return_value=emptyKpis)):
             with patch("agentic_claims.web.routers.dashboard._queryClaims", new=AsyncMock(return_value=[])):
-                with patch("agentic_claims.web.routers.pages.getCurrentUser", return_value=_FAKE_USER):
-                    with TestClient(testApp) as c:
-                        yield c
+                with patch("agentic_claims.web.routers.review.getCurrentUser", return_value=_FAKE_USER):
+                    with patch("agentic_claims.web.routers.review._fetchClaimDetail", new=AsyncMock(return_value=fakeClaimRow)):
+                        with patch("agentic_claims.web.routers.review._fetchAiInsight", new=AsyncMock(return_value=None)):
+                            with patch("agentic_claims.web.routers.pages.getCurrentUser", return_value=_FAKE_USER):
+                                with TestClient(testApp) as c:
+                                    yield c
 
 
 def testChatPageReturns200(client):
@@ -73,10 +87,10 @@ def testAuditPageReturns200(client):
 
 
 def testReviewPageReturns200(client):
-    """GET /review/test-claim-123 returns 200 with claim ID."""
-    response = client.get("/review/test-claim-123")
+    """GET /review/1 returns 200 with review page content."""
+    response = client.get("/review/1")
     assert response.status_code == 200
-    assert "test-claim-123" in response.text
+    assert "Review Flagged Claim" in response.text
 
 
 def testSessionCookieSetOnFirstVisit(client):

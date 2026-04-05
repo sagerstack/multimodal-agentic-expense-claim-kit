@@ -90,24 +90,3 @@ async def auditPage(request: Request, claimId: str):
     )
 
 
-@router.get("/review/{claimId}")
-async def reviewPage(request: Request, claimId: str):
-    """Render the Claim Review page for a specific claim. Reviewer-only."""
-    currentUser = getCurrentUser(request)
-    if currentUser["role"] != "reviewer":
-        return RedirectResponse("/", status_code=302)
-
-    sessionIds = getSessionIds(request)
-    return templates.TemplateResponse(
-        request,
-        "review.html",
-        context={
-            "activePage": "review",
-            "claimId": claimId,
-            "threadId": sessionIds["threadId"],
-            "userRole": currentUser["role"],
-            "displayName": currentUser["displayName"],
-            "employeeId": currentUser["employeeId"],
-            "username": currentUser["username"],
-        },
-    )
