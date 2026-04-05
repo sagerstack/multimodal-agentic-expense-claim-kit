@@ -313,6 +313,37 @@ def insertClaim(
 
 
 @mcp.tool()
+def insertAuditLog(claimId: int, action: str, newValue: str, actor: str, oldValue: str = "") -> dict[str, Any]:
+    """
+    Insert an audit log entry for a claim.
+
+    Args:
+        claimId: Claim ID to log against
+        action: Audit action label (e.g., 'receipt_uploaded', 'ai_extraction', 'policy_check')
+        newValue: JSON-encoded details for this audit step
+        actor: System/user that performed the action
+        oldValue: Optional previous value (default empty)
+
+    Returns:
+        Dict with id and timestamp of the inserted row
+    """
+    try:
+        conn = getConnection()
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO audit_log (claim_id, action, old_value, new_value, actor) VALUES (%s, %s, %s, %s, %s) RETURNING id, timestamp",
+                (claimId, action, oldValue, newValue, actor),
+            )
+            conn.commit()
+            row = cur.fetchone()
+            return {"id": row[0], "timestamp": row[1].isoformat()}
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return {"error": f"insertAuditLog failed: {e}"}
+
+
+@mcp.tool()
 def updateClaimStatus(claimId: int, newStatus: str, actor: str) -> dict[str, Any]:
     """
     Update claim status and insert audit log entry.

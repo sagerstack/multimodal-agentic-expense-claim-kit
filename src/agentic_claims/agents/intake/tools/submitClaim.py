@@ -6,6 +6,7 @@ from datetime import datetime
 
 from langchain_core.tools import tool
 
+from agentic_claims.agents.intake.auditLogger import flushSteps
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
 from agentic_claims.web.employeeIdContext import employeeIdVar
@@ -32,7 +33,7 @@ RECEIPT_FIELD_MAP = {
 
 
 @tool
-async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict | None = None, threadId: str | None = None) -> dict:
+async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict | None = None, threadId: str | None = None, sessionClaimId: str | None = None) -> dict:
     """Submit a claim and its receipt to the database atomically.
 
     Args:
@@ -52,6 +53,7 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
             - taxAmount, paymentMethod, imagePath (optional)
         intakeFindings: Agent observations (mismatches, overrides, red flags) for audit trail
         threadId: Conversation thread ID for idempotency (optional)
+        sessionClaimId: Session-scoped UUID for flushing buffered audit steps (optional)
 
     Returns:
         Dict with "claim" and "receipt" keys containing the inserted records,
@@ -215,6 +217,11 @@ async def submitClaim(claimData: dict, receiptData: dict, intakeFindings: dict |
                 "hasReceiptData": "receipt" in result,
             }
         )
+        # Flush buffered audit steps now that the DB claim ID is known
+        if sessionClaimId and "claim" in result and isinstance(result["claim"], dict):
+            dbClaimId = result["claim"].get("id")
+            if dbClaimId:
+                await flushSteps(sessionClaimId=sessionClaimId, dbClaimId=dbClaimId)
     else:
         logger.warning(
             "submitClaim tool returned unexpected type",
