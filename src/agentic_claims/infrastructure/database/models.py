@@ -139,3 +139,27 @@ class AuditLog(Base):
 
     # Relationships
     claim: Mapped["Claim"] = relationship("Claim", back_populates="auditLogs")
+
+
+class User(Base):
+    """Application user with role-based access."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(
+        String(50), unique=True, nullable=False, index=True
+    )
+    hashedPassword: Mapped[str] = mapped_column(
+        String(255), nullable=False, name="hashed_password"
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    employeeId: Mapped[str] = mapped_column(
+        String(50), nullable=False, name="employee_id"
+    )
+    displayName: Mapped[str] = mapped_column(
+        String(100), nullable=False, name="display_name"
+    )
+    createdAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()"), name="created_at"
+    )
