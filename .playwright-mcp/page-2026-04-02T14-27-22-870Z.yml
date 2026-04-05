@@ -1,0 +1,113 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Cognitive Atelier
+      - navigation [ref=e5]:
+        - link "Dashboard" [ref=e6] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Audit Log" [ref=e7] [cursor=pointer]:
+          - /url: /audit
+        - link "Escalations" [ref=e8] [cursor=pointer]:
+          - /url: "#"
+    - generic [ref=e9]:
+      - button "notifications" [ref=e10]:
+        - generic [ref=e11]: notifications
+      - button "settings" [ref=e12]:
+        - generic [ref=e13]: settings
+      - generic [ref=e14]: CA
+  - complementary [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e19]: bolt
+        - generic [ref=e20]:
+          - heading "Luminous Intelligence" [level=3] [ref=e21]
+          - paragraph [ref=e22]: Expense Engine Active
+      - link "add New Expense" [ref=e23] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e24]: add
+        - text: New Expense
+    - navigation [ref=e25]:
+      - link "chat_spark Chat AI" [ref=e26] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e27]: chat_spark
+        - text: Chat AI
+      - link "insert_chart Dashboard" [ref=e28] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=e29]: insert_chart
+        - text: Dashboard
+      - link "verified_user Audit Log" [ref=e30] [cursor=pointer]:
+        - /url: /audit
+        - generic [ref=e31]: verified_user
+        - text: Audit Log
+      - link "receipt_long Review" [ref=e32] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e33]: receipt_long
+        - text: Review
+    - link "sensors System Status" [ref=e35] [cursor=pointer]:
+      - /url: "#"
+      - generic [ref=e36]: sensors
+      - text: System Status
+  - main [ref=e38]:
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e44]: Processing
+          - button "add_circle New Claim" [ref=e45]:
+            - generic [ref=e46]: add_circle
+            - text: New Claim
+        - generic [ref=e47]:
+          - generic [ref=e48]:
+            - generic [ref=e50]: smart_toy
+            - generic [ref=e51]:
+              - paragraph [ref=e53]: Good evening. I'm ready to process your expenses. You can drag and drop receipts here or simply describe the transaction.
+              - text: Just now
+          - generic [ref=e105]:
+            - button "Analyzing... expand_more" [ref=e106]:
+              - generic [ref=e108]: Analyzing...
+              - generic [ref=e109]: expand_more
+            - generic [ref=e117]:
+              - generic [ref=e118]: Analyzing...
+              - generic [ref=e119]: "Schema loaded: 15 claim fields, 14 receipt fieldsExtracted receipt: DIG., USD 16.2"
+          - generic [ref=e111]:
+            - generic [ref=e113]: person
+            - paragraph [ref=e116]: process this receipt
+        - generic [ref=e55]:
+          - generic [ref=e57]:
+            - button "attach_file" [ref=e58]:
+              - generic [ref=e59]: attach_file
+            - textbox "Type a message or drop files..." [ref=e60]
+            - button "send" [disabled] [ref=e61]:
+              - generic [ref=e62]: send
+          - generic [ref=e63]:
+            - generic [ref=e64] [cursor=pointer]:
+              - generic [ref=e65]: photo_camera
+              - generic [ref=e66]: Capture
+            - generic [ref=e67] [cursor=pointer]:
+              - generic [ref=e68]: mic
+              - generic [ref=e69]: Voice
+            - generic [ref=e70] [cursor=pointer]:
+              - generic [ref=e71]: history
+              - generic [ref=e72]: Recent
+      - generic [ref=e73]:
+        - heading "Submission Summary" [level=2] [ref=e74]
+        - generic [ref=e75]:
+          - generic [ref=e76]:
+            - generic [ref=e77]:
+              - generic [ref=e78]: Current Session
+              - generic [ref=e79]:
+                - generic [ref=e80]:
+                  - paragraph [ref=e81]: $0.00
+                  - paragraph [ref=e82]: 0 items pending
+                - paragraph [ref=e85]: 0% Complete
+            - generic [ref=e86]:
+              - generic [ref=e87]: category
+              - paragraph [ref=e88]: Top Category
+              - paragraph [ref=e89]: "--"
+            - generic [ref=e90]:
+              - generic [ref=e91]: warning
+              - paragraph [ref=e92]: Warnings
+              - paragraph [ref=e93]: 0 Flags
+          - generic [ref=e94]:
+            - heading "Batch Details" [level=3] [ref=e95]
+            - paragraph [ref=e97]: No items yet. Upload a receipt to begin.
+        - button "Submit Entire Batch" [disabled] [ref=e98]

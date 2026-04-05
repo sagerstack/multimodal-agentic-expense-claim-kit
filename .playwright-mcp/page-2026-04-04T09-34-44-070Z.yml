@@ -1,0 +1,179 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Expense AI
+      - navigation [ref=e5]:
+        - link "Dashboard" [ref=e6] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Audit Log" [ref=e7] [cursor=pointer]:
+          - /url: /audit
+        - link "Escalations" [ref=e8] [cursor=pointer]:
+          - /url: "#"
+    - generic [ref=e9]:
+      - button "notifications" [ref=e10]:
+        - generic [ref=e11]: notifications
+      - button "settings" [ref=e12]:
+        - generic [ref=e13]: settings
+      - generic [ref=e14]: EA
+  - complementary [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e19]: bolt
+        - generic [ref=e20]:
+          - heading "Luminous Intelligence" [level=3] [ref=e21]
+          - paragraph [ref=e22]: Expense Engine Active
+      - button "add New Expense" [ref=e23]:
+        - generic [ref=e24]: add
+        - text: New Expense
+    - navigation [ref=e25]:
+      - link "description My Claims" [ref=e26] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e27]: description
+        - text: My Claims
+    - link "sensors System Status" [ref=e29] [cursor=pointer]:
+      - /url: "#"
+      - generic [ref=e30]: sensors
+      - text: System Status
+  - main [ref=e32]:
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - generic [ref=e37]:
+            - generic [ref=e39]: Processing
+            - button "add_circle New Claim" [ref=e40]:
+              - generic [ref=e41]: add_circle
+              - text: New Claim
+          - generic [ref=e42]:
+            - generic [ref=e43]:
+              - generic [ref=e45]: smart_toy
+              - generic [ref=e46]:
+                - paragraph [ref=e48]: Good evening. I'm ready to process your expenses. You can drag and drop receipts here or simply describe the transaction.
+                - text: Just now
+            - generic [ref=e181]:
+              - generic [ref=e183]: person
+              - generic [ref=e184]:
+                - paragraph [ref=e186]: Hello
+                - text: 5:34 PM
+            - button "Analyzing... expand_more" [ref=e189]:
+              - generic [ref=e191]: Analyzing...
+              - generic [ref=e192]: expand_more
+          - generic [ref=e50]:
+            - generic [ref=e52]:
+              - button "attach_file" [ref=e53]:
+                - generic [ref=e54]: attach_file
+              - textbox "Type a message or drop files..." [active] [ref=e55]
+              - button "send" [disabled] [ref=e56]:
+                - generic [ref=e57]: send
+            - generic [ref=e58]:
+              - generic [ref=e59] [cursor=pointer]:
+                - generic [ref=e60]: photo_camera
+                - generic [ref=e61]: Capture
+              - generic [ref=e62] [cursor=pointer]:
+                - generic [ref=e63]: mic
+                - generic [ref=e64]: Voice
+              - generic [ref=e65] [cursor=pointer]:
+                - generic [ref=e66]: history
+                - generic [ref=e67]: Recent
+        - complementary [ref=e68]:
+          - generic [ref=e69]:
+            - heading "Decision Pathway" [level=3] [ref=e70]
+            - generic [ref=e71]:
+              - generic [ref=e73]:
+                - generic [ref=e75]: cloud_upload
+                - generic [ref=e76]:
+                  - generic [ref=e77]:
+                    - heading "Receipt Uploaded" [level=4] [ref=e78]
+                    - generic [ref=e79]: "--:--:-- --"
+                  - generic [ref=e80]:
+                    - generic [ref=e81]: hourglass_empty
+                    - generic [ref=e82]: Awaiting previous step...
+                  - paragraph [ref=e83]: Pending
+              - generic [ref=e84]:
+                - generic [ref=e86]: troubleshoot
+                - generic [ref=e87]:
+                  - generic [ref=e88]:
+                    - heading "AI Extraction" [level=4] [ref=e89]
+                    - generic [ref=e90]: "--:--:-- --"
+                  - generic [ref=e91]:
+                    - generic [ref=e92]: hourglass_empty
+                    - generic [ref=e93]: Awaiting receipt upload...
+                  - paragraph [ref=e94]: Pending
+              - generic [ref=e95]:
+                - generic [ref=e97]: rule
+                - generic [ref=e98]:
+                  - generic [ref=e99]:
+                    - heading "Policy Check" [level=4] [ref=e100]
+                    - generic [ref=e101]: "--:--:-- --"
+                  - generic [ref=e102]:
+                    - generic [ref=e103]: hourglass_empty
+                    - generic [ref=e104]: Awaiting extraction data...
+                  - paragraph [ref=e105]: Pending
+              - generic [ref=e106]:
+                - generic [ref=e108]: verified
+                - generic [ref=e109]:
+                  - generic [ref=e110]:
+                    - heading "Final Decision" [level=4] [ref=e111]
+                    - generic [ref=e112]: "--:--:-- --"
+                  - generic [ref=e113]:
+                    - generic [ref=e114]: hourglass_empty
+                    - generic [ref=e115]: Awaiting policy check...
+                  - paragraph [ref=e116]: Pending
+      - generic [ref=e118]:
+        - generic [ref=e121]:
+          - generic [ref=e122]: Current Session
+          - paragraph [ref=e123]: SGD 210.27
+          - paragraph [ref=e124]: 5 items
+        - table [ref=e126]:
+          - rowgroup [ref=e127]:
+            - row "Claim Merchant Date Amount Status" [ref=e128]:
+              - columnheader "Claim" [ref=e129]
+              - columnheader "Merchant" [ref=e130]
+              - columnheader "Date" [ref=e131]
+              - columnheader "Amount" [ref=e132]
+              - columnheader "Status" [ref=e133]
+          - rowgroup [ref=e134]:
+            - row "CLAIM-009 receipt_long DIG. 2024-05-28 SGD 20.85 PENDING" [ref=e135] [cursor=pointer]:
+              - cell "CLAIM-009" [ref=e136]
+              - cell "receipt_long DIG." [ref=e137]:
+                - generic [ref=e138]:
+                  - generic [ref=e139]: receipt_long
+                  - generic [ref=e140]: DIG.
+              - cell "2024-05-28" [ref=e141]
+              - cell "SGD 20.85" [ref=e142]
+              - cell "PENDING" [ref=e143]
+            - row "CLAIM-006 receipt_long The Public Izakaya 2024-06-14 SGD 126.86 PENDING" [ref=e144] [cursor=pointer]:
+              - cell "CLAIM-006" [ref=e145]
+              - cell "receipt_long The Public Izakaya" [ref=e146]:
+                - generic [ref=e147]:
+                  - generic [ref=e148]: receipt_long
+                  - generic [ref=e149]: The Public Izakaya
+              - cell "2024-06-14" [ref=e150]
+              - cell "SGD 126.86" [ref=e151]
+              - cell "PENDING" [ref=e152]
+            - row "CLAIM-003 receipt_long DIG. 2024-05-28 SGD 20.85 PENDING" [ref=e153] [cursor=pointer]:
+              - cell "CLAIM-003" [ref=e154]
+              - cell "receipt_long DIG." [ref=e155]:
+                - generic [ref=e156]:
+                  - generic [ref=e157]: receipt_long
+                  - generic [ref=e158]: DIG.
+              - cell "2024-05-28" [ref=e159]
+              - cell "SGD 20.85" [ref=e160]
+              - cell "PENDING" [ref=e161]
+            - row "CLAIM-002 receipt_long DIG. 2024-05-28 USD 20.85 PENDING" [ref=e162] [cursor=pointer]:
+              - cell "CLAIM-002" [ref=e163]
+              - cell "receipt_long DIG." [ref=e164]:
+                - generic [ref=e165]:
+                  - generic [ref=e166]: receipt_long
+                  - generic [ref=e167]: DIG.
+              - cell "2024-05-28" [ref=e168]
+              - cell "USD 20.85" [ref=e169]
+              - cell "PENDING" [ref=e170]
+            - row "CLAIM-001 receipt_long DIG. 2024-05-28 SGD 20.86 PENDING" [ref=e171] [cursor=pointer]:
+              - cell "CLAIM-001" [ref=e172]
+              - cell "receipt_long DIG." [ref=e173]:
+                - generic [ref=e174]:
+                  - generic [ref=e175]: receipt_long
+                  - generic [ref=e176]: DIG.
+              - cell "2024-05-28" [ref=e177]
+              - cell "SGD 20.86" [ref=e178]
+              - cell "PENDING" [ref=e179]

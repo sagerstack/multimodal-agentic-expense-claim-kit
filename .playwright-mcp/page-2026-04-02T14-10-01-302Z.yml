@@ -1,0 +1,120 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Cognitive Atelier
+      - navigation [ref=e5]:
+        - link "Dashboard" [ref=e6] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Audit Log" [ref=e7] [cursor=pointer]:
+          - /url: /audit
+        - link "Escalations" [ref=e8] [cursor=pointer]:
+          - /url: "#"
+    - generic [ref=e9]:
+      - button "notifications" [ref=e10]:
+        - generic [ref=e11]: notifications
+      - button "settings" [ref=e12]:
+        - generic [ref=e13]: settings
+      - generic [ref=e14]: CA
+  - complementary [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e19]: bolt
+        - generic [ref=e20]:
+          - heading "Luminous Intelligence" [level=3] [ref=e21]
+          - paragraph [ref=e22]: Expense Engine Active
+      - link "add New Expense" [ref=e23] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e24]: add
+        - text: New Expense
+    - navigation [ref=e25]:
+      - link "chat_spark Chat AI" [ref=e26] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e27]: chat_spark
+        - text: Chat AI
+      - link "insert_chart Dashboard" [ref=e28] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=e29]: insert_chart
+        - text: Dashboard
+      - link "verified_user Audit Log" [ref=e30] [cursor=pointer]:
+        - /url: /audit
+        - generic [ref=e31]: verified_user
+        - text: Audit Log
+      - link "receipt_long Review" [ref=e32] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e33]: receipt_long
+        - text: Review
+    - link "sensors System Status" [ref=e35] [cursor=pointer]:
+      - /url: "#"
+      - generic [ref=e36]: sensors
+      - text: System Status
+  - main [ref=e38]:
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e44]: Processing
+          - button "add_circle New Claim" [ref=e45]:
+            - generic [ref=e46]: add_circle
+            - text: New Claim
+        - generic [ref=e47]:
+          - generic [ref=e48]:
+            - generic [ref=e50]: smart_toy
+            - generic [ref=e51]:
+              - paragraph [ref=e53]: Good evening. I'm ready to process your expenses. You can drag and drop receipts here or simply describe the transaction.
+              - text: Just now
+          - generic [ref=e101]:
+            - button "Analyzing... expand_more" [ref=e102]:
+              - generic [ref=e104]: Analyzing...
+              - generic [ref=e105]: expand_more
+            - generic [ref=e106]:
+              - generic [ref=e107]: Analyzing...
+              - generic [ref=e108]: "Schema loaded: 15 claim fields, 14 receipt fieldsError: No receipt image found. Please upload an image first."
+          - generic [ref=e109]: It looks like there was an issue with the receipt image upload. Could you please upload the receipt image again? Once the image is available, I'll process it to extract the details and proceed with your expense claim. Let me know when you're ready!
+          - generic [ref=e111]:
+            - generic [ref=e113]: smart_toy
+            - paragraph [ref=e116]: It looks like there was an issue with the receipt image upload. Could you please upload the receipt image again? Once the image is available, I'll process it to extract the details and proceed with your expense claim. Let me know when you're ready!
+        - generic [ref=e55]:
+          - generic [ref=e57]:
+            - button "attach_file" [ref=e58]:
+              - generic [ref=e59]: attach_file
+            - textbox "Type a message or drop files..." [ref=e60]
+            - button "send" [disabled] [ref=e61]:
+              - generic [ref=e62]: send
+          - generic [ref=e63]:
+            - generic [ref=e64] [cursor=pointer]:
+              - generic [ref=e65]: photo_camera
+              - generic [ref=e66]: Capture
+            - generic [ref=e67] [cursor=pointer]:
+              - generic [ref=e68]: mic
+              - generic [ref=e69]: Voice
+            - generic [ref=e70] [cursor=pointer]:
+              - generic [ref=e71]: history
+              - generic [ref=e72]: Recent
+      - generic [ref=e73]:
+        - heading "Submission Summary" [level=2] [ref=e74]
+        - generic [ref=e75]:
+          - generic [ref=e117]:
+            - generic [ref=e118]:
+              - generic [ref=e119]: Current Session
+              - generic [ref=e120]:
+                - generic [ref=e121]:
+                  - paragraph [ref=e122]: SGD
+                  - paragraph [ref=e123]: 1 item pending
+                - paragraph [ref=e127]: 50% Complete
+            - generic [ref=e128]:
+              - generic [ref=e129]: category
+              - paragraph [ref=e130]: Top Category
+              - paragraph [ref=e131]: "--"
+            - generic [ref=e132]:
+              - generic [ref=e133]: warning
+              - paragraph [ref=e134]: Warnings
+              - paragraph [ref=e135]: 0 Flags
+          - generic [ref=e136]:
+            - heading "Batch Details" [level=3] [ref=e137]
+            - generic [ref=e139]:
+              - generic [ref=e140]:
+                - generic [ref=e142]: receipt_long
+                - generic [ref=e143]:
+                  - paragraph [ref=e144]: Unknown
+                  - paragraph [ref=e145]: uncategorized
+              - paragraph [ref=e146]: SGD
+        - button "Submit Entire Batch" [disabled] [ref=e98]

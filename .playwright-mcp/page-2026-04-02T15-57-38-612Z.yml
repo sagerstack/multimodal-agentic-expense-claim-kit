@@ -1,0 +1,348 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Cognitive Atelier
+      - navigation [ref=e5]:
+        - link "Dashboard" [ref=e6] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Audit Log" [ref=e7] [cursor=pointer]:
+          - /url: /audit
+        - link "Escalations" [ref=e8] [cursor=pointer]:
+          - /url: "#"
+    - generic [ref=e9]:
+      - button "notifications" [ref=e10]:
+        - generic [ref=e11]: notifications
+      - button "settings" [ref=e12]:
+        - generic [ref=e13]: settings
+      - generic [ref=e14]: CA
+  - complementary [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e19]: bolt
+        - generic [ref=e20]:
+          - heading "Luminous Intelligence" [level=3] [ref=e21]
+          - paragraph [ref=e22]: Expense Engine Active
+      - link "add New Expense" [ref=e23] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e24]: add
+        - text: New Expense
+    - navigation [ref=e25]:
+      - link "chat_spark Chat AI" [ref=e26] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e27]: chat_spark
+        - text: Chat AI
+      - link "insert_chart Dashboard" [ref=e28] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=e29]: insert_chart
+        - text: Dashboard
+      - link "verified_user Audit Log" [ref=e30] [cursor=pointer]:
+        - /url: /audit
+        - generic [ref=e31]: verified_user
+        - text: Audit Log
+      - link "receipt_long Review" [ref=e32] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e33]: receipt_long
+        - text: Review
+    - link "sensors System Status" [ref=e35] [cursor=pointer]:
+      - /url: "#"
+      - generic [ref=e36]: sensors
+      - text: System Status
+  - main [ref=e38]:
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e44]: Processing
+          - button "add_circle New Claim" [ref=e45]:
+            - generic [ref=e46]: add_circle
+            - text: New Claim
+        - generic [ref=e47]:
+          - generic [ref=e48]:
+            - generic [ref=e50]: smart_toy
+            - generic [ref=e51]:
+              - paragraph [ref=e53]: Good evening. I'm ready to process your expenses. You can drag and drop receipts here or simply describe the transaction.
+              - text: Just now
+          - generic [ref=e105]:
+            - generic [ref=e107]: person
+            - generic [ref=e109]:
+              - img "receipt-pass-restaurant.jpeg" [ref=e110]
+              - paragraph [ref=e111]: receipt-pass-restaurant.jpeg
+          - generic [ref=e113]:
+            - button "Analyzing... expand_more" [ref=e114]:
+              - generic [ref=e116]: Analyzing...
+              - generic [ref=e117]: expand_more
+            - generic [ref=e119]:
+              - paragraph [ref=e120]: Okay
+              - paragraph [ref=e121]: ","
+              - paragraph [ref=e122]: the
+              - paragraph [ref=e123]: user
+              - paragraph [ref=e124]: has
+              - paragraph [ref=e125]: uploaded
+              - paragraph [ref=e126]: a
+              - paragraph [ref=e127]: receipt
+              - paragraph [ref=e128]: for
+              - paragraph [ref=e129]: claim
+              - paragraph
+              - paragraph [ref=e130]: "8"
+              - paragraph [ref=e131]: "9"
+              - paragraph [ref=e132]: a
+              - paragraph [ref=e133]: "5"
+              - paragraph [ref=e134]: "8"
+              - paragraph [ref=e135]: "2"
+              - paragraph [ref=e136]: d
+              - paragraph [ref=e137]: "6"
+              - paragraph [ref=e138]: "-"
+              - paragraph [ref=e139]: "5"
+              - paragraph [ref=e140]: "9"
+              - paragraph [ref=e141]: d
+              - paragraph [ref=e142]: "0"
+              - paragraph [ref=e143]: "-"
+              - paragraph [ref=e144]: "4"
+              - paragraph [ref=e145]: "7"
+              - paragraph [ref=e146]: "9"
+              - paragraph [ref=e147]: "4"
+              - paragraph [ref=e148]: "-"
+              - paragraph [ref=e149]: "9"
+              - paragraph [ref=e150]: "7"
+              - paragraph [ref=e151]: "0"
+              - paragraph [ref=e152]: "2"
+              - paragraph [ref=e153]: "-"
+              - paragraph [ref=e154]: "7"
+              - paragraph [ref=e155]: c
+              - paragraph [ref=e156]: "5"
+              - paragraph [ref=e157]: b
+              - paragraph [ref=e158]: "3"
+              - paragraph [ref=e159]: b
+              - paragraph [ref=e160]: "8"
+              - paragraph [ref=e161]: "9"
+              - paragraph [ref=e162]: "9"
+              - paragraph [ref=e163]: "5"
+              - paragraph [ref=e164]: "3"
+              - paragraph [ref=e165]: "6"
+              - paragraph [ref=e166]: and
+              - paragraph [ref=e167]: wants
+              - paragraph [ref=e168]: me
+              - paragraph [ref=e169]: to
+              - paragraph [ref=e170]: process
+              - paragraph [ref=e171]: it
+              - paragraph [ref=e172]: using
+              - paragraph [ref=e173]: extract
+              - paragraph [ref=e174]: Receipt
+              - paragraph [ref=e175]: Fields
+              - paragraph [ref=e176]: .
+              - paragraph [ref=e177]: They
+              - paragraph [ref=e178]: mentioned
+              - paragraph [ref=e179]: "no"
+              - paragraph [ref=e180]: expense
+              - paragraph [ref=e181]: description
+              - paragraph [ref=e182]: was
+              - paragraph [ref=e183]: provided
+              - paragraph [ref=e184]: .
+              - paragraph [ref=e185]: Let
+              - paragraph [ref=e186]: me
+              - paragraph [ref=e187]: go
+              - paragraph [ref=e188]: through
+              - paragraph [ref=e189]: the
+              - paragraph [ref=e190]: steps
+              - paragraph [ref=e191]: .
+              - paragraph [ref=e192]: First
+              - paragraph [ref=e193]: ","
+              - paragraph [ref=e194]: I
+              - paragraph [ref=e195]: need
+              - paragraph [ref=e196]: to
+              - paragraph [ref=e197]: check
+              - paragraph [ref=e198]: the
+              - paragraph [ref=e199]: conversation
+              - paragraph [ref=e200]: history
+              - paragraph [ref=e201]: .
+              - paragraph [ref=e202]: The
+              - paragraph [ref=e203]: user
+              - paragraph [ref=e204]: has
+              - paragraph [ref=e205]: already
+              - paragraph [ref=e206]: gone
+              - paragraph [ref=e207]: through
+              - paragraph [ref=e208]: several
+              - paragraph [ref=e209]: interactions
+              - paragraph [ref=e210]: ","
+              - paragraph [ref=e211]: but
+              - paragraph [ref=e212]: each
+              - paragraph [ref=e213]: time
+              - paragraph [ref=e214]: they
+              - paragraph [ref=e215]: start
+              - paragraph [ref=e216]: by
+              - paragraph [ref=e217]: uploading
+              - paragraph [ref=e218]: the
+              - paragraph [ref=e219]: same
+              - paragraph [ref=e220]: receipt
+              - paragraph [ref=e221]: .
+              - paragraph [ref=e222]: The
+              - paragraph [ref=e223]: previous
+              - paragraph [ref=e224]: responses
+              - paragraph [ref=e225]: show
+              - paragraph [ref=e226]: that
+              - paragraph [ref=e227]: the
+              - paragraph [ref=e228]: system
+              - paragraph [ref=e229]: has
+              - paragraph [ref=e230]: already
+              - paragraph [ref=e231]: called
+              - paragraph [ref=e232]: get
+              - paragraph [ref=e233]: Claim
+              - paragraph [ref=e234]: Schema
+              - paragraph [ref=e235]: and
+              - paragraph [ref=e236]: extract
+              - paragraph [ref=e237]: Receipt
+              - paragraph [ref=e238]: Fields
+              - paragraph [ref=e239]: ","
+              - paragraph [ref=e240]: then
+              - paragraph [ref=e241]: handled
+              - paragraph [ref=e242]: currency
+              - paragraph [ref=e243]: conversions
+              - paragraph [ref=e244]: .
+              - paragraph [ref=e245]: However
+              - paragraph [ref=e246]: ","
+              - paragraph [ref=e247]: the
+              - paragraph [ref=e248]: user
+              - paragraph [ref=e249]: is
+              - paragraph [ref=e250]: repeating
+              - paragraph [ref=e251]: the
+              - paragraph [ref=e252]: same
+              - paragraph [ref=e253]: request
+              - paragraph [ref=e254]: ","
+              - paragraph [ref=e255]: so
+              - paragraph [ref=e256]: maybe
+              - paragraph [ref=e257]: they
+              - paragraph [ref=e258]: are
+              - paragraph [ref=e259]: restarting
+              - paragraph [ref=e260]: or
+              - paragraph [ref=e261]: there
+              - paragraph [ref=e262]: "'s"
+              - paragraph [ref=e263]: an
+              - paragraph [ref=e264]: error
+              - paragraph [ref=e265]: in
+              - paragraph [ref=e266]: the
+              - paragraph [ref=e267]: process
+              - paragraph [ref=e268]: .
+              - paragraph [ref=e269]: Wait
+              - paragraph [ref=e270]: ","
+              - paragraph [ref=e271]: looking
+              - paragraph [ref=e272]: at
+              - paragraph [ref=e273]: the
+              - paragraph [ref=e274]: history
+              - paragraph [ref=e275]: ","
+              - paragraph [ref=e276]: the
+              - paragraph [ref=e277]: user
+              - paragraph [ref=e278]: "'s"
+              - paragraph [ref=e279]: last
+              - paragraph [ref=e280]: message
+              - paragraph [ref=e281]: is
+              - paragraph [ref=e282]: the
+              - paragraph [ref=e283]: same
+              - paragraph [ref=e284]: as
+              - paragraph [ref=e285]: before
+              - paragraph [ref=e286]: ","
+              - paragraph [ref=e287]: so
+              - paragraph [ref=e288]: it
+              - paragraph [ref=e289]: "'s"
+              - paragraph [ref=e290]: likely
+              - paragraph [ref=e291]: a
+              - paragraph [ref=e292]: repeat
+              - paragraph [ref=e293]: .
+              - paragraph [ref=e294]: But
+              - paragraph [ref=e295]: according
+              - paragraph [ref=e296]: to
+              - paragraph [ref=e297]: the
+              - paragraph [ref=e298]: workflow
+              - paragraph [ref=e299]: ","
+              - paragraph [ref=e300]: after
+              - paragraph [ref=e301]: Phase
+              - paragraph
+              - paragraph [ref=e302]: "1"
+              - paragraph [ref=e303]: (
+              - paragraph [ref=e304]: extract
+              - paragraph [ref=e305]: and
+              - paragraph [ref=e306]: present
+              - paragraph [ref=e307]: ),
+              - paragraph [ref=e308]: the
+              - paragraph [ref=e309]: user
+              - paragraph [ref=e310]: should
+              - paragraph [ref=e311]: confirm
+              - paragraph [ref=e312]: details
+              - paragraph [ref=e313]: or
+              - paragraph [ref=e314]: provide
+              - paragraph [ref=e315]: an
+              - paragraph [ref=e316]: employee
+              - paragraph [ref=e317]: ID
+              - paragraph [ref=e318]: .
+              - paragraph [ref=e319]: Since
+              - paragraph [ref=e320]: the
+              - paragraph [ref=e321]: user
+              - paragraph [ref=e322]: hasn
+              - paragraph [ref=e323]: "'t"
+              - paragraph [ref=e324]: done
+              - paragraph [ref=e325]: that
+              - paragraph [ref=e326]: yet
+              - paragraph [ref=e327]: ","
+              - paragraph [ref=e328]: maybe
+              - paragraph [ref=e329]: they
+              - paragraph [ref=e330]: are
+              - paragraph [ref=e331]: stuck
+              - paragraph [ref=e332]: here
+              - paragraph [ref=e333]: .
+              - paragraph [ref=e334]: However
+              - paragraph [ref=e335]: ","
+              - paragraph [ref=e336]: the
+              - paragraph [ref=e337]: user
+              - paragraph [ref=e338]: "'s"
+              - paragraph [ref=e339]: latest
+              - paragraph [ref=e340]: input
+              - paragraph [ref=e341]: is
+              - paragraph [ref=e342]: the
+              - paragraph [ref=e343]: same
+              - paragraph [ref=e344]: as
+              - paragraph [ref=e345]: before
+              - paragraph [ref=e346]: ","
+              - paragraph [ref=e347]: so
+              - paragraph [ref=e348]: perhaps
+              - paragraph [ref=e349]: they
+              - paragraph [ref=e350]: are
+              - paragraph [ref=e351]: re
+              - paragraph [ref=e352]: "-up"
+        - generic [ref=e55]:
+          - generic [ref=e57]:
+            - button "attach_file" [ref=e58]:
+              - generic [ref=e59]: attach_file
+            - textbox "Type a message or drop files..." [ref=e60]
+            - button "send" [disabled] [ref=e61]:
+              - generic [ref=e62]: send
+          - generic [ref=e63]:
+            - generic [ref=e64] [cursor=pointer]:
+              - generic [ref=e65]: photo_camera
+              - generic [ref=e66]: Capture
+            - generic [ref=e67] [cursor=pointer]:
+              - generic [ref=e68]: mic
+              - generic [ref=e69]: Voice
+            - generic [ref=e70] [cursor=pointer]:
+              - generic [ref=e71]: history
+              - generic [ref=e72]: Recent
+      - generic [ref=e73]:
+        - heading "Submission Summary" [level=2] [ref=e74]
+        - generic [ref=e75]:
+          - generic [ref=e76]:
+            - generic [ref=e77]:
+              - generic [ref=e78]: Current Session
+              - generic [ref=e79]:
+                - generic [ref=e80]:
+                  - paragraph [ref=e81]: $0.00
+                  - paragraph [ref=e82]: 0 items pending
+                - paragraph [ref=e85]: 0% Complete
+            - generic [ref=e86]:
+              - generic [ref=e87]: category
+              - paragraph [ref=e88]: Top Category
+              - paragraph [ref=e89]: "--"
+            - generic [ref=e90]:
+              - generic [ref=e91]: warning
+              - paragraph [ref=e92]: Warnings
+              - paragraph [ref=e93]: 0 Flags
+          - generic [ref=e94]:
+            - heading "Batch Details" [level=3] [ref=e95]
+            - paragraph [ref=e97]: No items yet. Upload a receipt to begin.
+        - button "Submit Entire Batch" [disabled] [ref=e98]

@@ -1,0 +1,154 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Cognitive Atelier
+      - navigation [ref=e5]:
+        - link "Dashboard" [ref=e6] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Audit Log" [ref=e7] [cursor=pointer]:
+          - /url: /audit
+        - link "Escalations" [ref=e8] [cursor=pointer]:
+          - /url: "#"
+    - generic [ref=e9]:
+      - button "notifications" [ref=e10]:
+        - generic [ref=e11]: notifications
+      - button "settings" [ref=e12]:
+        - generic [ref=e13]: settings
+      - generic [ref=e14]: CA
+  - complementary [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e19]: bolt
+        - generic [ref=e20]:
+          - heading "Luminous Intelligence" [level=3] [ref=e21]
+          - paragraph [ref=e22]: Expense Engine Active
+      - link "add New Expense" [ref=e23] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e24]: add
+        - text: New Expense
+    - navigation [ref=e25]:
+      - link "chat_spark Chat AI" [ref=e26] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e27]: chat_spark
+        - text: Chat AI
+      - link "insert_chart Dashboard" [ref=e28] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=e29]: insert_chart
+        - text: Dashboard
+      - link "verified_user Audit Log" [ref=e30] [cursor=pointer]:
+        - /url: /audit
+        - generic [ref=e31]: verified_user
+        - text: Audit Log
+      - link "receipt_long Review" [ref=e32] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e33]: receipt_long
+        - text: Review
+    - link "sensors System Status" [ref=e35] [cursor=pointer]:
+      - /url: "#"
+      - generic [ref=e36]: sensors
+      - text: System Status
+  - main [ref=e38]:
+    - generic [ref=e39]:
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - generic [ref=e43]: ESCALATION
+            - generic [ref=e45]: "Claim ID: test-claim-123"
+          - heading "Review Flagged Claim" [level=1] [ref=e46]
+          - paragraph [ref=e47]: Manual override required. Select a claim to review AI extraction and flag details.
+        - generic [ref=e48]:
+          - button "history View History" [ref=e49]:
+            - generic [ref=e50]: history
+            - text: View History
+          - button "share Reassign" [ref=e51]:
+            - generic [ref=e52]: share
+            - text: Reassign
+      - generic [ref=e53]:
+        - generic [ref=e54]:
+          - generic [ref=e55]:
+            - generic [ref=e56]:
+              - generic [ref=e57]:
+                - generic [ref=e58]: image
+                - text: Original Receipt
+              - generic [ref=e59]:
+                - button "zoom_in" [ref=e60]:
+                  - generic [ref=e61]: zoom_in
+                - button "download" [ref=e62]:
+                  - generic [ref=e63]: download
+            - generic [ref=e65]:
+              - generic [ref=e66]: receipt_long
+              - paragraph [ref=e67]: Receipt image will appear here when a claim is loaded.
+          - generic [ref=e68]:
+            - generic [ref=e70]:
+              - generic [ref=e71]: data_object
+              - text: Extracted Entity Data
+            - generic [ref=e73]:
+              - generic [ref=e74]:
+                - text: Vendor Name
+                - generic [ref=e75]:
+                  - generic [ref=e76]: "--"
+                  - generic [ref=e77]: edit
+              - generic [ref=e78]:
+                - text: Date of Transaction
+                - generic [ref=e80]: "--"
+              - generic [ref=e81]:
+                - generic [ref=e82]:
+                  - text: Total Amount
+                  - generic [ref=e83]: $0.00
+                - generic [ref=e84]:
+                  - text: Currency
+                  - generic [ref=e85]: SGD
+              - generic [ref=e86]:
+                - text: Category
+                - generic [ref=e87]:
+                  - generic [ref=e88]: restaurant
+                  - generic [ref=e89]: "--"
+              - generic [ref=e90]:
+                - text: Submitter
+                - generic [ref=e91]:
+                  - generic [ref=e93]: person
+                  - generic [ref=e94]: "--"
+        - generic [ref=e95]:
+          - generic [ref=e96]:
+            - generic [ref=e98]: security
+            - generic [ref=e99]:
+              - heading "report Flag Reason" [level=4] [ref=e100]:
+                - generic [ref=e101]: report
+                - text: Flag Reason
+              - generic [ref=e102]:
+                - paragraph [ref=e103]: No flag reason available. Select an escalated claim to review.
+                - generic [ref=e105]: "AI Confidence: --%"
+          - generic [ref=e107]:
+            - heading "notes Reviewer Decision" [level=4] [ref=e108]:
+              - generic [ref=e109]: notes
+              - text: Reviewer Decision
+            - generic [ref=e110]:
+              - generic [ref=e111]:
+                - text: Internal Notes
+                - textbox "State the reasoning for approval or rejection..." [ref=e112]
+              - generic [ref=e113]:
+                - text: Action Required
+                - generic [ref=e114]:
+                  - paragraph [ref=e115]: Rejection Reason (If Applicable)
+                  - generic [ref=e116]:
+                    - generic [ref=e117] [cursor=pointer]:
+                      - radio "Duplicate submission" [ref=e118]
+                      - generic [ref=e119]: Duplicate submission
+                    - generic [ref=e120] [cursor=pointer]:
+                      - radio "Incomplete receipt details" [ref=e121]
+                      - generic [ref=e122]: Incomplete receipt details
+                    - generic [ref=e123] [cursor=pointer]:
+                      - radio "Policy violation" [ref=e124]
+                      - generic [ref=e125]: Policy violation
+                - generic [ref=e126]:
+                  - button "cancel Reject Claim" [ref=e127]:
+                    - generic [ref=e128]: cancel
+                    - text: Reject Claim
+                  - button "check_circle Approve Claim" [ref=e129]:
+                    - generic [ref=e130]: check_circle
+                    - text: Approve Claim
+          - generic [ref=e131]:
+            - generic [ref=e132]:
+              - generic [ref=e134]: psychology
+              - heading "Luminous Intelligence Insight" [level=5] [ref=e136]
+            - paragraph [ref=e137]: AI insight will appear here once the claim has been analyzed by the compliance and fraud agents.

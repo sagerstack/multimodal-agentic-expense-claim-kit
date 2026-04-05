@@ -1,0 +1,143 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Cognitive Atelier
+      - navigation [ref=e5]:
+        - link "Dashboard" [ref=e6] [cursor=pointer]:
+          - /url: "#"
+        - link "Audit Log" [ref=e7] [cursor=pointer]:
+          - /url: "#"
+        - link "Escalations" [ref=e8] [cursor=pointer]:
+          - /url: "#"
+    - generic [ref=e9]:
+      - button "notifications" [ref=e10] [cursor=pointer]:
+        - generic [ref=e11]: notifications
+      - button "settings" [ref=e12] [cursor=pointer]:
+        - generic [ref=e13]: settings
+      - img "User profile with active AI status" [ref=e15]
+  - complementary [ref=e16]:
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - generic [ref=e20]: bolt
+        - generic [ref=e21]:
+          - heading "Luminous Intelligence" [level=3] [ref=e22]
+          - paragraph [ref=e23]: Expense Engine Active
+      - button "add New Expense" [ref=e24] [cursor=pointer]:
+        - generic [ref=e25]: add
+        - text: New Expense
+    - navigation [ref=e26]:
+      - link "chat_spark Chat AI" [ref=e27] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e28]: chat_spark
+        - text: Chat AI
+      - link "insert_chart Analytics" [ref=e29] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e30]: insert_chart
+        - text: Analytics
+      - link "verified_user Approvals" [ref=e31] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e32]: verified_user
+        - text: Approvals
+      - link "receipt_long History" [ref=e33] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e34]: receipt_long
+        - text: History
+      - link "help_center Support" [ref=e35] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e36]: help_center
+        - text: Support
+    - link "sensors System Status" [ref=e38] [cursor=pointer]:
+      - /url: "#"
+      - generic [ref=e39]: sensors
+      - text: System Status
+  - main [ref=e40]:
+    - generic [ref=e41]:
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - generic [ref=e45]: smart_toy
+          - generic [ref=e46]:
+            - paragraph [ref=e48]: Good evening. I'm ready to process your expenses. You can drag and drop receipts here or simply describe the transaction.
+            - text: 10:24 PM
+        - generic [ref=e49]:
+          - generic [ref=e51]: person
+          - generic [ref=e52]:
+            - generic [ref=e53]:
+              - generic [ref=e54] [cursor=pointer]:
+                - img "Receipt upload" [ref=e55]
+                - generic [ref=e57]: zoom_in
+              - paragraph [ref=e58]: receipt_0422.jpg (1.2MB)
+            - text: 10:25 PM
+        - generic [ref=e59]:
+          - generic [ref=e61]: smart_toy
+          - generic [ref=e62]:
+            - generic [ref=e63]:
+              - generic [ref=e66]: Analysis Complete
+              - paragraph [ref=e67]: Found $45.20 from Starbucks for "Coffee & Client Meeting".
+              - paragraph [ref=e68]: Shall I categorize this under Business Development?
+            - generic [ref=e69]:
+              - button "Yes, looks correct" [ref=e70] [cursor=pointer]
+              - button "Edit details" [ref=e71] [cursor=pointer]
+            - text: 10:25 PM
+      - generic [ref=e73]:
+        - generic:
+          - generic: Drop receipt to upload
+        - generic [ref=e74]:
+          - button "attach_file" [ref=e75] [cursor=pointer]:
+            - generic [ref=e76]: attach_file
+          - textbox "Type a message or drop files..." [ref=e77]
+          - button "send" [ref=e78] [cursor=pointer]:
+            - generic [ref=e79]: send
+        - generic [ref=e80]:
+          - generic [ref=e81] [cursor=pointer]:
+            - generic [ref=e82]: photo_camera
+            - generic [ref=e83]: Capture
+          - generic [ref=e84] [cursor=pointer]:
+            - generic [ref=e85]: mic
+            - generic [ref=e86]: Voice
+          - generic [ref=e87] [cursor=pointer]:
+            - generic [ref=e88]: history
+            - generic [ref=e89]: Recent
+    - generic [ref=e90]:
+      - heading "Submission Summary" [level=2] [ref=e91]
+      - generic [ref=e92]:
+        - generic [ref=e93]:
+          - generic [ref=e94]: Current Session
+          - generic [ref=e95]:
+            - generic [ref=e96]:
+              - paragraph [ref=e97]: $142.80
+              - paragraph [ref=e98]: 3 items pending
+            - paragraph [ref=e102]: 65% Complete
+        - generic [ref=e103]:
+          - generic [ref=e104]: category
+          - paragraph [ref=e105]: Top Category
+          - paragraph [ref=e106]: Business Dev
+        - generic [ref=e107]:
+          - generic [ref=e108]: warning
+          - paragraph [ref=e109]: Warnings
+          - paragraph [ref=e110]: 1 Flagged
+      - generic [ref=e111]:
+        - heading "Batch Details" [level=3] [ref=e112]
+        - generic [ref=e114] [cursor=pointer]:
+          - generic [ref=e115]:
+            - generic [ref=e117]: local_cafe
+            - generic [ref=e118]:
+              - paragraph [ref=e119]: Starbucks
+              - paragraph [ref=e120]: Apr 22, 2024
+          - generic [ref=e121]:
+            - paragraph [ref=e122]: $45.20
+            - text: READY
+        - generic [ref=e124] [cursor=pointer]:
+          - generic [ref=e125]:
+            - generic [ref=e127]: commute
+            - generic [ref=e128]:
+              - paragraph [ref=e129]: Uber Trip
+              - paragraph [ref=e130]: Apr 21, 2024
+          - generic [ref=e131]:
+            - paragraph [ref=e132]: $28.40
+            - text: READY
+        - generic [ref=e135]:
+          - generic [ref=e137]: receipt
+          - generic [ref=e139]:
+            - paragraph [ref=e140]: processing...
+            - paragraph [ref=e141]: Calculating OCR
+      - button "Submit Entire Batch" [ref=e144] [cursor=pointer]

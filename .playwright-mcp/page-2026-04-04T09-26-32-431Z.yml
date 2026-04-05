@@ -1,0 +1,178 @@
+- generic [ref=e1]:
+  - alert [ref=e2]: Events — Seq
+  - generic [ref=e4]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - link "Seq logo Events" [ref=e8] [cursor=pointer]:
+          - /url: "#/events?range=1d"
+          - img "Seq logo" [ref=e9]
+          - generic [ref=e16]: Events
+        - link "Skip to content" [ref=e17] [cursor=pointer]:
+          - /url: "##main"
+        - generic [ref=e19]:
+          - button "Personal" [ref=e20] [cursor=pointer]:
+            - generic [ref=e21]: Personal
+            - img [ref=e23]
+          - button "Save the current workspace" [ref=e28] [cursor=pointer]:
+            - img [ref=e30]
+            - generic [ref=e35]: Save the current workspace
+      - button "Show Commands" [ref=e40]:
+        - generic [ref=e41]: Find commands, shortcuts, and screens
+        - generic [ref=e43]:
+          - generic [ref=e44]: Cmd
+          - generic [ref=e45]: K
+      - list [ref=e47]:
+        - listitem [ref=e48]:
+          - button [ref=e50] [cursor=pointer]:
+            - img [ref=e52]
+        - listitem [ref=e56]:
+          - radiogroup "Theme switcher" [ref=e57]:
+            - radio "Light theme" [checked] [ref=e58]
+            - generic [ref=e59] [cursor=pointer]:
+              - img [ref=e61]
+              - generic [ref=e77]: Light theme
+            - radio "Dark theme" [ref=e78]
+            - generic [ref=e80] [cursor=pointer]: Dark theme
+        - listitem [ref=e81]:
+          - link "Events" [ref=e82] [cursor=pointer]:
+            - /url: "#/events?range=1d"
+        - listitem [ref=e83]:
+          - link "Dashboards" [ref=e84] [cursor=pointer]:
+            - /url: "#/dashboards"
+        - listitem [ref=e85]:
+          - link "Alerts" [ref=e86] [cursor=pointer]:
+            - /url: "#/alerts"
+        - listitem [ref=e87]:
+          - button "Data" [ref=e89] [cursor=pointer]:
+            - generic [ref=e91]:
+              - text: Data
+              - img [ref=e95]
+        - listitem [ref=e97]:
+          - button "Settings" [ref=e99] [cursor=pointer]:
+            - generic [ref=e101]:
+              - text: Settings
+              - img [ref=e105]
+        - listitem [ref=e107]:
+          - button "Support" [ref=e109] [cursor=pointer]:
+            - generic [ref=e111]:
+              - text: Support
+              - img [ref=e115]
+        - listitem [ref=e117]:
+          - generic "admin" [ref=e118] [cursor=pointer]
+          - button [ref=e122] [cursor=pointer]:
+            - img [ref=e128]
+    - main [ref=e130]:
+      - generic [ref=e131]:
+        - generic [ref=e132]:
+          - generic [ref=e134]:
+            - link "Queries" [ref=e135] [cursor=pointer]:
+              - /url: ""
+              - img [ref=e138]
+              - text: Queries
+            - link "Variables" [ref=e147] [cursor=pointer]:
+              - /url: ""
+              - img [ref=e150]
+              - text: Variables
+            - link "History" [ref=e152] [cursor=pointer]:
+              - /url: ""
+              - img [ref=e155]
+              - text: History
+          - generic [ref=e162]:
+            - textbox "+ 2 more" [ref=e163]:
+              - /placeholder: Find in active tool windows
+            - generic "Search" [ref=e165] [cursor=pointer]:
+              - img [ref=e167]
+          - generic [ref=e171]:
+            - heading "Signals" [level=3] [ref=e173]:
+              - text: Signals
+              - generic [ref=e174]:
+                - link "Add signal" [ref=e177] [cursor=pointer]:
+                  - /url: ""
+                  - img [ref=e179]
+                - link "Close" [ref=e182] [cursor=pointer]:
+                  - /url: ""
+                  - img [ref=e184]
+            - generic [ref=e190]:
+              - list [ref=e191]:
+                - listitem [ref=e192]:
+                  - generic [ref=e193]:
+                    - img [ref=e195] [cursor=pointer]
+                    - link "None" [ref=e201] [cursor=pointer]:
+                      - /url: ""
+                      - generic [ref=e202]: None
+                - listitem [ref=e203]:
+                  - generic [ref=e204]:
+                    - generic [ref=e205]:
+                      - img [ref=e207] [cursor=pointer]
+                      - generic [ref=e213] [cursor=pointer]: "@Level"
+                    - img [ref=e215] [cursor=pointer]
+                  - list [ref=e217]:
+                    - listitem [ref=e218]:
+                      - generic "Errors" [ref=e219]:
+                        - img [ref=e221] [cursor=pointer]
+                        - link "Errors" [ref=e227] [cursor=pointer]:
+                          - /url: ""
+                          - generic [ref=e228]: Errors
+                    - listitem [ref=e230]:
+                      - generic "Warnings" [ref=e231]:
+                        - img [ref=e233] [cursor=pointer]
+                        - link "Warnings" [ref=e239] [cursor=pointer]:
+                          - /url: ""
+                          - generic [ref=e240]: Warnings
+                - listitem [ref=e242]:
+                  - generic "Exceptions" [ref=e243]:
+                    - img [ref=e245] [cursor=pointer]
+                    - link "Exceptions" [ref=e251] [cursor=pointer]:
+                      - /url: ""
+                      - generic [ref=e252]: Exceptions
+              - text: + 2 more
+          - generic [ref=e254]:
+            - link "2025.2.15571" [ref=e255] [cursor=pointer]:
+              - /url: https://datalust.co/download
+            - link "Individual License" [ref=e256] [cursor=pointer]:
+              - /url: "#/settings/license"
+        - generic [ref=e258]:
+          - generic [ref=e260]:
+            - textbox [active] [ref=e266]
+            - generic [ref=e268]:
+              - link "Go" [ref=e269] [cursor=pointer]:
+                - /url: ""
+                - img [ref=e271]
+              - link "Tail" [ref=e273] [cursor=pointer]:
+                - /url: ""
+                - img [ref=e275]
+            - generic [ref=e278]:
+              - link "Add to dashboard" [ref=e279] [cursor=pointer]:
+                - /url: ""
+                - img [ref=e281]
+              - link "Create an alert based on the current result set" [ref=e287] [cursor=pointer]:
+                - /url: ""
+                - img [ref=e289]
+              - link "Add the current filter to a Signal" [ref=e296]:
+                - /url: ""
+                - img [ref=e298]
+              - button [ref=e307] [cursor=pointer]:
+                - img [ref=e313]
+          - generic [ref=e317]:
+            - generic [ref=e318]:
+              - button "Show or hide the frequency histogram" [ref=e319] [cursor=pointer]:
+                - img [ref=e321]
+              - button "Show or hide the heatmap" [ref=e327] [cursor=pointer]:
+                - img [ref=e329]
+              - button "Show or hide the trace view" [ref=e339] [cursor=pointer]:
+                - img [ref=e341]
+            - generic [ref=e351]:
+              - button [ref=e352] [cursor=pointer]:
+                - img [ref=e354]
+              - button "Last 1d" [ref=e357] [cursor=pointer]:
+                - generic [ref=e358]:
+                  - text: Last
+                  - code [ref=e359]: 1d
+                - generic:
+                  - generic:
+                    - img
+              - button [disabled] [ref=e360]:
+                - img [ref=e362]
+        - generic [ref=e367]:
+          - generic [ref=e370]: Searching… complete.
+          - paragraph [ref=e372]: No events matched the current search. If signals are selected, filters on the signals may be excluding events of interest. If a date range is selected, there may not be any matching events in the range.

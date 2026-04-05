@@ -1,0 +1,388 @@
+- generic [ref=e1]:
+  - alert [ref=e2]: Events — Seq
+  - generic [ref=e4]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - link "Seq logo Events" [ref=e8] [cursor=pointer]:
+          - /url: "#/events?range=1d"
+          - img "Seq logo" [ref=e9]
+          - generic [ref=e16]: Events
+        - link "Skip to content" [ref=e17] [cursor=pointer]:
+          - /url: "##main"
+        - generic [ref=e19]:
+          - button "Personal" [ref=e20] [cursor=pointer]:
+            - generic [ref=e21]: Personal
+            - img [ref=e23]
+          - button "Save the current workspace" [ref=e28] [cursor=pointer]:
+            - img [ref=e30]
+            - generic [ref=e35]: Save the current workspace
+      - button "Show Commands" [ref=e40]:
+        - generic [ref=e41]: Find commands, shortcuts, and screens
+        - generic [ref=e43]:
+          - generic [ref=e44]: Cmd
+          - generic [ref=e45]: K
+      - list [ref=e47]:
+        - listitem [ref=e48]:
+          - button [ref=e50] [cursor=pointer]:
+            - img [ref=e52]
+        - listitem [ref=e56]:
+          - radiogroup "Theme switcher" [ref=e57]:
+            - radio "Light theme" [checked] [ref=e58]
+            - generic [ref=e59] [cursor=pointer]:
+              - img [ref=e61]
+              - generic [ref=e77]: Light theme
+            - radio "Dark theme" [ref=e78]
+            - generic [ref=e80] [cursor=pointer]: Dark theme
+        - listitem [ref=e81]:
+          - link "Events" [ref=e82] [cursor=pointer]:
+            - /url: "#/events?range=1d"
+        - listitem [ref=e83]:
+          - link "Dashboards" [ref=e84] [cursor=pointer]:
+            - /url: "#/dashboards"
+        - listitem [ref=e85]:
+          - link "Alerts" [ref=e86] [cursor=pointer]:
+            - /url: "#/alerts"
+        - listitem [ref=e87]:
+          - button "Data" [ref=e89] [cursor=pointer]:
+            - generic [ref=e91]:
+              - text: Data
+              - img [ref=e95]
+        - listitem [ref=e97]:
+          - button "Settings" [ref=e99] [cursor=pointer]:
+            - generic [ref=e101]:
+              - text: Settings
+              - img [ref=e105]
+        - listitem [ref=e107]:
+          - button "Support" [ref=e109] [cursor=pointer]:
+            - generic [ref=e111]:
+              - text: Support
+              - img [ref=e115]
+        - listitem [ref=e117]:
+          - generic "admin" [ref=e118] [cursor=pointer]
+          - button [ref=e122] [cursor=pointer]:
+            - img [ref=e128]
+    - main [ref=e130]:
+      - generic [ref=e131]:
+        - generic [ref=e132]:
+          - generic [ref=e134]:
+            - link "Queries" [ref=e135] [cursor=pointer]:
+              - /url: ""
+              - img [ref=e138]
+              - text: Queries
+            - link "Variables" [ref=e147] [cursor=pointer]:
+              - /url: ""
+              - img [ref=e150]
+              - text: Variables
+            - link "History" [ref=e152] [cursor=pointer]:
+              - /url: ""
+              - img [ref=e155]
+              - text: History
+          - generic [ref=e162]:
+            - textbox "+ 2 more" [ref=e163]:
+              - /placeholder: Find in active tool windows
+            - generic "Search" [ref=e165] [cursor=pointer]:
+              - img [ref=e167]
+          - generic [ref=e171]:
+            - heading "Signals" [level=3] [ref=e173]:
+              - text: Signals
+              - generic [ref=e174]:
+                - link "Add signal" [ref=e177] [cursor=pointer]:
+                  - /url: ""
+                  - img [ref=e179]
+                - link "Close" [ref=e182] [cursor=pointer]:
+                  - /url: ""
+                  - img [ref=e184]
+            - generic [ref=e190]:
+              - list [ref=e191]:
+                - listitem [ref=e192]:
+                  - generic [ref=e193]:
+                    - img [ref=e195] [cursor=pointer]
+                    - link "None" [ref=e201] [cursor=pointer]:
+                      - /url: ""
+                      - generic [ref=e202]: None
+                - listitem [ref=e203]:
+                  - generic [ref=e204]:
+                    - generic [ref=e205]:
+                      - img [ref=e207] [cursor=pointer]
+                      - generic [ref=e213] [cursor=pointer]: "@Level"
+                    - img [ref=e215] [cursor=pointer]
+                  - list [ref=e217]:
+                    - listitem [ref=e218]:
+                      - generic "Errors" [ref=e219]:
+                        - img [ref=e221] [cursor=pointer]
+                        - link "Errors" [ref=e227] [cursor=pointer]:
+                          - /url: ""
+                          - generic [ref=e228]: Errors
+                    - listitem [ref=e230]:
+                      - generic "Warnings" [ref=e231]:
+                        - img [ref=e233] [cursor=pointer]
+                        - link "Warnings" [ref=e239] [cursor=pointer]:
+                          - /url: ""
+                          - generic [ref=e240]: Warnings
+                - listitem [ref=e242]:
+                  - generic "Exceptions" [ref=e243]:
+                    - img [ref=e245] [cursor=pointer]
+                    - link "Exceptions" [ref=e251] [cursor=pointer]:
+                      - /url: ""
+                      - generic [ref=e252]: Exceptions
+              - text: + 2 more
+          - generic [ref=e254]:
+            - link "2025.2.15571" [ref=e255] [cursor=pointer]:
+              - /url: https://datalust.co/download
+            - link "Individual License" [ref=e256] [cursor=pointer]:
+              - /url: "#/settings/license"
+        - generic [ref=e258]:
+          - generic [ref=e260]:
+            - textbox [active] [ref=e266]
+            - generic [ref=e268]:
+              - link "Go" [ref=e269] [cursor=pointer]:
+                - /url: ""
+                - img [ref=e271]
+              - link "Tail" [ref=e273] [cursor=pointer]:
+                - /url: ""
+                - img [ref=e275]
+            - generic [ref=e278]:
+              - link "Add to dashboard" [ref=e279] [cursor=pointer]:
+                - /url: ""
+                - img [ref=e281]
+              - link "Create an alert based on the current result set" [ref=e287] [cursor=pointer]:
+                - /url: ""
+                - img [ref=e289]
+              - link "Add the current filter to a Signal" [ref=e296]:
+                - /url: ""
+                - img [ref=e298]
+              - button [ref=e307] [cursor=pointer]:
+                - img [ref=e313]
+          - generic [ref=e317]:
+            - generic [ref=e318]:
+              - button "Show or hide the frequency histogram" [ref=e319] [cursor=pointer]:
+                - img [ref=e321]
+              - button "Show or hide the heatmap" [ref=e327] [cursor=pointer]:
+                - img [ref=e329]
+              - button "Show or hide the trace view" [ref=e339] [cursor=pointer]:
+                - img [ref=e341]
+            - generic [ref=e351]:
+              - button [ref=e352] [cursor=pointer]:
+                - img [ref=e354]
+              - button "Last 1d" [ref=e357] [cursor=pointer]:
+                - generic [ref=e358]:
+                  - text: Last
+                  - code [ref=e359]: 1d
+                - generic:
+                  - generic:
+                    - img
+              - button [disabled] [ref=e360]:
+                - img [ref=e362]
+        - generic [ref=e367]:
+          - generic [ref=e368]:
+            - generic [ref=e369]:
+              - generic "2026-04-04T09:35:01.723Z" [ref=e371] [cursor=pointer]:
+                - generic [ref=e372]: 04 Apr 2026
+                - text: 17:35:01.723
+              - generic [ref=e374] [cursor=pointer]:
+                - generic "Information" [ref=e375]
+                - generic [ref=e377]: GET stream disconnected, reconnecting in 1000ms...
+            - generic [ref=e378]:
+              - generic "2026-04-04T09:35:01.658Z" [ref=e380] [cursor=pointer]:
+                - generic [ref=e381]: 04 Apr 2026
+                - text: 17:35:01.658
+              - generic [ref=e383] [cursor=pointer]:
+                - generic "Information" [ref=e384]
+                - generic [ref=e386]: JSON parse successful
+            - generic [ref=e387]:
+              - generic "2026-04-04T09:35:01.590Z" [ref=e389] [cursor=pointer]:
+                - generic [ref=e390]: 04 Apr 2026
+                - text: 17:35:01.590
+              - generic [ref=e392] [cursor=pointer]:
+                - generic "Debug" [ref=e393]
+                - generic [ref=e395]: Raw text from MCP
+            - generic [ref=e396]:
+              - generic "2026-04-04T09:35:01.552Z" [ref=e398] [cursor=pointer]:
+                - generic [ref=e399]: 04 Apr 2026
+                - text: 17:35:01.552
+              - generic [ref=e401] [cursor=pointer]:
+                - generic "Information" [ref=e402]
+                - generic [ref=e404]: MCP tool returned
+            - generic [ref=e405]:
+              - generic "2026-04-04T09:35:01.507Z" [ref=e407] [cursor=pointer]:
+                - generic [ref=e408]: 04 Apr 2026
+                - text: 17:35:01.507
+              - generic [ref=e410] [cursor=pointer]:
+                - generic "Debug" [ref=e411]
+                - generic [ref=e413]: "SSE message: root=JSONRPCResponse(jsonrpc='2.0', id=2, result={'tools': [{'name': 'executeQuery', 'description': 'Execute read-only SQL query against Postgres.\\n\\nArgs:\\n query: SQL SELECT query\\n\\nReturns:\\n List of rows as dictionaries', 'inputSchema': {'additionalProperties': False, 'properties': {'query': {'type': 'string'}}, 'required': ['query'], 'type': 'object'}, 'outputSchema': {'properties': {'result': {'items': {'additionalProperties': True, 'type': 'object'}, 'type': 'array'}, 'required': ['result'], 'type': 'object', 'x-fastmcp-wrap-result': True}, '_meta': {'fastmcp': {'tags': []}}, {'name': 'insertClaim', 'description': 'Insert a new claim and optionally its receipt atomically.\\n\\nArgs:\\n employeeId: Employee ID who created the claim\\n status: Claim status (draft, pending, approved, rejected, paid)\\n totalAmount: Total claim amount\\n currency: Currency code (default SGD)\\n intakeFindings: Agent observations (mismatches, overrides, red flags)\\n claimNumber: Unique claim identifier (optional, DB generates via sequence if omitted)\\n idempotencyKey: Natural key for deduplication (optional, enables ON CONFLICT)\\n receiptNumber: Unique receipt identifier (optional)\\n merchant: Merchant name (optional)\\n receiptDate: Receipt date (optional)\\n receiptTotalAmount: Receipt total amount (optional)\\n receiptCurrency: Receipt currency (optional)\\n lineItems: Line items as list of dicts (optional)\\n imagePath: Path to receipt image (optional)\\n paymentMethod: Payment method (optional)\\n taxAmount: Tax amount (optional)\\n originalAmount: Original amount before conversion (optional)\\n originalCurrency: Original currency code (optional)\\n convertedAmount: Converted amount in SGD (optional)\\n convertedCurrency: Converted currency code (optional)\\n exchangeRate: Exchange rate used (optional)\\n conversionDate: Date of conversion (optional)\\n\\nReturns:\\n Dict with \"claim\" and \"receipt\" keys containing the inserted records,\\n or note key if duplicate detected', 'inputSchema': {'additionalProperties': False, 'properties': {'employeeId': {'type': 'string'}, 'status': {'type': 'string'}, 'totalAmount': {'type': 'number'}, 'currency': {'default': 'SGD', 'type': 'string'}, 'intakeFindings': {'anyOf': [{'additionalProperties': True, 'type': 'object'}, {'type': 'null'}], 'default': None}, 'claimNumber': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None}, 'idempotencyKey': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None}, 'receiptNumber': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None}, 'merchant': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None}, 'receiptDate': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None}, 'receiptTotalAmount': {'anyOf': [{'type': 'number'}, {'type': 'null'}], 'default': None}, 'receiptCurrency': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None}, 'lineItems': {'anyOf': [{'items': {}, 'type': 'array'}, {'type': 'null'}], 'default': None}, 'imagePath': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None}, 'paymentMethod': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None}, 'taxAmount': {'anyOf': [{'type': 'number'}, {'type': 'null'}], 'default': None}, 'originalAmount': {'anyOf': [{'type': 'number'}, {'type': 'null'}], 'default': None}, 'originalCurrency': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None}, 'convertedAmount': {'anyOf': [{'type': 'number'}, {'type': 'null'}], 'default': None}, 'convertedCurrency': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None}, 'exchangeRate': {'anyOf': [{'type': 'number'}, {'type': 'null'}], 'default': None}, 'conversionDate': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None}, 'required': ['employeeId', 'status', 'totalAmount'], 'type': 'object'}, 'outputSchema': {'additionalProperties': True, 'type': 'object'}, '_meta': {'fastmcp': {'tags': []}}, {'name': 'updateClaimStatus', 'description': 'Update claim status and insert audit log entry.\\n\\nArgs:\\n claimId: Claim ID to update\\n newStatus: New status value\\n actor: User/system performing the update\\n\\nReturns:\\n Updated claim record', 'inputSchema': {'additionalProperties': False, 'properties': {'claimId': {'type': 'integer'}, 'newStatus': {'type': 'string'}, 'actor': {'type': 'string'}}, 'required': ['claimId', 'newStatus', 'actor'], 'type': 'object'}, 'outputSchema': {'additionalProperties': True, 'type': 'object'}, '_meta': {'fastmcp': {'tags': []}}, {'name': 'getClaimSchema', 'description': \"Get the database schema for claims and receipts tables.\\n\\nReturns column names, types, and nullable status for both tables.\\nAgents use this to discover required/optional fields dynamically.\\n\\nReturns:\\n Dict with 'claims' and 'receipts' keys, each containing a list of\\n column descriptors {name, type, nullable, has_default}\", 'inputSchema': {'additionalProperties': False, 'properties': {}, 'type': 'object'}, 'outputSchema': {'additionalProperties': True, 'type': 'object'}, '_meta': {'fastmcp': {'tags': []}}, {'name': 'getClaimWithReceipts', 'description': 'Get claim with all linked receipts.\\n\\nArgs:\\n claimId: Claim ID\\n\\nReturns:\\n Claim record with nested receipts list', 'inputSchema': {'additionalProperties': False, 'properties': {'claimId': {'type': 'integer'}}, 'required': ['claimId'], 'type': 'object'}, 'outputSchema': {'additionalProperties': True, 'type': 'object'}, '_meta': {'fastmcp': {'tags': []}}]})"
+            - generic [ref=e414]:
+              - generic "2026-04-04T09:35:01.468Z" [ref=e416] [cursor=pointer]:
+                - generic [ref=e417]: 04 Apr 2026
+                - text: 17:35:01.468
+              - generic [ref=e419] [cursor=pointer]:
+                - generic "Debug" [ref=e420]
+                - generic [ref=e422]: "Sending client message: root=JSONRPCRequest(method='tools/list', params=None, jsonrpc='2.0', id=2)"
+            - generic [ref=e423]:
+              - generic "2026-04-04T09:35:01.414Z" [ref=e425] [cursor=pointer]:
+                - generic [ref=e426]: 04 Apr 2026
+                - text: 17:35:01.414
+              - generic [ref=e428] [cursor=pointer]:
+                - generic "Debug" [ref=e429]
+                - generic [ref=e431]: "SSE message: root=JSONRPCResponse(jsonrpc='2.0', id=1, result={'content': [{'type': 'text', 'text': '[{\"id\":9,\"claim_number\":\"CLAIM-009\",\"employee_id\":\"awaiting\",\"status\":\"pending\",\"total_amount\":\"20.85\",\"currency\":\"SGD\",\"created_at\":\"2026-04-04T09:07:07.925302Z\",\"merchant\":\"DIG.\",\"receipt_date\":\"2024-05-28\"},{\"id\":6,\"claim_number\":\"CLAIM-006\",\"employee_id\":\"1010736\",\"status\":\"pending\",\"total_amount\":\"126.86\",\"currency\":\"SGD\",\"created_at\":\"2026-04-04T04:05:07.275443Z\",\"merchant\":\"The Public Izakaya\",\"receipt_date\":\"2024-06-14\"},{\"id\":3,\"claim_number\":\"CLAIM-003\",\"employee_id\":\"EMP-1234\",\"status\":\"pending\",\"total_amount\":\"20.85\",\"currency\":\"SGD\",\"created_at\":\"2026-04-04T02:02:28.562205Z\",\"merchant\":\"DIG.\",\"receipt_date\":\"2024-05-28\"},{\"id\":2,\"claim_number\":\"CLAIM-002\",\"employee_id\":\"1010736\",\"status\":\"pending\",\"total_amount\":\"20.85\",\"currency\":\"USD\",\"created_at\":\"2026-04-03T18:08:02.087817Z\",\"merchant\":\"DIG.\",\"receipt_date\":\"2024-05-28\"},{\"id\":1,\"claim_number\":\"CLAIM-001\",\"employee_id\":\"EMP-001\",\"status\":\"pending\",\"total_amount\":\"20.86\",\"currency\":\"SGD\",\"created_at\":\"2026-03-28T14:04:13.616919Z\",\"merchant\":\"DIG.\",\"receipt_date\":\"2024-05-28\"}]'}], 'structuredContent': {'result': [{'id': 9, 'claim_number': 'CLAIM-009', 'employee_id': 'awaiting', 'status': 'pending', 'total_amount': '20.85', 'currency': 'SGD', 'created_at': '2026-04-04T09:07:07.925302Z', 'merchant': 'DIG.', 'receipt_date': '2024-05-28'}, {'id': 6, 'claim_number': 'CLAIM-006', 'employee_id': '1010736', 'status': 'pending', 'total_amount': '126.86', 'currency': 'SGD', 'created_at': '2026-04-04T04:05:07.275443Z', 'merchant': 'The Public Izakaya', 'receipt_date': '2024-06-14'}, {'id': 3, 'claim_number': 'CLAIM-003', 'employee_id': 'EMP-1234', 'status': 'pending', 'total_amount': '20.85', 'currency': 'SGD', 'created_at': '2026-04-04T02:02:28.562205Z', 'merchant': 'DIG.', 'receipt_date': '2024-05-28'}, {'id': 2, 'claim_number': 'CLAIM-002', 'employee_id': '1010736', 'status': 'pending', 'total_amount': '20.85', 'currency': 'USD', 'created_at': '2026-04-03T18:08:02.087817Z', 'merchant': 'DIG.', 'receipt_date': '2024-05-28'}, {'id': 1, 'claim_number': 'CLAIM-001', 'employee_id': 'EMP-001', 'status': 'pending', 'total_amount': '20.86', 'currency': 'SGD', 'created_at': '2026-03-28T14:04:13.616919Z', 'merchant': 'DIG.', 'receipt_date': '2024-05-28'}]}, 'isError': False})"
+            - generic [ref=e432]:
+              - generic "2026-04-04T09:35:01.306Z" [ref=e434] [cursor=pointer]:
+                - generic [ref=e435]: 04 Apr 2026
+                - text: 17:35:01.306
+              - generic [ref=e437] [cursor=pointer]:
+                - generic "Debug" [ref=e438]
+                - generic [ref=e440]: "Sending client message: root=JSONRPCRequest(method='tools/call', params={'name': 'executeQuery', 'arguments': {'query': 'SELECT c.id, c.claim_number, c.employee_id, c.status, c.total_amount, c.currency, c.created_at, r.merchant, r.date as receipt_date FROM claims c LEFT JOIN receipts r ON r.claim_id = c.id ORDER BY c.created_at DESC LIMIT 50'}}, jsonrpc='2.0', id=1)"
+            - generic [ref=e441]:
+              - generic "2026-04-04T09:35:01.253Z" [ref=e443] [cursor=pointer]:
+                - generic [ref=e444]: 04 Apr 2026
+                - text: 17:35:01.253
+              - generic [ref=e446] [cursor=pointer]:
+                - generic "Debug" [ref=e447]
+                - generic [ref=e449]: GET SSE connection established
+            - generic [ref=e450]:
+              - generic "2026-04-04T09:35:01.108Z" [ref=e452] [cursor=pointer]:
+                - generic [ref=e453]: 04 Apr 2026
+                - text: 17:35:01.108
+              - generic [ref=e455] [cursor=pointer]:
+                - generic "Debug" [ref=e456]
+                - generic [ref=e458]: Received 202 Accepted
+            - generic [ref=e459]:
+              - generic "2026-04-04T09:35:00.983Z" [ref=e461] [cursor=pointer]:
+                - generic [ref=e462]: 04 Apr 2026
+                - text: 17:35:00.983
+              - generic [ref=e464] [cursor=pointer]:
+                - generic "Debug" [ref=e465]
+                - generic [ref=e467]: "Sending client message: root=JSONRPCNotification(method='notifications/initialized', params=None, jsonrpc='2.0')"
+            - generic [ref=e468]:
+              - generic "2026-04-04T09:35:00.890Z" [ref=e470] [cursor=pointer]:
+                - generic [ref=e471]: 04 Apr 2026
+                - text: 17:35:00.890
+              - generic [ref=e473] [cursor=pointer]:
+                - generic "Information" [ref=e474]
+                - generic [ref=e476]: Calling MCP tool
+            - generic [ref=e477]:
+              - generic "2026-04-04T09:35:00.604Z" [ref=e479] [cursor=pointer]:
+                - generic [ref=e480]: 04 Apr 2026
+                - text: 17:35:00.604
+              - generic [ref=e482] [cursor=pointer]:
+                - generic "Information" [ref=e483]
+                - generic [ref=e485]: "Negotiated protocol version: 2025-11-25"
+            - generic [ref=e486]:
+              - generic "2026-04-04T09:35:00.462Z" [ref=e488] [cursor=pointer]:
+                - generic [ref=e489]: 04 Apr 2026
+                - text: 17:35:00.462
+              - generic [ref=e491] [cursor=pointer]:
+                - generic "Debug" [ref=e492]
+                - generic [ref=e494]: "SSE message: root=JSONRPCResponse(jsonrpc='2.0', id=0, result={'protocolVersion': '2025-11-25', 'capabilities': {'experimental': {}, 'prompts': {'listChanged': True}, 'resources': {'subscribe': False, 'listChanged': True}, 'tools': {'listChanged': True}, 'extensions': {'io.modelcontextprotocol/ui': {}}, 'serverInfo': {'name': 'db-server', 'version': '3.1.1'}})"
+            - generic [ref=e495]:
+              - generic "2026-04-04T09:35:00.039Z" [ref=e497] [cursor=pointer]:
+                - generic [ref=e498]: 04 Apr 2026
+                - text: 17:35:00.039
+              - generic [ref=e500] [cursor=pointer]:
+                - generic "Information" [ref=e501]
+                - generic [ref=e503]: "Received session ID: 50f5416d27704dc18d38199c3ed27f26"
+            - generic [ref=e504]:
+              - generic "2026-04-04T09:34:59.908Z" [ref=e506] [cursor=pointer]:
+                - generic [ref=e507]: 04 Apr 2026
+                - text: 17:34:59.908
+              - generic [ref=e509] [cursor=pointer]:
+                - generic "Debug" [ref=e510]
+                - generic [ref=e512]: "Sending client message: root=JSONRPCRequest(method='initialize', params={'protocolVersion': '2025-11-25', 'capabilities': {}, 'clientInfo': {'name': 'mcp', 'version': '0.1.0'}}, jsonrpc='2.0', id=0)"
+            - generic [ref=e513]:
+              - generic "2026-04-04T09:34:59.864Z" [ref=e515] [cursor=pointer]:
+                - generic [ref=e516]: 04 Apr 2026
+                - text: 17:34:59.864
+              - generic [ref=e518] [cursor=pointer]:
+                - generic "Debug" [ref=e519]
+                - generic [ref=e521]: Initializing MCP session
+            - generic [ref=e522]:
+              - generic "2026-04-04T09:34:59.841Z" [ref=e524] [cursor=pointer]:
+                - generic [ref=e525]: 04 Apr 2026
+                - text: 17:34:59.841
+              - generic [ref=e527] [cursor=pointer]:
+                - generic "Debug" [ref=e528]
+                - generic [ref=e530]: "Connecting to StreamableHTTP endpoint: http://mcp-db:8000/mcp/"
+            - generic [ref=e531]:
+              - generic "2026-04-04T09:34:59.528Z" [ref=e533] [cursor=pointer]:
+                - generic [ref=e534]: 04 Apr 2026
+                - text: 17:34:59.528
+              - generic [ref=e536] [cursor=pointer]:
+                - generic "Information" [ref=e537]
+                - generic [ref=e539]: mcpCallTool called
+            - generic [ref=e540]:
+              - generic "2026-04-04T09:34:51.788Z" [ref=e542] [cursor=pointer]:
+                - generic [ref=e543]: 04 Apr 2026
+                - text: 17:34:51.788
+              - generic [ref=e545] [cursor=pointer]:
+                - generic "Information" [ref=e546]
+                - generic [ref=e548]: Stream complete, yielding done event
+            - generic [ref=e549]:
+              - generic "2026-04-04T09:34:51.760Z" [ref=e551] [cursor=pointer]:
+                - generic [ref=e552]: 04 Apr 2026
+                - text: 17:34:51.760
+              - generic [ref=e554] [cursor=pointer]:
+                - generic "Information" [ref=e555]
+                - generic [ref=e557]: "Message yielded: 98 chars"
+            - generic [ref=e558]:
+              - generic "2026-04-04T09:34:51.693Z" [ref=e560] [cursor=pointer]:
+                - generic [ref=e561]: 04 Apr 2026
+                - text: 17:34:51.693
+              - generic [ref=e563] [cursor=pointer]:
+                - generic "Information" [ref=e564]
+                - generic [ref=e566]: "Thinking done: Thought for 10s . 0 tools"
+            - generic [ref=e567]:
+              - generic "2026-04-04T09:34:51.677Z" [ref=e569] [cursor=pointer]:
+                - generic [ref=e570]: 04 Apr 2026
+                - text: 17:34:51.677
+              - generic [ref=e572] [cursor=pointer]:
+                - generic "Information" [ref=e573]
+                - generic [ref=e575]: "astream_events event: on_chain_end - LangGraph"
+            - generic [ref=e576]:
+              - generic "2026-04-04T09:34:51.612Z" [ref=e578] [cursor=pointer]:
+                - generic [ref=e579]: 04 Apr 2026
+                - text: 17:34:51.612
+              - generic [ref=e581] [cursor=pointer]:
+                - generic "Information" [ref=e582]
+                - generic [ref=e584]: "astream_events event: on_chain_stream - LangGraph"
+            - generic [ref=e585]:
+              - generic "2026-04-04T09:34:51.381Z" [ref=e587] [cursor=pointer]:
+                - generic [ref=e588]: 04 Apr 2026
+                - text: 17:34:51.381
+              - generic [ref=e590] [cursor=pointer]:
+                - generic "Information" [ref=e591]
+                - generic [ref=e593]: "astream_events event: on_chain_end - intake"
+            - generic [ref=e594]:
+              - generic "2026-04-04T09:34:51.326Z" [ref=e596] [cursor=pointer]:
+                - generic [ref=e597]: 04 Apr 2026
+                - text: 17:34:51.326
+              - generic [ref=e599] [cursor=pointer]:
+                - generic "Information" [ref=e600]
+                - generic [ref=e602]: "astream_events event: on_chain_stream - intake"
+            - generic [ref=e603]:
+              - generic "2026-04-04T09:34:51.208Z" [ref=e605] [cursor=pointer]:
+                - generic [ref=e606]: 04 Apr 2026
+                - text: 17:34:51.208
+              - generic [ref=e608] [cursor=pointer]:
+                - generic "Information" [ref=e609]
+                - generic [ref=e611]: "astream_events event: on_chain_end - evaluatorGate"
+            - generic [ref=e612]:
+              - generic "2026-04-04T09:34:51.045Z" [ref=e614] [cursor=pointer]:
+                - generic [ref=e615]: 04 Apr 2026
+                - text: 17:34:51.045
+              - generic [ref=e617] [cursor=pointer]:
+                - generic "Information" [ref=e618]
+                - generic [ref=e620]: "astream_events event: on_chain_start - evaluatorGate"
+            - generic [ref=e621]:
+              - generic "2026-04-04T09:34:50.909Z" [ref=e623] [cursor=pointer]:
+                - generic [ref=e624]: 04 Apr 2026
+                - text: 17:34:50.909
+              - generic [ref=e626] [cursor=pointer]:
+                - generic "Information" [ref=e627]
+                - generic [ref=e629]: "astream_events event: on_chain_end - LangGraph"
+            - generic [ref=e630]:
+              - generic "2026-04-04T09:34:50.846Z" [ref=e632] [cursor=pointer]:
+                - generic [ref=e633]: 04 Apr 2026
+                - text: 17:34:50.846
+              - generic [ref=e635] [cursor=pointer]:
+                - generic "Information" [ref=e636]
+                - generic [ref=e638]: "astream_events event: on_chain_end - agent"
+          - generic [ref=e640]: Searched to 04 Apr 2026 17:34:50.846…

@@ -1,0 +1,215 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e6]: bolt
+        - generic [ref=e7]: Expense AI
+      - navigation [ref=e8]:
+        - link "Dashboard" [ref=e9] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Audit Log" [ref=e10] [cursor=pointer]:
+          - /url: /audit
+        - link "Escalations" [ref=e11] [cursor=pointer]:
+          - /url: "#"
+    - generic [ref=e12]:
+      - button "notifications" [ref=e13]:
+        - generic [ref=e14]: notifications
+      - button "settings" [ref=e15]:
+        - generic [ref=e16]: settings
+      - generic [ref=e17]: EA
+  - complementary [ref=e18]:
+    - button "add New Expense" [ref=e20]:
+      - generic [ref=e21]: add
+      - text: New Expense
+    - navigation [ref=e22]:
+      - link "description My Claims" [ref=e23] [cursor=pointer]:
+        - /url: javascript:void(0)
+        - generic [ref=e24]: description
+        - text: My Claims
+    - link "sensors System Status" [ref=e26] [cursor=pointer]:
+      - /url: "#"
+      - generic [ref=e27]: sensors
+      - text: System Status
+  - main [ref=e29]:
+    - generic [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e33]:
+          - generic [ref=e34]:
+            - generic [ref=e36]: Ready
+            - button "add_circle New Claim" [ref=e37]:
+              - generic [ref=e38]: add_circle
+              - text: New Claim
+          - generic [ref=e39]:
+            - generic [ref=e40]:
+              - generic [ref=e42]: smart_toy
+              - generic [ref=e43]:
+                - paragraph [ref=e45]: Good evening. I'm ready to process your expenses. You can drag and drop receipts here or simply describe the transaction.
+                - text: Just now
+            - generic [ref=e188]:
+              - generic [ref=e190]: person
+              - generic [ref=e191]:
+                - generic [ref=e192]:
+                  - img "receipt-fail-restaurant-izakaya.jpeg" [ref=e193]
+                  - paragraph [ref=e194]: receipt-fail-restaurant-izakaya.jpeg
+                  - paragraph [ref=e195]: My employee ID is E001. Please process this receipt and submit the claim.
+                - text: 10:04 PM
+            - group [ref=e246]:
+              - generic "neurology Thought for 12s . 3 tools expand_more" [ref=e247] [cursor=pointer]:
+                - generic [ref=e248]: neurology
+                - text: Thought for 12s . 3 tools
+                - generic [ref=e249]: expand_more
+            - generic [ref=e250]:
+              - generic [ref=e252]: smart_toy
+              - generic [ref=e253]:
+                - generic [ref=e254]:
+                  - generic [ref=e257]: Analysis Complete
+                  - generic [ref=e258]:
+                    - paragraph [ref=e259]: "I've processed your receipt. Here are the extracted details:"
+                    - table [ref=e260]:
+                      - rowgroup [ref=e261]:
+                        - row "Field Value Confidence" [ref=e262]:
+                          - columnheader "Field" [ref=e263]
+                          - columnheader "Value" [ref=e264]
+                          - columnheader "Confidence" [ref=e265]
+                      - rowgroup [ref=e266]:
+                        - row "Merchant The Public Izakaya High" [ref=e267]:
+                          - cell "Merchant" [ref=e268]
+                          - cell "The Public Izakaya" [ref=e269]
+                          - cell "High" [ref=e270]
+                        - row "Date 2024-06-14 High" [ref=e271]:
+                          - cell "Date" [ref=e272]
+                          - cell "2024-06-14" [ref=e273]
+                          - cell "High" [ref=e274]
+                        - row "Total Amount USD 98.56 High" [ref=e275]:
+                          - cell "Total Amount" [ref=e276]
+                          - cell "USD 98.56" [ref=e277]
+                          - cell "High" [ref=e278]
+                        - row "Currency USD High" [ref=e279]:
+                          - cell "Currency" [ref=e280]
+                          - cell "USD" [ref=e281]
+                          - cell "High" [ref=e282]
+                        - row "Tax USD 8.14 High" [ref=e283]:
+                          - cell "Tax" [ref=e284]
+                          - cell "USD 8.14" [ref=e285]
+                          - cell "High" [ref=e286]
+                        - row "Payment Method VISA High" [ref=e287]:
+                          - cell "Payment Method" [ref=e288]
+                          - cell "VISA" [ref=e289]
+                          - cell "High" [ref=e290]
+                    - paragraph [ref=e291]:
+                      - strong [ref=e292]: "Conversion to SGD:"
+                      - text: "Total: USD 98.56 → SGD 126.86 (rate: 1.2871)"
+                    - paragraph [ref=e293]: The receipt was in USD, so I've converted the total amount to SGD using the current exchange rate.
+                    - paragraph [ref=e294]:
+                      - strong [ref=e295]: "Required Information Missing:"
+                      - text: I still need your employee ID to proceed with the claim.
+                    - paragraph [ref=e296]: Do the details above look correct? Please confirm or correct any information, and provide your employee ID so I can process your claim.
+                  - generic [ref=e297]:
+                    - generic [ref=e298]: "merchant: 95%"
+                    - generic [ref=e299]: "date: 98%"
+                    - generic [ref=e300]: "totalAmount: 99%"
+                    - generic [ref=e301]: "currency: 98%"
+                    - generic [ref=e302]: "lineItems: 95%"
+                    - generic [ref=e303]: "tax: 90%"
+                    - generic [ref=e304]: "paymentMethod: 97%"
+                  - generic [ref=e305]:
+                    - button "Yes, looks correct" [ref=e306]
+                    - button "Edit details" [ref=e307]
+                - text: 2:04 PM
+            - generic [ref=e382]:
+              - generic [ref=e384]: person
+              - generic [ref=e385]:
+                - paragraph [ref=e387]: Yes, looks correct. Please submit.
+                - text: 10:04 PM
+            - group [ref=e389]:
+              - generic "neurology Thought for 1s . 0 tools expand_more" [ref=e390] [cursor=pointer]:
+                - generic [ref=e391]: neurology
+                - text: Thought for 1s . 0 tools
+                - generic [ref=e392]: expand_more
+            - generic [ref=e393]:
+              - generic [ref=e395]: smart_toy
+              - generic [ref=e396]:
+                - generic [ref=e398]:
+                  - paragraph [ref=e399]: You haven't provided your employee ID yet, which is required to proceed with the claim.
+                  - paragraph [ref=e400]: Could you please share your employee ID? Once I have it, I can move forward with the next steps.
+                - text: 2:04 PM
+          - generic [ref=e47]:
+            - generic [ref=e49]:
+              - button "attach_file" [ref=e50]:
+                - generic [ref=e51]: attach_file
+              - textbox "Type a message or drop files..." [ref=e52]
+              - button "send" [ref=e53]:
+                - generic [ref=e54]: send
+            - generic [ref=e55]:
+              - generic [ref=e56] [cursor=pointer]:
+                - generic [ref=e57]: photo_camera
+                - generic [ref=e58]: Capture
+              - generic [ref=e59] [cursor=pointer]:
+                - generic [ref=e60]: mic
+                - generic [ref=e61]: Voice
+              - generic [ref=e62] [cursor=pointer]:
+                - generic [ref=e63]: history
+                - generic [ref=e64]: Recent
+        - complementary [ref=e65]:
+          - generic [ref=e66]:
+            - heading "Decision Pathway" [level=3] [ref=e401]
+            - generic [ref=e402]:
+              - generic [ref=e404]:
+                - generic [ref=e406]: task_alt
+                - generic [ref=e407]:
+                  - generic [ref=e408]:
+                    - heading "Receipt Uploaded" [level=4] [ref=e409]
+                    - generic [ref=e410]: 10:04:56 PM
+                  - text: Completed
+              - generic [ref=e411]:
+                - generic [ref=e413]: task_alt
+                - generic [ref=e414]:
+                  - generic [ref=e415]:
+                    - heading "AI Extraction" [level=4] [ref=e416]
+                    - generic [ref=e417]: 10:04:56 PM
+                  - text: Completed
+              - generic [ref=e418]:
+                - generic [ref=e420]: rule
+                - generic [ref=e421]:
+                  - generic [ref=e422]:
+                    - heading "Policy Check" [level=4] [ref=e423]
+                    - generic [ref=e424]: "--:--:-- --"
+                  - generic [ref=e425]:
+                    - generic [ref=e426]: hourglass_empty
+                    - generic [ref=e427]: Awaiting extraction data...
+                  - paragraph [ref=e428]: Pending
+              - generic [ref=e429]:
+                - generic [ref=e431]: verified
+                - generic [ref=e432]:
+                  - generic [ref=e433]:
+                    - heading "Final Decision" [level=4] [ref=e434]
+                    - generic [ref=e435]: "--:--:-- --"
+                  - generic [ref=e436]:
+                    - generic [ref=e437]: hourglass_empty
+                    - generic [ref=e438]: Awaiting policy check...
+                  - paragraph [ref=e439]: Pending
+      - generic [ref=e115]:
+        - generic [ref=e356]:
+          - generic [ref=e357]: Current Report
+          - paragraph [ref=e358]: SGD 98.56
+          - paragraph [ref=e359]: 1 item
+        - table [ref=e361]:
+          - rowgroup [ref=e362]:
+            - row "Claim Merchant Date Amount Status Submitted" [ref=e363]:
+              - columnheader "Claim" [ref=e364]
+              - columnheader "Merchant" [ref=e365]
+              - columnheader "Date" [ref=e366]
+              - columnheader "Amount" [ref=e367]
+              - columnheader "Status" [ref=e368]
+              - columnheader "Submitted" [ref=e369]
+          - rowgroup [ref=e370]:
+            - row "-- receipt The Public Izakaya 2024-06-14 SGD 98.56 2026-04-04 22:04" [ref=e371]:
+              - cell "--" [ref=e372]
+              - cell "receipt The Public Izakaya" [ref=e373]:
+                - generic [ref=e374]:
+                  - generic [ref=e375]: receipt
+                  - generic [ref=e376]: The Public Izakaya
+              - cell "2024-06-14" [ref=e377]
+              - cell "SGD 98.56" [ref=e378]
+              - cell [ref=e379]
+              - cell "2026-04-04 22:04" [ref=e381]

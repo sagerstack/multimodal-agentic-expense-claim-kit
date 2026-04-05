@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Expense AI | Sign In</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-fixed": "#62fae3",
+                        "on-error-container": "#ffb2b9",
+                        "primary-fixed": "#c284ff",
+                        "secondary-fixed-dim": "#50ebd5",
+                        "surface-variant": "#192540",
+                        "surface-container-lowest": "#000000",
+                        "on-tertiary-container": "#59002a",
+                        "secondary-container": "#006b5f",
+                        "on-surface": "#dee5ff",
+                        "inverse-on-surface": "#4d556b",
+                        "on-secondary-fixed": "#004840",
+                        "on-primary-fixed-variant": "#430076",
+                        "primary-container": "#c284ff",
+                        "on-surface-variant": "#a3aac4",
+                        "surface-bright": "#1f2b49",
+                        "on-secondary-fixed-variant": "#00675c",
+                        "on-primary-container": "#360061",
+                        "surface-dim": "#060e20",
+                        "surface": "#060e20",
+                        "inverse-surface": "#faf8ff",
+                        "on-primary": "#47007c",
+                        "on-background": "#dee5ff",
+                        "inverse-primary": "#842cd3",
+                        "tertiary-dim": "#f0779d",
+                        "error-dim": "#d73357",
+                        "tertiary-container": "#fd81a8",
+                        "surface-tint": "#cc97ff",
+                        "primary-fixed-dim": "#b971ff",
+                        "error-container": "#a70138",
+                        "tertiary-fixed": "#ff8eb0",
+                        "on-secondary-container": "#dcfff7",
+                        "surface-container-low": "#091328",
+                        "on-secondary": "#005c52",
+                        "on-tertiary-fixed-variant": "#701039",
+                        "on-primary-fixed": "#000000",
+                        "tertiary": "#ff97b5",
+                        "primary": "#cc97ff",
+                        "surface-container-high": "#141f38",
+                        "outline": "#6d758c",
+                        "on-error": "#490013",
+                        "tertiary-fixed-dim": "#f67ca3",
+                        "outline-variant": "#40485d",
+                        "secondary": "#62fae3",
+                        "primary-dim": "#9c48ea",
+                        "on-tertiary-fixed": "#380018",
+                        "on-tertiary": "#6a0934",
+                        "surface-container": "#0f1930",
+                        "secondary-dim": "#50ebd5",
+                        "surface-container-highest": "#192540",
+                        "background": "#060e20",
+                        "error": "#ff6e84"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(25, 37, 64, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .neon-glow-focus:focus-within {
+            box-shadow: 0 0 15px -3px rgba(98, 250, 227, 0.3);
+        }
+        .intelligence-pulse {
+            width: 8px;
+            height: 8px;
+            background-color: #62fae3;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 8px #62fae3;
+        }
+        body {
+            background-color: #060e20;
+            color: #dee5ff;
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen relative overflow-hidden selection:bg-primary selection:text-on-primary">
+<div class="absolute inset-0 z-0 pointer-events-none">
+<div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 blur-[120px] rounded-full"></div>
+<div class="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-secondary/5 blur-[150px] rounded-full"></div>
+<div class="absolute inset-0 opacity-[0.03]" data-alt="abstract technical grid pattern of small glowing purple dots over a deep black background" style="background-image: radial-gradient(#cc97ff 0.5px, transparent 0.5px); background-size: 32px 32px;">
+</div>
+</div>
+<main class="relative z-10 w-full max-w-[480px] px-6">
+<div class="glass-panel border-t border-outline-variant/15 p-8 md:p-12 rounded-xl flex flex-col items-center">
+<header class="mb-10 text-center">
+<div class="flex items-center justify-center gap-3 mb-4">
+<span class="material-symbols-outlined text-4xl text-primary" data-icon="auto_awesome" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<h1 class="font-headline text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#cc97ff] to-[#9c48ea] bg-clip-text text-transparent">
+                        Expense AI
+                    </h1>
+</div>
+<div class="flex items-center justify-center gap-2">
+<span class="intelligence-pulse"></span>
+<p class="text-on-surface-variant text-sm font-medium tracking-wide uppercase">The Cognitive Atelier</p>
+</div>
+</header>
+<form class="w-full space-y-6">
+<div class="space-y-2 group">
+<label class="block font-label text-xs font-bold tracking-widest text-on-surface-variant uppercase ml-1" for="username">Username</label>
+<div class="relative neon-glow-focus transition-all duration-300 rounded-xl">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline" data-icon="alternate_email">alternate_email</span>
+<input class="w-full bg-surface-container-lowest border-none focus:ring-1 focus:ring-secondary/50 rounded-xl py-4 pl-12 pr-4 text-on-surface placeholder:text-outline-variant transition-all" id="username" name="username" placeholder="vanguard.analyst" type="text"/>
+</div>
+</div>
+<div class="space-y-2 group">
+<label class="block font-label text-xs font-bold tracking-widest text-on-surface-variant uppercase ml-1" for="password">Password</label>
+<div class="relative neon-glow-focus transition-all duration-300 rounded-xl">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline" data-icon="lock">lock</span>
+<input class="w-full bg-surface-container-lowest border-none focus:ring-1 focus:ring-secondary/50 rounded-xl py-4 pl-12 pr-4 text-on-surface placeholder:text-outline-variant transition-all" id="password" name="password" placeholder="••••••••••••" type="password"/>
+<button class="absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant hover:text-secondary transition-colors" type="button">
+<span class="material-symbols-outlined text-[20px]" data-icon="visibility">visibility</span>
+</button>
+</div>
+</div>
+<div class="flex items-center justify-between px-1">
+<label class="flex items-center gap-2 cursor-pointer group">
+<input class="w-4 h-4 rounded-sm border-outline-variant bg-surface-container-lowest text-primary focus:ring-primary/30 focus:ring-offset-0 transition-all" type="checkbox"/>
+<span class="text-xs text-on-surface-variant group-hover:text-on-surface transition-colors">Remember device</span>
+</label>
+<a class="text-xs font-bold text-outline hover:text-primary transition-colors duration-200" href="#">Forgot Password?</a>
+</div>
+<button class="w-full relative group overflow-hidden bg-gradient-to-br from-primary to-primary-dim py-4 rounded-xl text-on-primary-fixed font-headline font-extrabold text-sm tracking-widest uppercase transition-transform active:scale-[0.98]" type="submit">
+<div class="absolute inset-0 bg-gradient-to-r from-secondary/0 via-secondary/20 to-secondary/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+<span class="relative z-10 flex items-center justify-center gap-2">
+                        Sign In
+                        <span class="material-symbols-outlined text-[18px]" data-icon="arrow_forward">arrow_forward</span>
+</span>
+</button>
+</form>
+<footer class="mt-10 w-full pt-8 border-t border-outline-variant/10 flex flex-col items-center gap-4">
+<p class="text-sm text-on-surface-variant/70">
+                    New to the Intelligence Suite? 
+                    <a class="text-secondary font-bold hover:underline ml-1" href="#">Request Access</a>
+</p>
+<div class="flex gap-6 mt-2">
+<button class="p-2 text-outline-variant hover:text-on-surface transition-colors" title="Privacy Policy">
+<span class="material-symbols-outlined text-[20px]" data-icon="policy">policy</span>
+</button>
+<button class="p-2 text-outline-variant hover:text-on-surface transition-colors" title="System Status">
+<span class="material-symbols-outlined text-[20px]" data-icon="hub">hub</span>
+</button>
+<button class="p-2 text-outline-variant hover:text-on-surface transition-colors" title="Technical Support">
+<span class="material-symbols-outlined text-[20px]" data-icon="support_agent">support_agent</span>
+</button>
+</div>
+</footer>
+</div>
+<div class="mt-8 text-center px-4">
+<p class="text-[10px] text-outline font-label tracking-widest uppercase opacity-50">
+                Encrypted with AES-256 standards • Cloud Intelligence v4.0.2
+            </p>
+</div>
+</main>
+<div class="fixed bottom-0 left-0 p-8 hidden lg:block opacity-40">
+<div class="flex flex-col gap-1">
+<div class="w-12 h-[2px] bg-primary"></div>
+<div class="w-8 h-[2px] bg-secondary"></div>
+<div class="w-16 h-[2px] bg-outline-variant"></div>
+</div>
+</div>
+</body></html>

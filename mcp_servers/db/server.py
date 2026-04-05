@@ -203,9 +203,10 @@ def insertClaim(
                     claimRecord = serializeRow(dict(zip(claimColumns, claimRow)))
                     conn.rollback()  # No changes to commit
                     return {
-                        "claim": claimRecord,
-                        "receipt": None,
-                        "note": "Duplicate submission detected, returning existing claim"
+                        "error": f"Duplicate receipt detected. This receipt was already submitted as {claimRecord.get('claim_number', 'unknown')} "
+                                 f"on {claimRecord.get('created_at', 'unknown date')}. "
+                                 f"Each receipt can only be submitted once.",
+                        "existingClaimNumber": claimRecord.get("claim_number"),
                     }
 
                 claimRecord = serializeRow(dict(zip(claimColumns, claimRow)))

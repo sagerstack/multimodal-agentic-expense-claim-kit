@@ -1,0 +1,14 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e4]: Cognitive Atelier
+    - generic [ref=e5]:
+      - button "notifications" [ref=e6]:
+        - generic [ref=e7]: notifications
+      - button "settings" [ref=e8]:
+        - generic [ref=e9]: settings
+      - generic [ref=e10]: CA
+  - main [ref=e11]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: insert_chart
+      - heading "Approver Dashboard" [level=1] [ref=e15]
+      - paragraph [ref=e16]: Dashboard coming in Phase 8

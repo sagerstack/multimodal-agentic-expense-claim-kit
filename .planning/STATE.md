@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Milestone v2.0 — Phase 8: Dashboard + Audit Log Pages
+**Current focus:** Milestone v2.0 — Phase 6.3: User Authentication + Dual Roles
 
 ## Current Position
 
-Phase: 8 — Dashboard + Audit Log Pages
+Phase: 6.3 — User Authentication + Dual Roles
 Plan: Not started
-Status: Phase 6.2 complete (Chat UI refresh, Decision Pathway, employee ID fix), ready for Phase 8 planning
-Last activity: 2026-04-04 — Phase 6.2 delivered by maverick team (4 plans, browser UAT passed, 1 CSS fix cycle)
+Status: Phase 6.2 complete, Phase 6.3 context written, Stitch login design downloaded
+Last activity: 2026-04-04 — Phase 6.3 created (user auth with dual roles: user/reviewer)
 
 ```
 v2.0 Progress: [##########] 10/18 plans

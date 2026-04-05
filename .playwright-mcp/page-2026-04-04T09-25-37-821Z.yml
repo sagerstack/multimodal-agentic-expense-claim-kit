@@ -1,0 +1,251 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Expense AI
+      - navigation [ref=e5]:
+        - link "Dashboard" [ref=e6] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Audit Log" [ref=e7] [cursor=pointer]:
+          - /url: /audit
+        - link "Escalations" [ref=e8] [cursor=pointer]:
+          - /url: "#"
+    - generic [ref=e9]:
+      - button "notifications" [ref=e10]:
+        - generic [ref=e11]: notifications
+      - button "settings" [ref=e12]:
+        - generic [ref=e13]: settings
+      - generic [ref=e14]: EA
+  - complementary [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e19]: bolt
+        - generic [ref=e20]:
+          - heading "Luminous Intelligence" [level=3] [ref=e21]
+          - paragraph [ref=e22]: Expense Engine Active
+      - button "add New Expense" [ref=e23]:
+        - generic [ref=e24]: add
+        - text: New Expense
+    - navigation [ref=e25]:
+      - link "description My Claims" [ref=e26] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e27]: description
+        - text: My Claims
+    - link "sensors System Status" [ref=e29] [cursor=pointer]:
+      - /url: "#"
+      - generic [ref=e30]: sensors
+      - text: System Status
+  - main [ref=e32]:
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - generic [ref=e37]:
+            - generic [ref=e39]: Processing
+            - button "add_circle New Claim" [ref=e40]:
+              - generic [ref=e41]: add_circle
+              - text: New Claim
+          - generic [ref=e42]:
+            - generic [ref=e43]:
+              - generic [ref=e45]: smart_toy
+              - generic [ref=e46]:
+                - paragraph [ref=e48]: Good evening. I'm ready to process your expenses. You can drag and drop receipts here or simply describe the transaction.
+                - text: Just now
+            - generic [ref=e176]:
+              - generic [ref=e178]: person
+              - generic [ref=e179]:
+                - generic [ref=e180]:
+                  - img "receipt-pass-restaurant.jpeg" [ref=e181]
+                  - paragraph [ref=e182]: receipt-pass-restaurant.jpeg
+                  - paragraph [ref=e183]: Please process this receipt. My employee ID is EMP-042.
+                - text: 5:23 PM
+            - group [ref=e313]:
+              - generic "neurology Thought for 15s . 3 tools expand_more" [ref=e314] [cursor=pointer]:
+                - generic [ref=e315]: neurology
+                - text: Thought for 15s . 3 tools
+                - generic [ref=e316]: expand_more
+              - generic [ref=e505]:
+                - generic [ref=e506]: "Schema loaded: 15 claim fields, 14 receipt fields"
+                - generic [ref=e507]: "Extracted receipt: DIG., USD 16.2"
+                - generic [ref=e508]: "Converted to SGD 20.85 (rate: 1.2871)"
+            - generic [ref=e317]:
+              - generic [ref=e319]: smart_toy
+              - generic [ref=e320]:
+                - generic [ref=e321]:
+                  - generic [ref=e324]: Analysis Complete
+                  - generic [ref=e325]:
+                    - table [ref=e326]:
+                      - rowgroup [ref=e327]:
+                        - row "Field Value Confidence" [ref=e328]:
+                          - columnheader "Field" [ref=e329]
+                          - columnheader "Value" [ref=e330]
+                          - columnheader "Confidence" [ref=e331]
+                      - rowgroup [ref=e332]:
+                        - row "Merchant DIG. High" [ref=e333]:
+                          - cell "Merchant" [ref=e334]
+                          - cell "DIG." [ref=e335]
+                          - cell "High" [ref=e336]
+                        - row "Date 2024-05-28 High" [ref=e337]:
+                          - cell "Date" [ref=e338]
+                          - cell "2024-05-28" [ref=e339]
+                          - cell "High" [ref=e340]
+                        - row "Total USD 16.20 High" [ref=e341]:
+                          - cell "Total" [ref=e342]
+                          - cell "USD 16.20" [ref=e343]
+                          - cell "High" [ref=e344]
+                        - row "Category Meal High" [ref=e345]:
+                          - cell "Category" [ref=e346]
+                          - cell "Meal" [ref=e347]
+                          - cell "High" [ref=e348]
+                        - row "Tax USD 1.19 Medium" [ref=e349]:
+                          - cell "Tax" [ref=e350]
+                          - cell "USD 1.19" [ref=e351]
+                          - cell "Medium" [ref=e352]
+                        - row "Payment Method VISA CREDIT High" [ref=e353]:
+                          - cell "Payment Method" [ref=e354]
+                          - cell "VISA CREDIT" [ref=e355]
+                          - cell "High" [ref=e356]
+                    - paragraph [ref=e357]: "Conversion: Total: USD 16.20 → SGD 20.85 (rate: 1.2871)"
+                    - paragraph [ref=e358]: The receipt appears to be for a meal at DIG. on 28 May 2024, with a total of USD 16.20 (SGD 20.85). The tax amount was extracted with medium confidence — please confirm if USD 1.19 is correct.
+                    - paragraph [ref=e359]: Do the details above look correct? Please also provide your employee ID so I can process your claim.
+                  - generic [ref=e360]:
+                    - generic [ref=e361]: "merchant: 95%"
+                    - generic [ref=e362]: "date: 92%"
+                    - generic [ref=e363]: "totalAmount: 98%"
+                    - generic [ref=e364]: "currency: 99%"
+                    - generic [ref=e365]: "lineItems: 88%"
+                    - generic [ref=e366]: "tax: 85%"
+                    - generic [ref=e367]: "paymentMethod: 90%"
+                  - generic [ref=e368]:
+                    - button "Yes, looks correct" [ref=e369]
+                    - button "Edit details" [ref=e370]
+                - text: 9:24 AM
+            - group [ref=e465]:
+              - generic "neurology Thought for 6s . 1 tool expand_more" [ref=e466] [cursor=pointer]:
+                - generic [ref=e467]: neurology
+                - text: Thought for 6s . 1 tool
+                - generic [ref=e468]: expand_more
+            - generic [ref=e469]:
+              - generic [ref=e471]: smart_toy
+              - generic [ref=e472]:
+                - generic [ref=e474]:
+                  - paragraph [ref=e475]: "Policy check: This exceeds the lunch meal cap of SGD 20.00 (Section 2.2). Your claim is SGD 20.85. You can still submit with a brief justification. Please explain why this expense was necessary."
+                  - table [ref=e476]:
+                    - rowgroup [ref=e477]:
+                      - row "Claim Detail Value" [ref=e478]:
+                        - columnheader "Claim Detail" [ref=e479]
+                        - columnheader "Value" [ref=e480]
+                    - rowgroup [ref=e481]:
+                      - row "Claimant (awaiting employee ID)" [ref=e482]:
+                        - cell "Claimant" [ref=e483]
+                        - cell "(awaiting employee ID)" [ref=e484]
+                      - row "Merchant DIG." [ref=e485]:
+                        - cell "Merchant" [ref=e486]
+                        - cell "DIG." [ref=e487]
+                      - row "Date 2024-05-28" [ref=e488]:
+                        - cell "Date" [ref=e489]
+                        - cell "2024-05-28" [ref=e490]
+                      - row "Amount SGD 20.85" [ref=e491]:
+                        - cell "Amount" [ref=e492]
+                        - cell "SGD 20.85" [ref=e493]
+                      - row "Category Meal" [ref=e494]:
+                        - cell "Category" [ref=e495]
+                        - cell "Meal" [ref=e496]
+                      - row "Policy Check Exceeds lunch cap of SGD 20.00 (Section 2.2)" [ref=e497]:
+                        - cell "Policy Check" [ref=e498]
+                        - cell "Exceeds lunch cap of SGD 20.00 (Section 2.2)" [ref=e499]
+                      - row "Justification (required — please provide)" [ref=e500]:
+                        - cell "Justification" [ref=e501]
+                        - cell "(required — please provide)" [ref=e502]
+                  - paragraph [ref=e503]: Ready to submit? Type 'yes' or 'confirm' along with a brief justification for the overage.
+                - text: 9:24 AM
+            - generic [ref=e509]:
+              - generic [ref=e511]: person
+              - generic [ref=e512]:
+                - paragraph [ref=e514]: Yes, this was a team lunch for a client meeting. Please submit the claim.
+                - text: 5:25 PM
+            - button "Analyzing... expand_more" [ref=e515]:
+              - generic [ref=e188]: Analyzing...
+              - generic [ref=e189]: expand_more
+          - generic [ref=e50]:
+            - generic [ref=e52]:
+              - button "attach_file" [ref=e53]:
+                - generic [ref=e54]: attach_file
+              - textbox "Type a message or drop files..." [active] [ref=e55]
+              - button "send" [disabled] [ref=e56]:
+                - generic [ref=e57]: send
+            - generic [ref=e58]:
+              - generic [ref=e59] [cursor=pointer]:
+                - generic [ref=e60]: photo_camera
+                - generic [ref=e61]: Capture
+              - generic [ref=e62] [cursor=pointer]:
+                - generic [ref=e63]: mic
+                - generic [ref=e64]: Voice
+              - generic [ref=e65] [cursor=pointer]:
+                - generic [ref=e66]: history
+                - generic [ref=e67]: Recent
+        - complementary [ref=e68]:
+          - generic [ref=e69]:
+            - heading "Decision Pathway" [level=3] [ref=e516]
+            - generic [ref=e517]:
+              - generic [ref=e519]:
+                - generic [ref=e521]: cloud_upload
+                - generic [ref=e522]:
+                  - generic [ref=e523]:
+                    - heading "Receipt Uploaded" [level=4] [ref=e524]
+                    - generic [ref=e525]: "--:--:-- --"
+                  - generic [ref=e526]:
+                    - generic [ref=e527]: hourglass_empty
+                    - generic [ref=e528]: Awaiting previous step...
+                  - paragraph [ref=e529]: Pending
+              - generic [ref=e530]:
+                - generic [ref=e532]: troubleshoot
+                - generic [ref=e533]:
+                  - generic [ref=e534]:
+                    - heading "AI Extraction" [level=4] [ref=e535]
+                    - generic [ref=e536]: "--:--:-- --"
+                  - generic [ref=e537]:
+                    - generic [ref=e538]: hourglass_empty
+                    - generic [ref=e539]: Awaiting receipt upload...
+                  - paragraph [ref=e540]: Pending
+              - generic [ref=e541]:
+                - generic [ref=e543]: rule
+                - generic [ref=e544]:
+                  - generic [ref=e545]:
+                    - heading "Policy Check" [level=4] [ref=e546]
+                    - generic [ref=e547]: "--:--:-- --"
+                  - generic [ref=e548]:
+                    - generic [ref=e549]: hourglass_empty
+                    - generic [ref=e550]: Awaiting extraction data...
+                  - paragraph [ref=e551]: Pending
+              - generic [ref=e552]:
+                - generic [ref=e554]: verified
+                - generic [ref=e555]:
+                  - generic [ref=e556]:
+                    - heading "Final Decision" [level=4] [ref=e557]
+                    - generic [ref=e558]: "--:--:-- --"
+                  - generic [ref=e559]:
+                    - generic [ref=e560]: hourglass_empty
+                    - generic [ref=e561]: Awaiting policy check...
+                  - paragraph [ref=e562]: Pending
+      - generic [ref=e118]:
+        - generic [ref=e288]:
+          - generic [ref=e289]: Current Session
+          - paragraph [ref=e290]: SGD 16.20
+          - paragraph [ref=e291]: 1 item
+        - table [ref=e293]:
+          - rowgroup [ref=e294]:
+            - row "Claim Merchant Date Amount Status" [ref=e295]:
+              - columnheader "Claim" [ref=e296]
+              - columnheader "Merchant" [ref=e297]
+              - columnheader "Date" [ref=e298]
+              - columnheader "Amount" [ref=e299]
+              - columnheader "Status" [ref=e300]
+          - rowgroup [ref=e301]:
+            - row "-- receipt DIG. 2024-05-28 SGD 16.2" [ref=e302]:
+              - cell "--" [ref=e303]
+              - cell "receipt DIG." [ref=e304]:
+                - generic [ref=e305]:
+                  - generic [ref=e306]: receipt
+                  - generic [ref=e307]: DIG.
+              - cell "2024-05-28" [ref=e308]
+              - cell "SGD 16.2" [ref=e309]
+              - cell [ref=e310]

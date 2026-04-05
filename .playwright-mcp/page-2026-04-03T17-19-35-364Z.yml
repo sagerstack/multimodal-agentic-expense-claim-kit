@@ -1,0 +1,217 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Cognitive Atelier
+      - navigation [ref=e5]:
+        - link "Dashboard" [ref=e6] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Audit Log" [ref=e7] [cursor=pointer]:
+          - /url: /audit
+        - link "Escalations" [ref=e8] [cursor=pointer]:
+          - /url: "#"
+    - generic [ref=e9]:
+      - button "notifications" [ref=e10]:
+        - generic [ref=e11]: notifications
+      - button "settings" [ref=e12]:
+        - generic [ref=e13]: settings
+      - generic [ref=e14]: CA
+  - complementary [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e19]: bolt
+        - generic [ref=e20]:
+          - heading "Luminous Intelligence" [level=3] [ref=e21]
+          - paragraph [ref=e22]: Expense Engine Active
+      - link "add New Expense" [ref=e23] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e24]: add
+        - text: New Expense
+    - navigation [ref=e25]:
+      - link "chat_spark Chat AI" [ref=e26] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e27]: chat_spark
+        - text: Chat AI
+      - link "insert_chart Dashboard" [ref=e28] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=e29]: insert_chart
+        - text: Dashboard
+      - link "verified_user Audit Log" [ref=e30] [cursor=pointer]:
+        - /url: /audit
+        - generic [ref=e31]: verified_user
+        - text: Audit Log
+      - link "receipt_long Review" [ref=e32] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e33]: receipt_long
+        - text: Review
+    - link "sensors System Status" [ref=e35] [cursor=pointer]:
+      - /url: "#"
+      - generic [ref=e36]: sensors
+      - text: System Status
+  - main [ref=e38]:
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e44]: Ready
+          - button "add_circle New Claim" [ref=e45]:
+            - generic [ref=e46]: add_circle
+            - text: New Claim
+        - generic [ref=e47]:
+          - generic [ref=e48]:
+            - generic [ref=e50]: smart_toy
+            - generic [ref=e51]:
+              - paragraph [ref=e53]: Good evening. I'm ready to process your expenses. You can drag and drop receipts here or simply describe the transaction.
+              - text: Just now
+          - generic [ref=e104]:
+            - generic [ref=e106]: person
+            - generic [ref=e108]:
+              - img "receipt-pass-restaurant.jpeg" [ref=e109]
+              - paragraph [ref=e110]: receipt-pass-restaurant.jpeg
+              - paragraph [ref=e111]: Submit this expense
+          - group [ref=e126]:
+            - generic "neurology Thought for 52s . 3 tools expand_more" [ref=e127] [cursor=pointer]:
+              - generic [ref=e128]: neurology
+              - text: Thought for 52s . 3 tools
+              - generic [ref=e129]: expand_more
+          - generic [ref=e130]:
+            - generic [ref=e132]: smart_toy
+            - generic [ref=e134]:
+              - generic [ref=e135]:
+                - paragraph [ref=e136]: "I've processed your receipt. Here are the extracted details:"
+                - table [ref=e137]:
+                  - rowgroup [ref=e138]:
+                    - row "Field Value Confidence" [ref=e139]:
+                      - columnheader "Field" [ref=e140]
+                      - columnheader "Value" [ref=e141]
+                      - columnheader "Confidence" [ref=e142]
+                  - rowgroup [ref=e143]:
+                    - row "Merchant DIG. High" [ref=e144]:
+                      - cell "Merchant" [ref=e145]
+                      - cell "DIG." [ref=e146]
+                      - cell "High" [ref=e147]
+                    - row "Date 2024-05-28 High" [ref=e148]:
+                      - cell "Date" [ref=e149]
+                      - cell "2024-05-28" [ref=e150]
+                      - cell "High" [ref=e151]
+                    - row "Total Amount USD 16.20 → SGD 20.85 High" [ref=e152]:
+                      - cell "Total Amount" [ref=e153]
+                      - cell "USD 16.20 → SGD 20.85" [ref=e154]
+                      - cell "High" [ref=e155]
+                    - row "Currency USD High" [ref=e156]:
+                      - cell "Currency" [ref=e157]
+                      - cell "USD" [ref=e158]
+                      - cell "High" [ref=e159]
+                    - row "Tax USD 1.19 Medium" [ref=e160]:
+                      - cell "Tax" [ref=e161]
+                      - cell "USD 1.19" [ref=e162]
+                      - cell "Medium" [ref=e163]
+                    - row "Payment Method VISA CREDIT High" [ref=e164]:
+                      - cell "Payment Method" [ref=e165]
+                      - cell "VISA CREDIT" [ref=e166]
+                      - cell "High" [ref=e167]
+                    - row "Line Items 1 Custom with Protein, Charred Chicken Medium" [ref=e168]:
+                      - cell "Line Items" [ref=e169]
+                      - cell "1 Custom with Protein, Charred Chicken" [ref=e170]
+                      - cell "Medium" [ref=e171]
+                - paragraph [ref=e172]:
+                  - strong [ref=e173]: "Conversion:"
+                - list [ref=e174]:
+                  - listitem [ref=e175]: "Total: USD 16.20 → SGD 20.85 (rate: 1.2871)"
+                - paragraph [ref=e176]: "The tax amount has a medium confidence score (0.85), and line items are at 0.88, which is acceptable but slightly lower than ideal. All required fields from the schema are present:"
+                - list [ref=e177]:
+                  - listitem [ref=e178]: "Merchant: Mapped ✅"
+                  - listitem [ref=e179]: "Date: Mapped ✅"
+                  - listitem [ref=e180]: "Total Amount: Mapped ✅"
+                  - listitem [ref=e181]: "Currency: Mapped ✅"
+                - paragraph [ref=e182]: No issues with image quality or missing required data.
+                - paragraph [ref=e183]: Do the details above look correct? Let me know if anything needs to be changed, or confirm to proceed.
+                - paragraph [ref=e184]: I'll also need your employee ID to process this claim.
+              - generic [ref=e185]:
+                - generic [ref=e186]: "merchant: 95%"
+                - generic [ref=e187]: "date: 92%"
+                - generic [ref=e188]: "totalAmount: 98%"
+                - generic [ref=e189]: "currency: 99%"
+                - generic [ref=e190]: "lineItems: 88%"
+                - generic [ref=e191]: "tax: 85%"
+                - generic [ref=e192]: "paymentMethod: 90%"
+          - generic [ref=e223]:
+            - generic [ref=e225]: person
+            - paragraph [ref=e228]: Yes, looks correct. My employee ID is EMP-001
+          - group [ref=e230]:
+            - generic "neurology Thought for 2s . 0 tools expand_more" [ref=e231] [cursor=pointer]:
+              - generic [ref=e232]: neurology
+              - text: Thought for 2s . 0 tools
+              - generic [ref=e233]: expand_more
+          - generic [ref=e234]:
+            - generic [ref=e236]: smart_toy
+            - generic [ref=e239]:
+              - paragraph [ref=e240]: You haven't confirmed whether the extracted details are correct, and I still need your employee ID to proceed.
+              - paragraph [ref=e241]: "Please:"
+              - list [ref=e242]:
+                - listitem [ref=e243]: Confirm that the merchant, date, amounts, and currency are accurate.
+                - listitem [ref=e244]: Provide your employee ID.
+              - paragraph [ref=e245]: Once I have both, I can move to the policy check phase.
+          - generic [ref=e276]:
+            - generic [ref=e278]: person
+            - paragraph [ref=e281]: "I confirm all details are correct. Employee ID: EMP-001. Please proceed with submission."
+          - group [ref=e283]:
+            - generic "neurology Thought for 2s . 0 tools expand_more" [ref=e284] [cursor=pointer]:
+              - generic [ref=e285]: neurology
+              - text: Thought for 2s . 0 tools
+              - generic [ref=e286]: expand_more
+          - generic [ref=e287]:
+            - generic [ref=e289]: smart_toy
+            - generic [ref=e292]:
+              - paragraph [ref=e293]: I'm still waiting for your confirmation on the extracted receipt details and your employee ID.
+              - paragraph [ref=e294]: "Please confirm:"
+              - list [ref=e295]:
+                - listitem [ref=e296]: The merchant is correctly identified as "DIG."
+                - listitem [ref=e297]: The date (2024-05-28) and total amount (USD 16.20 → SGD 20.85) are correct
+                - listitem [ref=e298]: The line items and payment method are accurate
+              - paragraph [ref=e299]: Also, please provide your employee ID.
+              - paragraph [ref=e300]: Once I have your confirmation and employee ID, I’ll proceed with the policy check.
+        - generic [ref=e55]:
+          - generic [ref=e57]:
+            - button "attach_file" [ref=e58]:
+              - generic [ref=e59]: attach_file
+            - textbox "Type a message or drop files..." [ref=e60]
+            - button "send" [ref=e61]:
+              - generic [ref=e62]: send
+          - generic [ref=e63]:
+            - generic [ref=e64] [cursor=pointer]:
+              - generic [ref=e65]: photo_camera
+              - generic [ref=e66]: Capture
+            - generic [ref=e67] [cursor=pointer]:
+              - generic [ref=e68]: mic
+              - generic [ref=e69]: Voice
+            - generic [ref=e70] [cursor=pointer]:
+              - generic [ref=e71]: history
+              - generic [ref=e72]: Recent
+      - generic [ref=e73]:
+        - heading "Submission Summary" [level=2] [ref=e74]
+        - generic [ref=e75]:
+          - generic [ref=e301]:
+            - generic [ref=e302]:
+              - generic [ref=e303]: Current Session
+              - generic [ref=e304]:
+                - generic [ref=e305]:
+                  - paragraph [ref=e306]: SGD 20.85
+                  - paragraph [ref=e307]: 1 item pending
+                - paragraph [ref=e311]: 50% Complete
+            - generic [ref=e312]:
+              - generic [ref=e313]: category
+              - paragraph [ref=e314]: Top Category
+              - paragraph [ref=e315]: "--"
+            - generic [ref=e316]:
+              - generic [ref=e317]: warning
+              - paragraph [ref=e318]: Warnings
+              - paragraph [ref=e319]: 0 Flags
+          - generic [ref=e320]:
+            - heading "Batch Details" [level=3] [ref=e321]
+            - generic [ref=e323]:
+              - generic [ref=e324]:
+                - generic [ref=e326]: receipt_long
+                - generic [ref=e327]:
+                  - paragraph [ref=e328]: DIG.
+                  - paragraph [ref=e329]: uncategorized
+              - paragraph [ref=e330]: SGD 20.85
+        - button "Submit Entire Batch" [disabled] [ref=e98]

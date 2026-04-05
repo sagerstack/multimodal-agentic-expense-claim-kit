@@ -1,0 +1,114 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Cognitive Atelier
+      - navigation [ref=e5]:
+        - link "Dashboard" [ref=e6] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Audit Log" [ref=e7] [cursor=pointer]:
+          - /url: /audit
+        - link "Escalations" [ref=e8] [cursor=pointer]:
+          - /url: "#"
+    - generic [ref=e9]:
+      - button "notifications" [ref=e10]:
+        - generic [ref=e11]: notifications
+      - button "settings" [ref=e12]:
+        - generic [ref=e13]: settings
+      - generic [ref=e14]: CA
+  - complementary [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e19]: bolt
+        - generic [ref=e20]:
+          - heading "Luminous Intelligence" [level=3] [ref=e21]
+          - paragraph [ref=e22]: Expense Engine Active
+      - link "add New Expense" [ref=e23] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e24]: add
+        - text: New Expense
+    - navigation [ref=e25]:
+      - link "chat_spark Chat AI" [ref=e26] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e27]: chat_spark
+        - text: Chat AI
+      - link "insert_chart Dashboard" [ref=e28] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=e29]: insert_chart
+        - text: Dashboard
+      - link "verified_user Audit Log" [ref=e30] [cursor=pointer]:
+        - /url: /audit
+        - generic [ref=e31]: verified_user
+        - text: Audit Log
+      - link "receipt_long Review" [ref=e32] [cursor=pointer]:
+        - /url: "#"
+        - generic [ref=e33]: receipt_long
+        - text: Review
+    - link "sensors System Status" [ref=e35] [cursor=pointer]:
+      - /url: "#"
+      - generic [ref=e36]: sensors
+      - text: System Status
+  - main [ref=e38]:
+    - generic [ref=e39]:
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - heading "Approver Dashboard" [level=1] [ref=e43]
+          - paragraph [ref=e44]: Manage pending claims and AI-driven thresholds.
+        - generic [ref=e46]:
+          - generic [ref=e47]: Auto-Approval Threshold
+          - generic [ref=e49]: $500.00
+      - generic [ref=e52]:
+        - generic [ref=e53]:
+          - generic [ref=e54]:
+            - generic [ref=e55]: pending_actions
+            - generic [ref=e56]: "--"
+          - generic [ref=e57]:
+            - heading "0" [level=4] [ref=e58]
+            - paragraph [ref=e59]: Total Pending Claims
+        - generic [ref=e60]:
+          - generic [ref=e61]:
+            - generic [ref=e62]: magic_button
+            - generic [ref=e63]: "--"
+          - generic [ref=e64]:
+            - heading "0" [level=4] [ref=e66]
+            - paragraph [ref=e68]: Auto-Approved by AI
+        - generic [ref=e69]:
+          - generic [ref=e70]:
+            - generic [ref=e71]: escalator_warning
+            - generic [ref=e72]: "--"
+          - generic [ref=e73]:
+            - heading "0" [level=4] [ref=e74]
+            - paragraph [ref=e75]: Escalated to Human
+      - generic [ref=e76]:
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - heading "AI Efficiency" [level=3] [ref=e79]
+            - generic [ref=e80]: more_vert
+          - generic [ref=e89]:
+            - generic [ref=e90]: Mon
+            - generic [ref=e91]: Tue
+            - generic [ref=e92]: Wed
+            - generic [ref=e93]: Thu
+            - generic [ref=e94]: Fri
+            - generic [ref=e95]: Sat
+          - generic [ref=e97]:
+            - generic [ref=e98]:
+              - generic [ref=e99]: JD
+              - generic [ref=e100]: AS
+            - paragraph [ref=e101]: 2 Agents monitoring AI accuracy
+        - generic [ref=e103]:
+          - generic [ref=e104]:
+            - heading "Recent Claims" [level=3] [ref=e105]
+            - generic [ref=e106]:
+              - button "Filters" [ref=e107]
+              - button "Export" [ref=e108]
+          - table [ref=e110]:
+            - rowgroup [ref=e111]:
+              - row "Employee Category Amount Status Action" [ref=e112]:
+                - columnheader "Employee" [ref=e113]
+                - columnheader "Category" [ref=e114]
+                - columnheader "Amount" [ref=e115]
+                - columnheader "Status" [ref=e116]
+                - columnheader "Action" [ref=e117]
+            - rowgroup [ref=e118]:
+              - row "No claims to display. Submit an expense to get started." [ref=e119]:
+                - cell "No claims to display. Submit an expense to get started." [ref=e120]

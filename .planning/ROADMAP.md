@@ -22,6 +22,7 @@ See MILESTONES.md for archived v1.0 details.
 - [x] **Phase 7: SSE Streaming + Full Chat Page** -- SSE event taxonomy, streaming pipeline, V1 migration, complete Chat Page feature set
 - [x] **Phase 6.1: Model Upgrade + UX Fixes** -- Switch LLM from QwQ-32B to Qwen3-235B-A22B (fast MoE, no CoT chains), swap to v2 system prompt, fix submission summary panel (100% on submit, show Claim ID, correct amounts)
 - [x] **Phase 6.2: Chat UI Refresh + Employee ID Fix** -- Apply Stitch "Updated Branding" design to Chat Page (Decision Pathway sidebar, bottom submission table, message styling, top nav) and fix BUG-015 (server-side employee ID extraction)
+- [ ] **Phase 6.3: User Authentication + Dual Roles** -- Login page (Stitch design), user/reviewer roles, session-based auth, role-based routing, employee ID from authenticated user
 - [ ] **Phase 8: Dashboard + Audit Log Pages** -- Approver Dashboard (KPIs, claims table) and Audit & Transparency Log (decision timeline)
 - [ ] **Phase 9: Claim Review Page** -- Escalated claim display, approve/reject actions, receipt zoom, claim navigation
 - [ ] **Phase 10: Browser E2E Tests** -- Playwright test suite covering all 4 pages against a live server
@@ -125,6 +126,28 @@ Plans:
 - [x] 06.2-02-PLAN.md -- Decision Pathway sidebar: partial template with 4 steps, SSE pathway-update events, replace right-panel summary
 - [x] 06.2-03-PLAN.md -- Bottom Submission Table: horizontal claims table from DB, session total card, SSE real-time row updates
 - [x] 06.2-04-PLAN.md -- Branding refresh (Expense AI logo, sidebar nav reduction) + message bubble styling (Analysis Complete badge, timestamps, quick-reply buttons)
+
+---
+
+### Phase 6.3: User Authentication + Dual Roles
+
+**Goal:** The application requires authentication before accessing any page. A login page matching the Stitch "Login - Expense AI" design authenticates users with username/password. Two roles exist — **user** (claimant, routed to Chat Page) and **reviewer** (approver, routed to Dashboard). Role-based access controls restrict page visibility. The authenticated user's employee_id replaces manual extraction from chat messages.
+
+**Depends on:** Phase 6.2
+
+**Requirements:** AUTH-01 (login page), AUTH-02 (dual roles), AUTH-03 (session auth), AUTH-04 (role routing), AUTH-05 (employee ID from auth)
+
+**Success Criteria** (what must be TRUE when Phase 6.3 completes):
+1. Visiting any page while unauthenticated redirects to `/login`, which renders the Stitch login design with username/password fields matching the dark theme
+2. Logging in as a user role redirects to `/` (Chat Page); logging in as a reviewer role redirects to `/dashboard`
+3. Users cannot access `/dashboard`, `/audit`, or `/review` pages; reviewers can access all pages
+4. The authenticated user's `employee_id` is automatically used for claim submission — no manual employee ID extraction from chat messages
+5. Logging out clears the session and redirects to `/login`; all existing tests pass without regression
+
+**Plans:** TBD
+
+Plans:
+- [ ] 06.3-01-PLAN.md -- TBD
 
 ---
 
