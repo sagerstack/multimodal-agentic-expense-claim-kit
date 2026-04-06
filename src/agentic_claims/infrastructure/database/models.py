@@ -53,6 +53,20 @@ class Claim(Base):
     convertedAmountSgd: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(10, 2), nullable=True, name="converted_amount_sgd"
     )
+    # Agent output columns (Phase 8)
+    complianceFindings: Mapped[Optional[dict]] = mapped_column(
+        JSONB, nullable=True, name="compliance_findings"
+    )
+    fraudFindings: Mapped[Optional[dict]] = mapped_column(
+        JSONB, nullable=True, name="fraud_findings"
+    )
+    advisorDecision: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, name="advisor_decision"
+    )
+    approvedBy: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, name="approved_by"
+    )
+
     submissionDate: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, name="submission_date"
     )

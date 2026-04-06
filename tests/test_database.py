@@ -122,3 +122,52 @@ def testClaimAuditLogRelationship():
 
     assert claim_audit_logs_property.back_populates == "claim"
     assert audit_log_claim_property.back_populates == "auditLogs"
+
+
+def testClaimAgentOutputColumnsExist():
+    """Test that Claim model has all 4 agent output columns."""
+    claim = Claim(
+        claimNumber="CLM-002",
+        employeeId="EMP-001",
+        status="submitted",
+        totalAmount=Decimal("200.00"),
+        currency="SGD",
+    )
+    assert hasattr(claim, "complianceFindings")
+    assert hasattr(claim, "fraudFindings")
+    assert hasattr(claim, "advisorDecision")
+    assert hasattr(claim, "approvedBy")
+
+
+def testClaimAgentOutputColumnsNullable():
+    """Test that all 4 agent output columns default to None."""
+    claim = Claim(
+        claimNumber="CLM-003",
+        employeeId="EMP-002",
+        status="draft",
+        totalAmount=Decimal("50.00"),
+    )
+    assert claim.complianceFindings is None
+    assert claim.fraudFindings is None
+    assert claim.advisorDecision is None
+    assert claim.approvedBy is None
+
+
+def testClaimComplianceFraudFindingsAreJsonb():
+    """Test that complianceFindings and fraudFindings use JSONB column type."""
+    claims_table = Base.metadata.tables["claims"]
+    complianceCol = claims_table.columns["compliance_findings"]
+    fraudCol = claims_table.columns["fraud_findings"]
+    assert isinstance(complianceCol.type, JSONB)
+    assert isinstance(fraudCol.type, JSONB)
+
+
+def testClaimAdvisorDecisionColumnType():
+    """Test that advisorDecision is String(50) and approvedBy is String(50)."""
+    from sqlalchemy import String
+
+    claims_table = Base.metadata.tables["claims"]
+    advisorCol = claims_table.columns["advisor_decision"]
+    approvedByCol = claims_table.columns["approved_by"]
+    assert isinstance(advisorCol.type, String)
+    assert isinstance(approvedByCol.type, String)

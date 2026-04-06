@@ -27,3 +27,9 @@ class ClaimState(TypedDict):
 
     # Phase 2.2: Agent observations (mismatches, overrides, red flags) for downstream agents and reviewer audit trail
     intakeFindings: Optional[dict]
+
+    # Phase 8: Post-submission agent findings
+    complianceFindings: Optional[dict]  # Structured compliance verdict from compliance agent
+    fraudFindings: Optional[dict]  # Structured fraud verdict from fraud agent
+    advisorDecision: Optional[str]  # One of "auto_approve" | "return_to_claimant" | "escalate_to_reviewer"
+    dbClaimId: Optional[int]  # Integer DB primary key from submitClaim, used by post-submission agents
