@@ -42,7 +42,7 @@ async def test_pendingClaimEndsAfterIntake():
         allContent = " ".join(messageContents)
 
         assert "Intake processing" in allContent, "Intake message should be present"
-        assert "Compliance Agent" not in allContent, "Compliance should NOT run"
+        assert "Compliance Check" not in allContent, "Compliance should NOT run"
         assert "Fraud Agent" not in allContent, "Fraud should NOT run"
         assert "Advisor Agent" not in allContent, "Advisor should NOT run"
 
@@ -80,7 +80,7 @@ async def test_submittedClaimRoutesToComplianceAndFraud():
         allContent = " ".join(messageContents)
 
         assert "Claim submitted" in allContent, "Intake message should be present"
-        assert "Compliance Agent" in allContent, "Compliance should run"
+        assert "Compliance Check" in allContent, "Compliance should run"
         assert "Fraud Agent" in allContent, "Fraud should run"
         assert "Advisor Agent" in allContent, "Advisor should run"
 
