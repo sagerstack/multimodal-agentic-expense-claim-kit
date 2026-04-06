@@ -284,3 +284,97 @@ async def testRunGraphBreaksOnDisconnect(monkeypatch):
 
     # Disconnected run should have fewer events (no full token stream + no MESSAGE)
     assert len(collected) < len(fullCollected)
+
+
+# ── BUG-016 tests ──
+
+
+@pytest.mark.asyncio
+async def testRunGraphIntakeResponseNotOverwrittenByAdvisor():
+    """BUG-016: advisor LLM output after submitClaim must NOT overwrite the intake response."""
+    from unittest.mock import patch
+
+    submitOutput = json.dumps({"claim": {"id": 42, "claim_number": "CLM-042"}, "receipt": {}})
+
+    events = [
+        # Intake agent: tool call then clean summary
+        {"event": "on_tool_start", "name": "submitClaim", "data": {}},
+        {"event": "on_tool_end", "name": "submitClaim", "data": {"output": submitOutput}},
+        {"event": "on_chat_model_stream", "data": {"chunk": _makeChunk("Your claim CLM-042 has been submitted.")}},
+        {"event": "on_chat_model_end", "data": {"output": MagicMock(tool_calls=None)}},
+        # Advisor agent: raw JSON leaks as subsequent LLM generation
+        {"event": "on_chat_model_stream", "data": {"chunk": _makeChunk('{"decision": "escalate", "reasoning": "over limit"}')}},
+        {"event": "on_chat_model_end", "data": {"output": MagicMock(tool_calls=None)}},
+    ]
+
+    stateValues = {"messages": [], "claimSubmitted": True}
+    graph = _makeMockGraph(events)
+    graph.aget_state.return_value.values = stateValues
+
+    dbClaims = [
+        {
+            "merchant": "Test",
+            "receipt_date": "2026-04-05",
+            "total_amount": "42.00",
+            "currency": "SGD",
+            "status": "submitted",
+            "created_at": "2026-04-05 10:00",
+            "claim_number": "CLM-042",
+        }
+    ]
+
+    request = _makeMockRequest()
+    with patch(
+        "agentic_claims.web.sseHelpers.fetchClaimsForTable",
+        new=AsyncMock(return_value=dbClaims),
+    ):
+        collected = await _collectEvents(graph, _baseGraphInput(), request)
+
+    msgEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
+    assert len(msgEvents) == 1
+    # The rendered message must contain the intake summary, not the advisor JSON
+    assert "CLM-042 has been submitted" in msgEvents[0].raw_data
+    assert '"decision"' not in msgEvents[0].raw_data
+
+
+@pytest.mark.asyncio
+async def testRunGraphFinalTableUpdateEmittedAfterAdvisorStatusChange():
+    """BUG-016: a TABLE_UPDATE is emitted after the graph loop if advisor changed claim status."""
+    from unittest.mock import patch
+
+    submitOutput = json.dumps({"claim": {"id": 7, "claim_number": "CLM-007"}, "receipt": {}})
+
+    events = [
+        {"event": "on_tool_start", "name": "submitClaim", "data": {}},
+        {"event": "on_tool_end", "name": "submitClaim", "data": {"output": submitOutput}},
+        {"event": "on_chat_model_stream", "data": {"chunk": _makeChunk("Claim submitted.")}},
+        {"event": "on_chat_model_end", "data": {"output": MagicMock(tool_calls=None)}},
+    ]
+
+    # Graph state after advisor ran: status is now "escalated"
+    stateValues = {"messages": [], "claimSubmitted": True, "status": "escalated"}
+    graph = _makeMockGraph(events)
+    graph.aget_state.return_value.values = stateValues
+
+    dbClaims = [
+        {
+            "merchant": "Test Merchant",
+            "receipt_date": "2026-04-05",
+            "total_amount": "120.00",
+            "currency": "SGD",
+            "status": "escalated",
+            "created_at": "2026-04-05 10:00",
+            "claim_number": "CLM-007",
+        }
+    ]
+
+    request = _makeMockRequest()
+    with patch(
+        "agentic_claims.web.sseHelpers.fetchClaimsForTable",
+        new=AsyncMock(return_value=dbClaims),
+    ):
+        collected = await _collectEvents(graph, _baseGraphInput(), request)
+
+    tableEvents = [e for e in collected if e.event == SseEvent.TABLE_UPDATE]
+    # At least one TABLE_UPDATE must have the final advisor status (template uppercases it)
+    assert any("ESCALATED" in e.raw_data for e in tableEvents)

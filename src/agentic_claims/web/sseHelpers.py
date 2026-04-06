@@ -23,6 +23,14 @@ from agentic_claims.web.sseEvents import SseEvent
 
 logger = logging.getLogger(__name__)
 
+
+async def fetchClaimsForTable() -> list[dict]:
+    """Thin wrapper so tests can patch agentic_claims.web.sseHelpers.fetchClaimsForTable."""
+    from agentic_claims.web.routers.chat import fetchClaimsForTable as _fetchClaimsForTable
+
+    return await _fetchClaimsForTable()
+
+
 TOOL_LABELS = {
     "getClaimSchema": "Loading claim schema...",
     "extractReceiptFields": "Extracting receipt fields...",
@@ -516,6 +524,9 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     hadAnyToolCall = False
     toolStartTimes = {}
     turnStart = time.time()
+    # BUG-016: once submitClaim completes, post-submission agent LLM events
+    # must not overwrite the intake agent's clean submission response.
+    claimSubmittedFlag = False
 
     # Decision Pathway state
     pathwayActiveTools: set = set()
@@ -672,7 +683,13 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             event=SseEvent.STEP_CONTENT,
                         )
                     yield ServerSentEvent(raw_data="Preparing response...", event=SseEvent.STEP_NAME)
-                    finalResponse = _stripToolCallJson(tokenBuffer)
+                    # BUG-016: only capture the first non-empty finalResponse. The
+                    # intake agent's confirmation message is the first non-tool
+                    # on_chat_model_end. Post-submission agents (compliance, fraud,
+                    # advisor) emit subsequent on_chat_model_end events that must
+                    # not overwrite the intake agent's clean submission response.
+                    if not finalResponse:
+                        finalResponse = _stripToolCallJson(tokenBuffer)
                     tokenBuffer = ""
                     reasoningBuffer = ""
 
@@ -747,12 +764,14 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 elif toolName == "submitClaim":
                     if tableClaims:
                         tableClaims[-1]["status"] = "submitted"
+                    # BUG-016: flag that submission completed so subsequent
+                    # post-submission agent LLM events do not overwrite finalResponse.
+                    claimSubmittedFlag = True
 
                 if toolName in ("extractReceiptFields", "submitClaim"):
                     try:
                         renderClaims = tableClaims
                         if toolName == "submitClaim":
-                            from agentic_claims.web.routers.chat import fetchClaimsForTable
                             dbClaims = await fetchClaimsForTable()
                             if dbClaims:
                                 renderClaims = dbClaims
@@ -798,6 +817,28 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             yield ServerSentEvent(raw_data=summaryHtml, event=SseEvent.SUMMARY_UPDATE)
         except Exception as e:
             logger.error(f"Error rendering summary panel: {e}", exc_info=True)
+
+    # BUG-016: after the graph completes, refresh the submission table from DB.
+    # The advisor node may have updated the claim status (e.g. submitted ->
+    # escalated) AFTER the submitClaim TABLE_UPDATE was already emitted during
+    # the streaming loop. Fetching from DB here gives the authoritative status.
+    if claimSubmittedFlag:
+        try:
+            dbClaims = await fetchClaimsForTable()
+            if dbClaims:
+                sessionTotal = sum(
+                    float(c.get("total_amount", 0) or 0)
+                    for c in dbClaims
+                    if c.get("total_amount") and str(c.get("total_amount")) != "--"
+                )
+                finalTableHtml = templates.get_template("partials/submission_table.html").render(
+                    claims=dbClaims,
+                    sessionTotal=f"SGD {sessionTotal:.2f}",
+                    itemCount=len(dbClaims),
+                )
+                yield ServerSentEvent(raw_data=finalTableHtml, event=SseEvent.TABLE_UPDATE)
+        except Exception as e:
+            logger.error(f"Error rendering final table update after advisor: {e}", exc_info=True)
 
     # Check for interrupt via graph state
     try:
