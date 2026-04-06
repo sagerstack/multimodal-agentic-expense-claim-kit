@@ -368,14 +368,29 @@ def insertAuditLog(
 
 
 @mcp.tool()
-def updateClaimStatus(claimId: int, newStatus: str, actor: str) -> dict[str, Any]:
+def updateClaimStatus(
+    claimId: int,
+    newStatus: str,
+    actor: str,
+    complianceFindings: dict | None = None,
+    fraudFindings: dict | None = None,
+    advisorDecision: str | None = None,
+    approvedBy: str | None = None,
+) -> dict[str, Any]:
     """
     Update claim status and insert audit log entry.
+
+    Optionally persists agent output columns (compliance_findings,
+    fraud_findings, advisor_decision, approved_by) when provided.
 
     Args:
         claimId: Claim ID to update
         newStatus: New status value
         actor: User/system performing the update
+        complianceFindings: Structured compliance verdict dict (optional)
+        fraudFindings: Structured fraud verdict dict (optional)
+        advisorDecision: Advisor routing decision string (optional)
+        approvedBy: Actor who approved (e.g. "agent" for auto-approve) (optional)
 
     Returns:
         Updated claim record
@@ -391,16 +406,34 @@ def updateClaimStatus(claimId: int, newStatus: str, actor: str) -> dict[str, Any
 
             oldStatus = result[0]
 
-            # Update claim status
+            # Build dynamic SET clause based on optional agent findings
+            setClauses = ["status = %s", "updated_at = NOW()"]
+            params: list = [newStatus]
+
+            if complianceFindings is not None:
+                setClauses.append("compliance_findings = %s")
+                params.append(Json(complianceFindings))
+            if fraudFindings is not None:
+                setClauses.append("fraud_findings = %s")
+                params.append(Json(fraudFindings))
+            if advisorDecision is not None:
+                setClauses.append("advisor_decision = %s")
+                params.append(advisorDecision)
+            if approvedBy is not None:
+                setClauses.append("approved_by = %s")
+                params.append(approvedBy)
+
+            params.append(claimId)
+
             cur.execute(
-                """
+                f"""
                 UPDATE claims
-                SET status = %s, updated_at = NOW()
+                SET {', '.join(setClauses)}
                 WHERE id = %s
                 RETURNING id, claim_number, employee_id, status,
                           total_amount, currency, created_at, updated_at
                 """,
-                (newStatus, claimId),
+                params,
             )
 
             columns = [desc[0] for desc in cur.description]

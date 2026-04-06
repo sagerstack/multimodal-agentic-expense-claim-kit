@@ -44,7 +44,7 @@ async def test_pendingClaimEndsAfterIntake():
         assert "Intake processing" in allContent, "Intake message should be present"
         assert "Compliance Check" not in allContent, "Compliance should NOT run"
         assert "Fraud Check" not in allContent, "Fraud should NOT run"
-        assert "Advisor Agent" not in allContent, "Advisor should NOT run"
+        assert "Advisor Decision" not in allContent, "Advisor should NOT run"
 
 
 @pytest.mark.asyncio
@@ -82,7 +82,7 @@ async def test_submittedClaimRoutesToComplianceAndFraud():
         assert "Claim submitted" in allContent, "Intake message should be present"
         assert "Compliance Check" in allContent, "Compliance should run"
         assert "Fraud Check" in allContent, "Fraud should run"
-        assert "Advisor Agent" in allContent, "Advisor should run"
+        assert "Advisor Decision" in allContent, "Advisor should run"
 
 
 @pytest.mark.asyncio
