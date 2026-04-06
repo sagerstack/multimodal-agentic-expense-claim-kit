@@ -11,7 +11,7 @@ from agentic_claims.infrastructure.database.models import AuditLog, Base, Claim,
 def testBaseMetadataHasAllTables():
     """Test that Base.metadata includes all expected tables."""
     table_names = set(Base.metadata.tables.keys())
-    assert table_names == {"claims", "receipts", "audit_log"}
+    assert table_names == {"claims", "receipts", "audit_log", "users"}
 
 
 def testClaimModelStructure():

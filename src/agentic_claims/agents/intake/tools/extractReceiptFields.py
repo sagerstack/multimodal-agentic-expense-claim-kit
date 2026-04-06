@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 from langchain_openrouter import ChatOpenRouter
 
+from agentic_claims.agents.intake.auditLogger import bufferStep
 from agentic_claims.agents.intake.prompts.vlmExtractionPrompt import VLM_EXTRACTION_PROMPT
 from agentic_claims.agents.intake.utils.imageQuality import checkImageQuality
 from agentic_claims.core.config import getSettings
@@ -56,7 +57,13 @@ async def extractReceiptFields(claimId: str) -> dict:
                 "error": f"Image quality check failed: {qualityCheck['reason']}. Please upload a clearer, higher-resolution image."
             }
 
-        logger.info("extractReceiptFields quality check passed", extra={"elapsed": f"{time.time() - toolStart:.2f}s", "qualityScore": qualityCheck.get("score")})
+        logger.info(
+            "extractReceiptFields quality check passed",
+            extra={
+                "elapsed": f"{time.time() - toolStart:.2f}s",
+                "qualityScore": qualityCheck.get("score"),
+            },
+        )
 
         # Step 3: Instantiate VLM using ChatOpenRouter
         vlm = ChatOpenRouter(
@@ -116,7 +123,10 @@ async def extractReceiptFields(claimId: str) -> dict:
             else:
                 raise
 
-        logger.info("extractReceiptFields VLM call completed", extra={"elapsed": f"{time.time() - toolStart:.2f}s"})
+        logger.info(
+            "extractReceiptFields VLM call completed",
+            extra={"elapsed": f"{time.time() - toolStart:.2f}s"},
+        )
 
         rawContent = response.content.strip()
         if rawContent.startswith("```"):
@@ -129,7 +139,34 @@ async def extractReceiptFields(claimId: str) -> dict:
 
         try:
             result = json.loads(rawContent)
-            logger.info("extractReceiptFields completed", extra={"elapsed": f"{time.time() - toolStart:.2f}s", "hasFields": "fields" in result})
+            logger.info(
+                "extractReceiptFields completed",
+                extra={
+                    "elapsed": f"{time.time() - toolStart:.2f}s",
+                    "hasFields": "fields" in result,
+                },
+            )
+
+            # Buffer audit steps — flushed to DB when claim is submitted
+            if "fields" in result:
+                fields = result.get("fields", {})
+                confidence = result.get("confidence", {})
+                bufferStep(
+                    sessionClaimId=claimId,
+                    action="receipt_uploaded",
+                    details={"imagePath": None, "imageQuality": qualityCheck},
+                )
+                bufferStep(
+                    sessionClaimId=claimId,
+                    action="ai_extraction",
+                    details={
+                        "confidence": confidence,
+                        "merchant": fields.get("merchant"),
+                        "amount": fields.get("totalAmount"),
+                        "fields": fields,
+                    },
+                )
+
             return result
         except json.JSONDecodeError as e:
             return {"error": f"Failed to parse VLM response as JSON: {str(e)}"}

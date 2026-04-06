@@ -6,11 +6,13 @@ from decimal import Decimal
 from typing import Any
 
 import psycopg
-from psycopg.types.json import Json
 from fastmcp import FastMCP
+from psycopg.types.json import Json
 
 # Environment configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://agentic:password@localhost:5432/agentic_claims")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql://agentic:password@localhost:5432/agentic_claims"
+)
 
 # Initialize FastMCP server
 mcp = FastMCP("db-server")
@@ -30,9 +32,13 @@ def getConnection() -> psycopg.Connection:
 def serializeRow(row: dict) -> dict:
     """Convert non-JSON-serializable values (datetime, Decimal) to strings."""
     return {
-        k: (v.isoformat() if isinstance(v, (datetime, date))
-             else float(v) if isinstance(v, Decimal)
-             else v)
+        k: (
+            v.isoformat()
+            if isinstance(v, (datetime, date))
+            else float(v)
+            if isinstance(v, Decimal)
+            else v
+        )
         for k, v in row.items()
     }
 
@@ -131,15 +137,17 @@ def insertClaim(
                     # Legacy path: claimNumber provided (backwards compatibility)
                     claimSql = """
                         INSERT INTO claims (
-                            claim_number, employee_id, status, total_amount, currency,
-                            intake_findings, original_amount, original_currency, converted_amount_sgd,
-                            idempotency_key
+                            claim_number, employee_id, status,
+                            total_amount, currency, intake_findings,
+                            original_amount, original_currency,
+                            converted_amount_sgd, idempotency_key
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (idempotency_key) DO NOTHING
-                        RETURNING id, claim_number, employee_id, status, total_amount, currency,
-                                  intake_findings, original_amount, original_currency, converted_amount_sgd,
-                                  created_at, updated_at
+                        RETURNING id, claim_number, employee_id, status,
+                                  total_amount, currency, intake_findings,
+                                  original_amount, original_currency,
+                                  converted_amount_sgd, created_at, updated_at
                     """
                     claimParams = (
                         claimNumber,
@@ -158,14 +166,15 @@ def insertClaim(
                     claimSql = """
                         INSERT INTO claims (
                             employee_id, status, total_amount, currency,
-                            intake_findings, original_amount, original_currency, converted_amount_sgd,
-                            idempotency_key
+                            intake_findings, original_amount, original_currency,
+                            converted_amount_sgd, idempotency_key
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (idempotency_key) DO NOTHING
-                        RETURNING id, claim_number, employee_id, status, total_amount, currency,
-                                  intake_findings, original_amount, original_currency, converted_amount_sgd,
-                                  created_at, updated_at
+                        RETURNING id, claim_number, employee_id, status,
+                                  total_amount, currency, intake_findings,
+                                  original_amount, original_currency,
+                                  converted_amount_sgd, created_at, updated_at
                     """
                     claimParams = (
                         employeeId,
@@ -187,12 +196,13 @@ def insertClaim(
                 if not claimRow:
                     cur.execute(
                         """
-                        SELECT id, claim_number, employee_id, status, total_amount, currency,
-                               intake_findings, original_amount, original_currency, converted_amount_sgd,
-                               created_at, updated_at
+                        SELECT id, claim_number, employee_id, status,
+                               total_amount, currency, intake_findings,
+                               original_amount, original_currency,
+                               converted_amount_sgd, created_at, updated_at
                         FROM claims WHERE idempotency_key = %s
                         """,
-                        (idempotencyKey,)
+                        (idempotencyKey,),
                     )
                     claimColumns = [desc[0] for desc in cur.description]
                     claimRow = cur.fetchone()
@@ -202,10 +212,14 @@ def insertClaim(
 
                     claimRecord = serializeRow(dict(zip(claimColumns, claimRow)))
                     conn.rollback()  # No changes to commit
+                    claimNum = claimRecord.get("claim_number", "unknown")
+                    claimDate = claimRecord.get("created_at", "unknown date")
                     return {
-                        "error": f"Duplicate receipt detected. This receipt was already submitted as {claimRecord.get('claim_number', 'unknown')} "
-                                 f"on {claimRecord.get('created_at', 'unknown date')}. "
-                                 f"Each receipt can only be submitted once.",
+                        "error": (
+                            f"Duplicate receipt detected. This receipt was already "
+                            f"submitted as {claimNum} on {claimDate}. "
+                            f"Each receipt can only be submitted once."
+                        ),
                         "existingClaimNumber": claimRecord.get("claim_number"),
                     }
 
@@ -215,13 +229,15 @@ def insertClaim(
                 if claimNumber:
                     claimSql = """
                         INSERT INTO claims (
-                            claim_number, employee_id, status, total_amount, currency,
-                            intake_findings, original_amount, original_currency, converted_amount_sgd
+                            claim_number, employee_id, status,
+                            total_amount, currency, intake_findings,
+                            original_amount, original_currency, converted_amount_sgd
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id, claim_number, employee_id, status, total_amount, currency,
-                                  intake_findings, original_amount, original_currency, converted_amount_sgd,
-                                  created_at, updated_at
+                        RETURNING id, claim_number, employee_id, status,
+                                  total_amount, currency, intake_findings,
+                                  original_amount, original_currency,
+                                  converted_amount_sgd, created_at, updated_at
                     """
                     claimParams = (
                         claimNumber,
@@ -239,12 +255,14 @@ def insertClaim(
                     claimSql = """
                         INSERT INTO claims (
                             employee_id, status, total_amount, currency,
-                            intake_findings, original_amount, original_currency, converted_amount_sgd
+                            intake_findings, original_amount,
+                            original_currency, converted_amount_sgd
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id, claim_number, employee_id, status, total_amount, currency,
-                                  intake_findings, original_amount, original_currency, converted_amount_sgd,
-                                  created_at, updated_at
+                        RETURNING id, claim_number, employee_id, status,
+                                  total_amount, currency, intake_findings,
+                                  original_amount, original_currency,
+                                  converted_amount_sgd, created_at, updated_at
                     """
                     claimParams = (
                         employeeId,
@@ -273,13 +291,15 @@ def insertClaim(
                 cur.execute(
                     """
                     INSERT INTO receipts (
-                        claim_id, receipt_number, merchant, date, total_amount, currency,
-                        line_items, image_path, original_amount, original_currency, converted_amount_sgd
+                        claim_id, receipt_number, merchant, date,
+                        total_amount, currency, line_items, image_path,
+                        original_amount, original_currency, converted_amount_sgd
                     )
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id, claim_id, receipt_number, merchant, date, total_amount, currency,
-                              line_items, image_path, original_amount, original_currency, converted_amount_sgd,
-                              created_at, updated_at
+                    RETURNING id, claim_id, receipt_number, merchant, date,
+                              total_amount, currency, line_items, image_path,
+                              original_amount, original_currency,
+                              converted_amount_sgd, created_at, updated_at
                     """,
                     (
                         claimId,
@@ -313,6 +333,41 @@ def insertClaim(
 
 
 @mcp.tool()
+def insertAuditLog(
+    claimId: int, action: str, newValue: str, actor: str, oldValue: str = ""
+) -> dict[str, Any]:
+    """
+    Insert an audit log entry for a claim.
+
+    Args:
+        claimId: Claim ID to log against
+        action: Audit action label (e.g., 'receipt_uploaded', 'ai_extraction', 'policy_check')
+        newValue: JSON-encoded details for this audit step
+        actor: System/user that performed the action
+        oldValue: Optional previous value (default empty)
+
+    Returns:
+        Dict with id and timestamp of the inserted row
+    """
+    try:
+        conn = getConnection()
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO audit_log "
+                "(claim_id, action, old_value, new_value, actor) "
+                "VALUES (%s, %s, %s, %s, %s) RETURNING id, timestamp",
+                (claimId, action, oldValue, newValue, actor),
+            )
+            conn.commit()
+            row = cur.fetchone()
+            return {"id": row[0], "timestamp": row[1].isoformat()}
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return {"error": f"insertAuditLog failed: {e}"}
+
+
+@mcp.tool()
 def updateClaimStatus(claimId: int, newStatus: str, actor: str) -> dict[str, Any]:
     """
     Update claim status and insert audit log entry.
@@ -342,7 +397,8 @@ def updateClaimStatus(claimId: int, newStatus: str, actor: str) -> dict[str, Any
                 UPDATE claims
                 SET status = %s, updated_at = NOW()
                 WHERE id = %s
-                RETURNING id, claim_number, employee_id, status, total_amount, currency, created_at, updated_at
+                RETURNING id, claim_number, employee_id, status,
+                          total_amount, currency, created_at, updated_at
                 """,
                 (newStatus, claimId),
             )
@@ -391,16 +447,18 @@ def getClaimSchema() -> dict[str, Any]:
                     WHERE table_name = %s AND table_schema = 'public'
                     ORDER BY ordinal_position
                     """,
-                    (tableName,)
+                    (tableName,),
                 )
                 columns = []
                 for row in cur.fetchall():
-                    columns.append({
-                        "name": row[0],
-                        "type": row[1],
-                        "nullable": row[2] == "YES",
-                        "hasDefault": row[3] is not None,
-                    })
+                    columns.append(
+                        {
+                            "name": row[0],
+                            "type": row[1],
+                            "nullable": row[2] == "YES",
+                            "hasDefault": row[3] is not None,
+                        }
+                    )
                 schema[tableName] = columns
             return schema
     except Exception as e:
@@ -424,7 +482,8 @@ def getClaimWithReceipts(claimId: int) -> dict[str, Any]:
             # Get claim
             cur.execute(
                 """
-                SELECT id, claim_number, employee_id, status, total_amount, currency, created_at, updated_at
+                SELECT id, claim_number, employee_id, status,
+                       total_amount, currency, created_at, updated_at
                 FROM claims
                 WHERE id = %s
                 """,
@@ -441,7 +500,9 @@ def getClaimWithReceipts(claimId: int) -> dict[str, Any]:
             # Get receipts
             cur.execute(
                 """
-                SELECT id, claim_id, receipt_number, merchant, date, total_amount, currency, image_path, line_items, created_at, updated_at
+                SELECT id, claim_id, receipt_number, merchant, date,
+                       total_amount, currency, image_path, line_items,
+                       created_at, updated_at
                 FROM receipts
                 WHERE claim_id = %s
                 ORDER BY date
@@ -451,7 +512,9 @@ def getClaimWithReceipts(claimId: int) -> dict[str, Any]:
             receiptColumns = [desc[0] for desc in cur.description]
             receiptRows = cur.fetchall()
 
-            claim["receipts"] = [serializeRow(dict(zip(receiptColumns, row))) for row in receiptRows]
+            claim["receipts"] = [
+                serializeRow(dict(zip(receiptColumns, row))) for row in receiptRows
+            ]
 
             return claim
     except Exception as e:

@@ -1,151 +1,78 @@
 {% extends "base.html" %}
 {% block title %}Audit &amp; Transparency Log{% endblock %}
 {% block content %}
-<div class="pt-8 pb-20 md:pb-8 px-4 md:px-8 overflow-y-auto h-full">
-<!-- Header Section -->
-<header class="mb-12">
-  <div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
-    <div>
-      <h1 class="font-headline text-4xl font-extrabold tracking-tight text-on-surface mb-2">Audit Log &amp; <span class="text-primary">Transparency</span></h1>
-      <p class="text-on-surface-variant max-w-2xl font-body">Verification of every claim's neural path. Real-time decision history and policy matching engine logs.</p>
-    </div>
-    <div class="flex items-center gap-3">
-      <div class="bg-surface-container-highest px-4 py-2 rounded-xl flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
-        <span class="text-xs font-bold text-secondary uppercase tracking-widest">Live Engine Feed</span>
+<div class="pt-8 pb-20 md:pb-8 px-4 md:px-8 overflow-y-auto h-full"
+     x-data="{ selectedClaimId: {{ selectedClaimId | tojson }} }">
+
+  <!-- Page Header -->
+  <header class="mb-10">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div>
+        <h1 class="font-headline text-4xl font-extrabold tracking-tight text-on-surface mb-2">
+          Audit Log &amp; <span class="text-primary">Transparency</span>
+        </h1>
+        <p class="text-on-surface-variant max-w-2xl font-body">
+          Verification of every claim's neural path. Real-time decision history and policy matching engine logs.
+        </p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="bg-surface-container-highest px-4 py-2 rounded-xl flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+          <span class="text-xs font-bold text-secondary uppercase tracking-widest">Live Engine Feed</span>
+        </div>
       </div>
     </div>
+  </header>
+
+  <!-- Main List-Detail Layout -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+    <!-- Left Panel: Claim List -->
+    <section class="lg:col-span-5 space-y-4">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-bold uppercase tracking-widest text-on-surface-variant px-2">Recent Decisions</h3>
+      </div>
+      <!-- Scrollable claim cards -->
+      <div id="auditClaimList"
+           class="space-y-4 max-h-[716px] overflow-y-auto pr-2"
+           style="-ms-overflow-style: none; scrollbar-width: none;">
+        {% set allClaims = allClaims %}
+        {% include "partials/audit_claim_list.html" %}
+      </div>
+    </section>
+
+    <!-- Right Panel: Timeline + Insights -->
+    <section class="lg:col-span-7">
+      <div class="bg-[rgba(25,37,64,0.2)] backdrop-blur-xl rounded-[2rem] p-8 border border-outline-variant/10 min-h-[716px]">
+
+        <!-- HTMX loading indicator -->
+        <div id="timeline-loading" class="htmx-indicator">
+          <div class="flex items-center gap-3 mb-8 pb-6 border-b border-outline-variant/10">
+            <div class="w-12 h-12 rounded-2xl bg-surface-container-highest animate-pulse"></div>
+            <div class="space-y-2">
+              <div class="h-4 w-32 bg-surface-container-highest rounded animate-pulse"></div>
+              <div class="h-3 w-48 bg-surface-container-highest rounded animate-pulse"></div>
+            </div>
+          </div>
+          <div class="space-y-8">
+            {% for _ in range(4) %}
+            <div class="flex gap-6">
+              <div class="w-12 h-12 rounded-full bg-surface-container-highest animate-pulse flex-shrink-0"></div>
+              <div class="flex-1 space-y-2 pt-2">
+                <div class="h-4 w-28 bg-surface-container-highest rounded animate-pulse"></div>
+                <div class="h-3 w-full bg-surface-container-highest rounded animate-pulse"></div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Timeline detail — swapped by HTMX on claim selection -->
+        <div id="timeline-detail">
+          {% include "partials/audit_timeline.html" %}
+        </div>
+      </div>
+    </section>
   </div>
-</header>
-<!-- Audit Layout -->
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-  <!-- List Section -->
-  <section class="lg:col-span-5 space-y-4">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-sm font-bold uppercase tracking-widest text-on-surface-variant px-2">Recent Decisions</h3>
-      <div class="flex gap-2">
-        <button class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-bright transition-colors">
-          <span class="material-symbols-outlined text-sm">filter_list</span>
-        </button>
-      </div>
-    </div>
-    <!-- Claim Cards -->
-    <div id="auditClaimList" class="space-y-4 max-h-[716px] overflow-y-auto hide-scrollbar pr-2">
-      <p class="text-xs text-on-surface-variant/50 text-center py-12">No decisions recorded yet.</p>
-    </div>
-  </section>
-  <!-- Detail View Section -->
-  <section class="lg:col-span-7">
-    <div class="glass-panel rounded-[2rem] p-8 border border-outline-variant/10 min-h-[716px]">
-      <!-- Detail Header -->
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 pb-8 border-b border-outline-variant/10">
-        <div class="flex items-center gap-4">
-          <div class="w-12 h-12 rounded-2xl bg-surface-container-highest flex items-center justify-center border border-outline-variant/20">
-            <span class="material-symbols-outlined text-primary">description</span>
-          </div>
-          <div>
-            <h2 id="auditDetailTitle" class="text-2xl font-headline font-bold text-on-surface">Select a Claim</h2>
-            <p id="auditDetailSubtitle" class="text-sm text-on-surface-variant">Choose a decision from the list to view its audit trail.</p>
-          </div>
-        </div>
-        <div class="flex items-center gap-2">
-          <button class="px-4 py-2 rounded-xl bg-surface-container-highest text-on-surface text-sm font-bold border border-outline-variant/20 hover:bg-surface-bright transition-all">View Receipt</button>
-          <button class="px-4 py-2 rounded-xl bg-primary text-on-primary text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all">Download Log</button>
-        </div>
-      </div>
-      <!-- Decision Pathway -->
-      <div id="auditTimeline" class="mb-12">
-        <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-secondary mb-8">Decision Pathway</h3>
-        <div class="relative flex flex-col gap-10">
-          <!-- Connection Line -->
-          <div class="absolute left-6 top-2 bottom-2 w-px bg-gradient-to-b from-secondary to-primary/20"></div>
-          <!-- Step 1: Upload -->
-          <div class="flex gap-6 relative">
-            <div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center z-10 border border-secondary/40 shadow-[0_0_15px_rgba(98,250,227,0.15)]">
-              <span class="material-symbols-outlined text-secondary">upload_file</span>
-            </div>
-            <div class="flex-1">
-              <div class="flex items-center justify-between mb-1">
-                <h4 class="font-bold text-on-surface">Receipt Uploaded</h4>
-                <span class="text-[10px] text-on-surface-variant font-mono">--:--:-- --</span>
-              </div>
-              <p class="text-sm text-on-surface-variant">Awaiting claim submission.</p>
-            </div>
-          </div>
-          <!-- Step 2: AI Extraction -->
-          <div class="flex gap-6 relative">
-            <div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center z-10 border border-secondary/40 shadow-[0_0_15px_rgba(98,250,227,0.15)]">
-              <span class="material-symbols-outlined text-secondary">troubleshoot</span>
-            </div>
-            <div class="flex-1">
-              <div class="flex items-center justify-between mb-1">
-                <h4 class="font-bold text-on-surface">AI Extraction</h4>
-                <span class="text-[10px] text-on-surface-variant font-mono">--:--:-- --</span>
-              </div>
-              <div class="bg-surface-container-lowest/50 p-4 rounded-xl border border-outline-variant/10">
-                <div class="flex items-center justify-between mb-2">
-                  <span class="text-xs font-medium text-on-surface-variant">Confidence Score</span>
-                  <span class="text-xs font-bold text-on-surface-variant">--%</span>
-                </div>
-                <div class="h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
-                  <div class="h-full bg-secondary w-0"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- Step 3: Policy Check -->
-          <div class="flex gap-6 relative">
-            <div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center z-10 border border-primary/40 shadow-[0_0_15px_rgba(204,151,255,0.15)]">
-              <span class="material-symbols-outlined text-primary">rule</span>
-            </div>
-            <div class="flex-1">
-              <div class="flex items-center justify-between mb-1">
-                <h4 class="font-bold text-on-surface">Policy Check</h4>
-                <span class="text-[10px] text-on-surface-variant font-mono">--:--:-- --</span>
-              </div>
-              <div class="p-3 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <span class="material-symbols-outlined text-primary text-sm">task_alt</span>
-                  <span class="text-sm font-medium">Pending policy match</span>
-                </div>
-                <span class="text-[10px] text-primary underline cursor-pointer">View Policy Reference</span>
-              </div>
-            </div>
-          </div>
-          <!-- Step 4: Final Decision -->
-          <div class="flex gap-6 relative">
-            <div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center z-10 border border-outline-variant/20">
-              <span class="material-symbols-outlined text-on-surface-variant">verified</span>
-            </div>
-            <div class="flex-1">
-              <div class="flex items-center justify-between mb-1">
-                <h4 class="font-bold text-on-surface">Final Decision</h4>
-                <span class="text-[10px] text-on-surface-variant font-mono">--:--:-- --</span>
-              </div>
-              <p class="text-sm text-on-surface-variant">Awaiting processing.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- Intelligence Insights -->
-      <div class="grid grid-cols-2 gap-4">
-        <div class="bg-surface-container-highest/40 p-4 rounded-2xl border border-outline-variant/10">
-          <h5 class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-3">Anomaly Detection</h5>
-          <div class="flex items-center gap-3">
-            <span class="material-symbols-outlined text-secondary">security</span>
-            <span class="text-sm font-bold text-on-surface">--</span>
-          </div>
-        </div>
-        <div class="bg-surface-container-highest/40 p-4 rounded-2xl border border-outline-variant/10">
-          <h5 class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-3">Cost Benchmark</h5>
-          <div class="flex items-center gap-3">
-            <span class="material-symbols-outlined text-tertiary">trending_down</span>
-            <span class="text-sm font-bold text-on-surface">--</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-</div>
 </div>
 {% endblock %}

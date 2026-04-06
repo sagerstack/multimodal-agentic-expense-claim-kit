@@ -1,9 +1,24 @@
 """Smoke tests verifying chat page renders with expected SSE/HTMX/Alpine attributes."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+
+_FAKE_USER = {
+    "userId": 1,
+    "username": "testuser",
+    "role": "user",
+    "employeeId": "EMP001",
+    "displayName": "Test User",
+}
+
+
+@pytest.fixture(autouse=True)
+def mockGetCurrentUser():
+    """Patch getCurrentUser for all tests — lightweight app has no session data."""
+    with patch("agentic_claims.web.routers.pages.getCurrentUser", return_value=_FAKE_USER):
+        yield
 
 
 @pytest.fixture

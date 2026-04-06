@@ -2,21 +2,24 @@
 
 import logging
 import time
+
 from langchain_core.tools import tool
 
-logger = logging.getLogger(__name__)
-
+from agentic_claims.agents.intake.auditLogger import bufferStep
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
 
+logger = logging.getLogger(__name__)
+
 
 @tool
-async def searchPolicies(query: str, limit: int = 5) -> list | dict:
+async def searchPolicies(query: str, limit: int = 5, claimId: str | None = None) -> list | dict:
     """Search company policy documents using RAG.
 
     Args:
         query: Search query describing the policy question
         limit: Maximum number of policy chunks to return (default: 5)
+        claimId: Session claim ID for audit buffering (optional)
 
     Returns:
         List of policy chunks with text, file, category, section, and relevance score,
@@ -33,5 +36,30 @@ async def searchPolicies(query: str, limit: int = 5) -> list | dict:
         arguments={"query": query, "limit": limit},
     )
 
-    logger.info("searchPolicies completed", extra={"elapsed": f"{time.time() - toolStart:.2f}s", "resultCount": len(result) if isinstance(result, list) else 0})
+    logger.info(
+        "searchPolicies completed",
+        extra={
+            "elapsed": f"{time.time() - toolStart:.2f}s",
+            "resultCount": len(result) if isinstance(result, list) else 0,
+        },
+    )
+
+    # Buffer policy check audit step if a session claimId was provided
+    if claimId and isinstance(result, list):
+        policyRefs = [
+            {"section": r.get("section"), "category": r.get("category"), "score": r.get("score")}
+            for r in result
+            if isinstance(r, dict)
+        ]
+        bufferStep(
+            sessionClaimId=claimId,
+            action="policy_check",
+            details={
+                "violations": [],
+                "policyRefs": policyRefs,
+                "compliant": True,
+                "query": query,
+            },
+        )
+
     return result

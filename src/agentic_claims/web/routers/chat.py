@@ -149,8 +149,10 @@ async def fetchClaimsForTable() -> list[dict]:
                 if rawTs and isinstance(rawTs, str) and "T" in rawTs:
                     try:
                         from datetime import datetime
+
                         dt = datetime.fromisoformat(rawTs.replace("Z", "+00:00"))
                         from zoneinfo import ZoneInfo
+
                         sgt = dt.astimezone(ZoneInfo("Asia/Singapore"))
                         row["created_at"] = sgt.strftime("%Y-%m-%d %H:%M")
                     except Exception:

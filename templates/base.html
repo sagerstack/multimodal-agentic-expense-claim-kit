@@ -23,21 +23,26 @@
       </div>
       <span class="text-xl font-bold bg-gradient-to-r from-[#cc97ff] to-[#62fae3] bg-clip-text text-transparent font-manrope tracking-tight">Expense AI</span>
     </div>
-    <nav class="hidden md:flex gap-6">
-      <a href="/dashboard" class="text-[#dee5ff] opacity-70 font-manrope tracking-tight font-bold hover:text-[#62fae3] transition-colors duration-300">Dashboard</a>
-      <a href="/audit" class="text-[#dee5ff] opacity-70 font-manrope tracking-tight font-bold hover:text-[#62fae3] transition-colors duration-300">Audit Log</a>
-      <a href="#" class="text-[#dee5ff] opacity-70 font-manrope tracking-tight font-bold hover:text-[#62fae3] transition-colors duration-300">Escalations</a>
-    </nav>
   </div>
   <div class="flex items-center gap-4">
-    <button class="scale-95 active:scale-90 transition-transform text-[#dee5ff] opacity-70 hover:text-[#62fae3]">
-      <span class="material-symbols-outlined">notifications</span>
-    </button>
-    <button class="scale-95 active:scale-90 transition-transform text-[#dee5ff] opacity-70 hover:text-[#62fae3]">
-      <span class="material-symbols-outlined">settings</span>
-    </button>
-    <div class="h-8 w-8 rounded-full overflow-hidden border border-outline-variant/30 flex items-center justify-center bg-[#192540] text-[#dee5ff] text-xs font-bold">
-      EA
+    <!-- Profile avatar with logout dropdown (Alpine.js) -->
+    <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+      <button @click="open = !open"
+              class="h-8 w-8 rounded-full border border-outline-variant/30 flex items-center justify-center bg-[#192540] text-[#dee5ff] text-xs font-bold hover:border-secondary/50 transition-colors">
+        {{ (displayName or 'EA')[:2] | upper }}
+      </button>
+      <div x-show="open" x-cloak
+           class="absolute right-0 mt-2 w-52 rounded-xl bg-[#0f1930] border border-outline-variant/20 shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50 overflow-hidden">
+        <div class="px-4 py-3 border-b border-outline-variant/10">
+          <p class="text-on-surface text-sm font-semibold font-manrope">{{ displayName or '' }}</p>
+          <p class="text-on-surface-variant text-xs capitalize mt-0.5">{{ userRole or '' }}</p>
+        </div>
+        <a href="/logout"
+           class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-bright transition-colors text-sm">
+          <span class="material-symbols-outlined text-base">logout</span>
+          Logout
+        </a>
+      </div>
     </div>
   </div>
 </header>
@@ -52,19 +57,21 @@
     </button>
   </div>
   <nav class="flex-1 space-y-1">
-    <a href="javascript:void(0)"
-       class="flex items-center gap-3 bg-[#1f2b49] text-[#62fae3] rounded-r-full py-3 px-6 shadow-[0_0_15px_rgba(98,250,227,0.2)] transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide">
+    <!-- Claims — visible to all roles -->
+    <a href="/"
+       class="flex items-center gap-3 {% if activePage == 'chat' %}bg-[#1f2b49] text-[#62fae3] shadow-[0_0_15px_rgba(98,250,227,0.2)]{% else %}text-[#dee5ff] opacity-70 hover:opacity-100 hover:bg-surface-bright{% endif %} rounded-r-full py-3 px-6 transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide">
       <span class="material-symbols-outlined">description</span>
-      My Claims
+      Claims
     </a>
+    <!-- Review — reviewer only -->
+    {% if userRole == "reviewer" %}
+    <a href="/dashboard"
+       class="flex items-center gap-3 {% if activePage == 'dashboard' %}bg-[#1f2b49] text-[#62fae3] shadow-[0_0_15px_rgba(98,250,227,0.2)]{% else %}text-[#dee5ff] opacity-70 hover:opacity-100 hover:bg-surface-bright{% endif %} rounded-r-full py-3 px-6 transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide">
+      <span class="material-symbols-outlined">fact_check</span>
+      Review
+    </a>
+    {% endif %}
   </nav>
-  <div class="px-6 mt-auto">
-    <a href="#" class="flex items-center gap-3 text-[#dee5ff] opacity-50 py-3 hover:opacity-100 transition-all font-inter text-sm font-medium tracking-wide">
-      <span class="material-symbols-outlined">sensors</span>
-      System Status
-      <div class="intelligence-pulse ml-auto"></div>
-    </a>
-  </div>
 </aside>
 
 <!-- Main Content Area -->

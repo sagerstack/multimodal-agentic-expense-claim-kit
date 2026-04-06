@@ -1,4 +1,4 @@
-"""Page route handlers for all 4 application pages."""
+"""Page route handlers for all application pages."""
 
 import uuid
 
@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from starlette.requests import Request
 
 from agentic_claims.core.imageStore import clearImage
+from agentic_claims.web.auth import getCurrentUser
 from agentic_claims.web.routers.chat import fetchClaimsForTable
 from agentic_claims.web.session import getSessionIds
 from agentic_claims.web.sessionQueues import removeQueue
@@ -34,11 +35,29 @@ async def chatPage(request: Request):
     request.session.pop("awaiting_clarification", None)
 
     sessionIds = getSessionIds(request)
+    currentUser = getCurrentUser(request)
+
+    _pending = {"status": "pending", "timestamp": None, "details": None, "description": None}
     initialSteps = [
-        {"name": "Receipt Uploaded", "icon": "cloud_upload", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": ""},
-        {"name": "AI Extraction", "icon": "troubleshoot", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": "Awaiting receipt upload..."},
-        {"name": "Policy Check", "icon": "rule", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": "Awaiting extraction data..."},
-        {"name": "Final Decision", "icon": "verified", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": "Awaiting policy check..."},
+        {**_pending, "name": "Receipt Uploaded", "icon": "cloud_upload", "waitingText": ""},
+        {
+            **_pending,
+            "name": "AI Extraction",
+            "icon": "troubleshoot",
+            "waitingText": "Awaiting receipt upload...",
+        },
+        {
+            **_pending,
+            "name": "Policy Check",
+            "icon": "rule",
+            "waitingText": "Awaiting extraction data...",
+        },
+        {
+            **_pending,
+            "name": "Final Decision",
+            "icon": "verified",
+            "waitingText": "Awaiting policy check...",
+        },
     ]
 
     claims = await fetchClaimsForTable()
@@ -55,50 +74,9 @@ async def chatPage(request: Request):
             "claims": claims,
             "sessionTotal": f"SGD {sessionTotal:.2f}",
             "itemCount": len(claims),
-        },
-    )
-
-
-@router.get("/dashboard")
-async def dashboardPage(request: Request):
-    """Render the Approver Dashboard page."""
-    sessionIds = getSessionIds(request)
-    return templates.TemplateResponse(
-        request,
-        "dashboard.html",
-        context={
-            "activePage": "dashboard",
-            "threadId": sessionIds["threadId"],
-            "claimId": sessionIds["claimId"],
-        },
-    )
-
-
-@router.get("/audit")
-async def auditPage(request: Request):
-    """Render the Audit & Transparency Log page."""
-    sessionIds = getSessionIds(request)
-    return templates.TemplateResponse(
-        request,
-        "audit.html",
-        context={
-            "activePage": "audit",
-            "threadId": sessionIds["threadId"],
-            "claimId": sessionIds["claimId"],
-        },
-    )
-
-
-@router.get("/review/{claimId}")
-async def reviewPage(request: Request, claimId: str):
-    """Render the Claim Review page for a specific claim."""
-    sessionIds = getSessionIds(request)
-    return templates.TemplateResponse(
-        request,
-        "review.html",
-        context={
-            "activePage": "review",
-            "claimId": claimId,
-            "threadId": sessionIds["threadId"],
+            "userRole": currentUser["role"],
+            "displayName": currentUser["displayName"],
+            "employeeId": currentUser["employeeId"],
+            "username": currentUser["username"],
         },
     )
