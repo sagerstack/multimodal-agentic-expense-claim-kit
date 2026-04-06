@@ -26,10 +26,46 @@ _REJECTION_REASONS = {
 }
 
 
+async def _fetchAgentFindingsFromAuditLog(claimId: int) -> dict:
+    """Fallback: reconstruct agent findings from audit_log when claims columns are NULL.
+
+    Some claims were processed before the advisor agent began writing compliance_findings
+    and fraud_findings directly to the claims table. For those claims, the audit_log
+    contains the agent output as JSON in new_value.
+    """
+    findings: dict = {}
+    async with getAsyncSession() as session:
+        result = await session.execute(
+            select(AuditLog.action, AuditLog.newValue)
+            .where(
+                AuditLog.claimId == claimId,
+                AuditLog.action.in_(["compliance_check", "fraud_check", "advisor_decision"]),
+            )
+            .order_by(AuditLog.timestamp.asc())
+        )
+        rows = result.all()
+
+    for action, newValue in rows:
+        try:
+            data = json.loads(newValue) if newValue else {}
+        except Exception:
+            data = {}
+        if action == "compliance_check" and data:
+            findings["compliance_findings"] = data
+        elif action == "fraud_check" and data:
+            findings["fraud_findings"] = data
+        elif action == "advisor_decision" and data:
+            findings["advisor_decision"] = data.get("decision")
+
+    return findings
+
+
 async def _fetchClaimDetail(claimId: int) -> dict | None:
     """Fetch claim with receipt and intake_findings via raw SQL.
 
     ORM model lacks intake_findings column, so raw SQL is required.
+    Falls back to audit_log when compliance_findings / fraud_findings are NULL
+    (pre-fix claims processed before the advisor wrote to the claims table).
     """
     async with getAsyncSession() as session:
         result = await session.execute(
@@ -59,7 +95,19 @@ async def _fetchClaimDetail(claimId: int) -> dict | None:
     if row is None:
         return None
 
-    return dict(row)
+    rowDict = dict(row)
+
+    # If the advisor never wrote findings to the claims table, reconstruct from audit_log
+    if rowDict.get("compliance_findings") is None or rowDict.get("fraud_findings") is None:
+        fallback = await _fetchAgentFindingsFromAuditLog(claimId)
+        if fallback.get("compliance_findings") and rowDict.get("compliance_findings") is None:
+            rowDict["compliance_findings"] = fallback["compliance_findings"]
+        if fallback.get("fraud_findings") and rowDict.get("fraud_findings") is None:
+            rowDict["fraud_findings"] = fallback["fraud_findings"]
+        if fallback.get("advisor_decision") and rowDict.get("advisor_decision") is None:
+            rowDict["advisor_decision"] = fallback["advisor_decision"]
+
+    return rowDict
 
 
 async def _fetchAiInsight(employeeId: str) -> dict | None:
