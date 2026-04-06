@@ -10,6 +10,7 @@
     hx-get="/api/audit/{{ c.id }}/timeline"
     hx-target="#timeline-detail"
     hx-swap="innerHTML"
+    hx-trigger="click"
     hx-indicator="#timeline-loading"
     @click="selectedClaimId = {{ c.id }}">
     <div class="flex justify-between items-start mb-3">
