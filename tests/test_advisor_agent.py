@@ -260,3 +260,99 @@ async def testAdvisorMessageHygiene():
     assert len(result["messages"]) == 1
     assert isinstance(result["messages"][0], AIMessage)
     assert "Advisor Decision" in result["messages"][0].content
+
+
+# ---------------------------------------------------------------------------
+# BUG-019: advisor error recovery tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def testAdvisorNodeSilentFailureRecovery():
+    """BUG-019: unhandled exception in agent.ainvoke must NOT leave claim in pending.
+
+    advisorNode must catch the exception, escalate the claim to 'escalated',
+    write an advisor_decision audit entry with reason 'advisor_error', and
+    return a valid state update instead of propagating the exception.
+    """
+    state = makeState()
+
+    mockAgent = AsyncMock()
+    mockAgent.ainvoke = AsyncMock(side_effect=RuntimeError("Unexpected network timeout"))
+
+    with patch(
+        "agentic_claims.agents.advisor.node._getAdvisorAgent",
+        return_value=mockAgent,
+    ), patch(
+        "agentic_claims.agents.advisor.node.mcpCallTool",
+        new_callable=AsyncMock,
+        return_value={"ok": True},
+    ) as mockMcp:
+        from agentic_claims.agents.advisor.node import advisorNode
+
+        result = await advisorNode(state)
+
+    # Must return a valid state update — not raise
+    assert result["advisorDecision"] == "escalate_to_reviewer"
+    assert result["status"] == "escalated"
+    assert len(result["messages"]) == 1
+
+    # Must still attempt to persist status change (updateClaimStatus call)
+    mcpCalls = mockMcp.call_args_list
+    toolNames = [c.kwargs["toolName"] for c in mcpCalls]
+    assert "updateClaimStatus" in toolNames
+
+
+@pytest.mark.asyncio
+async def testAdvisorNodeErrorWritesAuditLog():
+    """BUG-019: advisor error recovery writes an advisor_decision audit log entry."""
+    state = makeState({"dbClaimId": 77})
+
+    mockAgent = AsyncMock()
+    mockAgent.ainvoke = AsyncMock(side_effect=ValueError("LLM response malformed"))
+
+    with patch(
+        "agentic_claims.agents.advisor.node._getAdvisorAgent",
+        return_value=mockAgent,
+    ), patch(
+        "agentic_claims.agents.advisor.node.mcpCallTool",
+        new_callable=AsyncMock,
+        return_value={"ok": True},
+    ) as mockMcp:
+        from agentic_claims.agents.advisor.node import advisorNode
+
+        await advisorNode(state)
+
+    mcpCalls = mockMcp.call_args_list
+    toolNames = [c.kwargs["toolName"] for c in mcpCalls]
+    # insertAuditLog must be called with advisor_decision action
+    assert "insertAuditLog" in toolNames
+    auditCall = next(c for c in mcpCalls if c.kwargs["toolName"] == "insertAuditLog")
+    assert auditCall.kwargs["arguments"]["action"] == "advisor_decision"
+    auditPayload = json.loads(auditCall.kwargs["arguments"]["newValue"])
+    assert auditPayload.get("decision") == "escalate_to_reviewer"
+
+
+@pytest.mark.asyncio
+async def testAdvisorNodeErrorWithNoDbClaimIdDoesNotCallMcp():
+    """BUG-019: if dbClaimId is missing, advisor error recovery skips MCP calls gracefully."""
+    state = makeState({"dbClaimId": None})
+
+    mockAgent = AsyncMock()
+    mockAgent.ainvoke = AsyncMock(side_effect=RuntimeError("timeout"))
+
+    with patch(
+        "agentic_claims.agents.advisor.node._getAdvisorAgent",
+        return_value=mockAgent,
+    ), patch(
+        "agentic_claims.agents.advisor.node.mcpCallTool",
+        new_callable=AsyncMock,
+        return_value={"ok": True},
+    ) as mockMcp:
+        from agentic_claims.agents.advisor.node import advisorNode
+
+        result = await advisorNode(state)
+
+    # Valid state update, no MCP calls (dbClaimId is None)
+    assert result["status"] == "escalated"
+    assert mockMcp.call_count == 0

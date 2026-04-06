@@ -137,6 +137,80 @@ def _extractAdvisorDecision(messages: list) -> str:
 # ---------------------------------------------------------------------------
 
 
+async def _advisorErrorFallback(
+    claimId: str,
+    dbClaimId: int | None,
+    settings,
+    errorStr: str,
+    complianceFindings: dict,
+    fraudFindings: dict,
+) -> dict:
+    """Safe fallback when advisorNode fails unexpectedly.
+
+    Escalates the claim to "escalated" with reason "advisor_error" so it is
+    never silently left in "pending". Writes audit_log and updateClaimStatus
+    via DB MCP (non-fatal if those calls also fail).
+
+    Returns a valid partial state update.
+    """
+    logger.error(
+        "advisorNode failed — applying error fallback (escalate_to_reviewer)",
+        extra={"claimId": claimId, "error": errorStr},
+    )
+
+    if dbClaimId is not None:
+        try:
+            auditValue = json.dumps({
+                "decision": "escalate_to_reviewer",
+                "reason": "advisor_error",
+                "error": errorStr,
+                "complianceVerdict": complianceFindings.get("verdict"),
+                "fraudVerdict": fraudFindings.get("verdict"),
+            })
+            await mcpCallTool(
+                serverUrl=settings.db_mcp_url,
+                toolName="insertAuditLog",
+                arguments={
+                    "claimId": dbClaimId,
+                    "action": "advisor_decision",
+                    "newValue": auditValue,
+                    "actor": "advisor_agent",
+                    "oldValue": "",
+                },
+            )
+        except Exception as auditErr:
+            logger.warning(
+                "Error fallback: failed to write advisor audit log",
+                extra={"claimId": claimId, "error": str(auditErr)},
+            )
+
+        try:
+            await mcpCallTool(
+                serverUrl=settings.db_mcp_url,
+                toolName="updateClaimStatus",
+                arguments={
+                    "claimId": dbClaimId,
+                    "newStatus": "escalated",
+                    "actor": "advisor_agent",
+                    "complianceFindings": complianceFindings,
+                    "fraudFindings": fraudFindings,
+                    "advisorDecision": "escalate_to_reviewer",
+                    "approvedBy": "",
+                },
+            )
+        except Exception as updateErr:
+            logger.warning(
+                "Error fallback: failed to update claim status",
+                extra={"claimId": claimId, "error": str(updateErr)},
+            )
+
+    return {
+        "messages": [AIMessage(content="**Advisor Decision**: ESCALATED FOR REVIEW\n\nAdvisor encountered an error and escalated the claim for manual review.")],
+        "advisorDecision": "escalate_to_reviewer",
+        "status": "escalated",
+    }
+
+
 async def advisorNode(state: ClaimState) -> dict:
     """Make the final claim routing decision and take action.
 
@@ -238,10 +312,29 @@ async def advisorNode(state: ClaimState) -> dict:
                 "Primary LLM returned 402 in advisorNode — falling back",
                 extra={"error": errorStr},
             )
-            fallbackAgent = _getAdvisorAgent(useFallback=True)
-            result = await fallbackAgent.ainvoke(agentInput)
+            try:
+                fallbackAgent = _getAdvisorAgent(useFallback=True)
+                result = await fallbackAgent.ainvoke(agentInput)
+            except Exception as fallbackErr:
+                return await _advisorErrorFallback(
+                    claimId=claimId,
+                    dbClaimId=dbClaimId,
+                    settings=settings,
+                    errorStr=str(fallbackErr),
+                    complianceFindings=complianceFindings,
+                    fraudFindings=fraudFindings,
+                )
         else:
-            raise
+            # BUG-019: any unexpected exception (network timeout, JSON parse failure, etc.)
+            # must not leave the claim stuck in "pending". Escalate with reason "advisor_error".
+            return await _advisorErrorFallback(
+                claimId=claimId,
+                dbClaimId=dbClaimId,
+                settings=settings,
+                errorStr=errorStr,
+                complianceFindings=complianceFindings,
+                fraudFindings=fraudFindings,
+            )
 
     # ------------------------------------------------------------------
     # 4. Extract decision from agent output
