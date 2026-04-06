@@ -72,154 +72,237 @@
   </div>
   {% else %}
 
-  <!-- Main Layout: Split view -->
-  <div class="grid grid-cols-12 gap-6">
+  <!-- Receipt Section: Image + Extracted Data side by side -->
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
 
-    <!-- Left: Receipt Image + Extracted Data (col-span-8) -->
-    <section class="col-span-12 xl:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-
-      <!-- Receipt Image with Zoom -->
-      <div class="bg-surface-container-low rounded-2xl overflow-hidden shadow-2xl relative h-[600px] flex flex-col"
-           x-data="{ scale: 1 }">
-        <div class="p-4 flex justify-between items-center bg-surface-container-high/50 flex-shrink-0">
-          <span class="text-xs font-bold text-on-surface-variant flex items-center gap-2 uppercase tracking-widest">
-            <span class="material-symbols-outlined text-sm">image</span>
-            Original Receipt
-          </span>
-          <div class="flex gap-1.5">
-            <button @click="scale = Math.max(scale - 0.25, 0.5)"
-                    class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors"
-                    title="Zoom out">
-              <span class="material-symbols-outlined text-lg">zoom_out</span>
-            </button>
-            <button @click="scale = 1"
-                    class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors text-xs font-bold px-3"
-                    title="Reset zoom">1×</button>
-            <button @click="scale = Math.min(scale + 0.25, 3)"
-                    class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors"
-                    title="Zoom in">
-              <span class="material-symbols-outlined text-lg">zoom_in</span>
-            </button>
-          </div>
-        </div>
-        <div class="flex-1 overflow-auto bg-[#000000] p-8 flex justify-center items-start">
-          {% if receipt and receipt.imagePath %}
-            <img src="/api/review/{{ claim.id }}/receipt-image"
-                 alt="Receipt"
-                 :style="'transform: scale(' + scale + '); transform-origin: top center; transition: transform 0.15s ease;'"
-                 class="max-w-full rounded-lg shadow-lg" />
-          {% else %}
-            <div class="w-64 h-80 rounded-lg border border-outline-variant/20 flex flex-col items-center justify-center gap-4 bg-surface-container-lowest/20">
-              <span class="material-symbols-outlined text-on-surface-variant/30 text-6xl">receipt_long</span>
-              <p class="text-on-surface-variant/40 text-xs text-center px-4">No receipt image available.</p>
-            </div>
-          {% endif %}
+    <!-- Receipt Image with Zoom -->
+    <div class="bg-surface-container-low rounded-2xl overflow-hidden shadow-2xl relative h-[600px] flex flex-col"
+         x-data="{ scale: 1 }">
+      <div class="p-4 flex justify-between items-center bg-surface-container-high/50 flex-shrink-0">
+        <span class="text-xs font-bold text-on-surface-variant flex items-center gap-2 uppercase tracking-widest">
+          <span class="material-symbols-outlined text-sm">image</span>
+          Original Receipt
+        </span>
+        <div class="flex gap-1.5">
+          <button @click="scale = Math.max(scale - 0.25, 0.5)"
+                  class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors"
+                  title="Zoom out">
+            <span class="material-symbols-outlined text-lg">zoom_out</span>
+          </button>
+          <button @click="scale = 1"
+                  class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors text-xs font-bold px-3"
+                  title="Reset zoom">1x</button>
+          <button @click="scale = Math.min(scale + 0.25, 3)"
+                  class="p-1.5 bg-surface-container-highest rounded-lg text-on-surface hover:text-secondary transition-colors"
+                  title="Zoom in">
+            <span class="material-symbols-outlined text-lg">zoom_in</span>
+          </button>
         </div>
       </div>
+      <div class="flex-1 overflow-auto bg-[#000000] p-8 flex justify-center items-start">
+        {% if receipt and receipt.imagePath %}
+          <img src="/api/review/{{ claim.id }}/receipt-image"
+               alt="Receipt"
+               :style="'transform: scale(' + scale + '); transform-origin: top center; transition: transform 0.15s ease;'"
+               class="max-w-full rounded-lg shadow-lg" />
+        {% else %}
+          <div class="w-64 h-80 rounded-lg border border-outline-variant/20 flex flex-col items-center justify-center gap-4 bg-surface-container-lowest/20">
+            <span class="material-symbols-outlined text-on-surface-variant/30 text-6xl">receipt_long</span>
+            <p class="text-on-surface-variant/40 text-xs text-center px-4">No receipt image available.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
 
-      <!-- Extracted Entity Data -->
-      <div class="bg-surface-container-low rounded-2xl p-6 shadow-2xl h-[600px] flex flex-col border-t border-outline-variant/10">
-        <div class="flex justify-between items-center mb-6">
-          <span class="text-xs font-bold text-on-surface-variant flex items-center gap-2 uppercase tracking-widest">
-            <span class="material-symbols-outlined text-sm">data_object</span>
-            Extracted Entity Data
-          </span>
-          <div class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(98,250,227,0.6)]"></div>
+    <!-- Extracted Entity Data -->
+    <div class="bg-surface-container-low rounded-2xl p-6 shadow-2xl h-[600px] flex flex-col border-t border-outline-variant/10">
+      <div class="flex justify-between items-center mb-6">
+        <span class="text-xs font-bold text-on-surface-variant flex items-center gap-2 uppercase tracking-widest">
+          <span class="material-symbols-outlined text-sm">data_object</span>
+          Extracted Entity Data
+        </span>
+        <div class="w-2 h-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(98,250,227,0.6)]"></div>
+      </div>
+      <div class="space-y-4 flex-1 overflow-auto pr-1">
+        <!-- Merchant -->
+        <div class="space-y-1.5">
+          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs">store</span>Vendor Name
+          </label>
+          <div class="bg-surface-container-highest p-3 rounded-xl">
+            <span class="font-headline font-bold text-on-surface">{{ receipt.merchant if receipt else "---" }}</span>
+          </div>
         </div>
-        <div class="space-y-4 flex-1 overflow-auto pr-1">
-          <!-- Merchant -->
-          <div class="space-y-1.5">
-            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
-              <span class="material-symbols-outlined text-xs">store</span>Vendor Name
-            </label>
-            <div class="bg-surface-container-highest p-3 rounded-xl">
-              <span class="font-headline font-bold text-on-surface">{{ receipt.merchant if receipt else "—" }}</span>
-            </div>
+        <!-- Date -->
+        <div class="space-y-1.5">
+          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs">calendar_today</span>Date of Transaction
+          </label>
+          <div class="bg-surface-container-highest p-3 rounded-xl">
+            <span class="font-headline font-bold text-on-surface">{{ receipt.date if receipt and receipt.date else "---" }}</span>
           </div>
-          <!-- Date -->
-          <div class="space-y-1.5">
-            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
-              <span class="material-symbols-outlined text-xs">calendar_today</span>Date of Transaction
-            </label>
-            <div class="bg-surface-container-highest p-3 rounded-xl">
-              <span class="font-headline font-bold text-on-surface">{{ receipt.date if receipt and receipt.date else "—" }}</span>
-            </div>
-          </div>
-          <!-- Amount -->
-          <div class="space-y-1.5">
-            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
-              <span class="material-symbols-outlined text-xs">payments</span>Amount
-            </label>
-            <div class="bg-surface-container-highest p-3 rounded-xl">
-              {% if receipt %}
-                <span class="font-headline font-bold text-on-surface text-xl">{{ receipt.currency }} {{ "%.2f"|format(receipt.totalAmount) }}</span>
-                {% if receipt.originalCurrency and receipt.originalCurrency != receipt.currency %}
-                  <span class="text-xs text-on-surface-variant ml-2">({{ receipt.originalCurrency }} {{ "%.2f"|format(receipt.originalAmount) }})</span>
-                {% endif %}
-              {% else %}
-                <span class="font-headline font-bold text-on-surface text-xl">—</span>
+        </div>
+        <!-- Amount -->
+        <div class="space-y-1.5">
+          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs">payments</span>Amount
+          </label>
+          <div class="bg-surface-container-highest p-3 rounded-xl">
+            {% if receipt %}
+              <span class="font-headline font-bold text-on-surface text-xl">{{ receipt.currency }} {{ "%.2f"|format(receipt.totalAmount) }}</span>
+              {% if receipt.originalCurrency and receipt.originalCurrency != receipt.currency %}
+                <span class="text-xs text-on-surface-variant ml-2">({{ receipt.originalCurrency }} {{ "%.2f"|format(receipt.originalAmount) }})</span>
               {% endif %}
-            </div>
-          </div>
-          <!-- Category -->
-          <div class="space-y-1.5">
-            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
-              <span class="material-symbols-outlined text-xs">category</span>Category
-            </label>
-            <div class="bg-surface-container-highest p-3 rounded-xl flex items-center gap-2">
-              <span class="material-symbols-outlined text-sm text-primary">restaurant</span>
-              <span class="font-headline font-bold text-on-surface">{{ receipt.category if receipt else "General" }}</span>
-            </div>
-          </div>
-          <!-- Submitter -->
-          <div class="space-y-1.5">
-            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
-              <span class="material-symbols-outlined text-xs">person</span>Submitter
-            </label>
-            <div class="bg-surface-container-highest p-3 rounded-xl flex items-center gap-3">
-              <div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
-                <span class="material-symbols-outlined text-primary text-sm">person</span>
-              </div>
-              <span class="font-headline font-bold text-on-surface text-sm">{{ claim.employeeName }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Right: Intelligence Panel -->
-    <section class="col-span-12 xl:col-span-4 space-y-6">
-
-      <!-- Flag Reason Card (Intake) -->
-      <div class="bg-surface-container-highest rounded-2xl p-6 border-t border-error/30 relative overflow-hidden shadow-2xl">
-        <div class="absolute top-0 right-0 p-4">
-          <span class="material-symbols-outlined text-error/20 text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">security</span>
-        </div>
-        <div class="relative z-10">
-          <h4 class="text-error font-headline font-bold text-lg mb-4 flex items-center gap-2">
-            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">report</span>
-            Flag Reason
-          </h4>
-          <div class="p-4 bg-error-container/10 rounded-xl border border-error/20">
-            {% if flagReason %}
-              <p class="text-on-surface text-sm font-medium leading-relaxed">{{ flagReason.explanation }}</p>
-              <div class="mt-3 flex items-center gap-2">
-                <span class="text-xs text-error/80 font-bold uppercase tracking-tighter">
-                  AI Confidence: {{ (flagReason.confidence * 100)|int }}%
-                </span>
-                <div class="h-1 flex-1 bg-error/20 rounded-full overflow-hidden">
-                  <div class="h-full bg-error rounded-full" style="width: {{ (flagReason.confidence * 100)|int }}%"></div>
-                </div>
-              </div>
             {% else %}
-              <p class="text-on-surface-variant text-sm italic">No policy violations detected during AI intake.</p>
+              <span class="font-headline font-bold text-on-surface text-xl">---</span>
             {% endif %}
           </div>
         </div>
+        <!-- Category -->
+        <div class="space-y-1.5">
+          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs">category</span>Category
+          </label>
+          <div class="bg-surface-container-highest p-3 rounded-xl flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm text-primary">restaurant</span>
+            <span class="font-headline font-bold text-on-surface">{{ receipt.category if receipt else "General" }}</span>
+          </div>
+        </div>
+        <!-- Submitter -->
+        <div class="space-y-1.5">
+          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs">person</span>Submitter
+          </label>
+          <div class="bg-surface-container-highest p-3 rounded-xl flex items-center gap-3">
+            <div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+              <span class="material-symbols-outlined text-primary text-sm">person</span>
+            </div>
+            <span class="font-headline font-bold text-on-surface text-sm">{{ claim.employeeName }}</span>
+          </div>
+        </div>
       </div>
+    </div>
+  </section>
 
-      <!-- Compliance Card -->
-      {% if complianceFindings %}
+  <!-- Intelligence Cards: 2-column grid below receipt -->
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- Row 1, Col 1: Intake Agent Findings -->
+    <div class="bg-surface-container-highest rounded-2xl p-6 border-t border-secondary/30 relative overflow-hidden shadow-2xl">
+      <div class="absolute top-0 right-0 p-4">
+        <span class="material-symbols-outlined text-secondary/20 text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">data_object</span>
+      </div>
+      <div class="relative z-10">
+        <h4 class="text-secondary font-headline font-bold text-lg mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">data_object</span>
+          Intake Agent Findings
+        </h4>
+        {% if intakeAgentFindings %}
+          <div class="p-4 bg-secondary-container/10 rounded-xl border border-secondary/20">
+            <!-- Average Confidence -->
+            <div class="flex items-center gap-4 mb-4">
+              <div class="text-center">
+                <p class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest mb-1">Avg Confidence</p>
+                {% set avgPct = (intakeAgentFindings.avgConfidence * 100)|int %}
+                <span class="text-3xl font-headline font-extrabold
+                  {% if intakeAgentFindings.avgConfidence >= 0.85 %}text-green-400
+                  {% elif intakeAgentFindings.avgConfidence >= 0.7 %}text-yellow-400
+                  {% else %}text-error{% endif %}">{{ avgPct }}%</span>
+              </div>
+              <div class="flex-1">
+                <div class="h-2 bg-surface-container-low rounded-full overflow-hidden">
+                  <div class="h-full rounded-full
+                    {% if intakeAgentFindings.avgConfidence >= 0.85 %}bg-green-400
+                    {% elif intakeAgentFindings.avgConfidence >= 0.7 %}bg-yellow-400
+                    {% else %}bg-error{% endif %}" style="width: {{ avgPct }}%"></div>
+                </div>
+              </div>
+            </div>
+            <!-- Lowest Confidence Field -->
+            <div class="p-3 bg-surface-container-low rounded-lg border border-outline-variant/10 mb-4">
+              <p class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest mb-1">Lowest Confidence</p>
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-bold text-on-surface">{{ intakeAgentFindings.lowestField }}</span>
+                {% set lowPct = (intakeAgentFindings.lowestScore * 100)|int %}
+                <span class="text-sm font-bold
+                  {% if intakeAgentFindings.lowestScore >= 0.85 %}text-green-400
+                  {% elif intakeAgentFindings.lowestScore >= 0.7 %}text-yellow-400
+                  {% else %}text-error{% endif %}">{{ lowPct }}%</span>
+              </div>
+            </div>
+            <!-- Per-field Scores -->
+            <div class="space-y-2">
+              <p class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Field Scores</p>
+              {% for field, score in intakeAgentFindings.scores.items() %}
+                {% set fieldPct = (score * 100)|int %}
+                <div class="flex items-center gap-3">
+                  <span class="text-xs text-on-surface-variant w-24 truncate" title="{{ field }}">{{ field }}</span>
+                  <div class="flex-1 h-1.5 bg-surface-container-low rounded-full overflow-hidden">
+                    <div class="h-full rounded-full
+                      {% if score >= 0.85 %}bg-green-400
+                      {% elif score >= 0.7 %}bg-yellow-400
+                      {% else %}bg-error{% endif %}" style="width: {{ fieldPct }}%"></div>
+                  </div>
+                  <span class="text-xs font-bold text-on-surface-variant w-10 text-right">{{ fieldPct }}%</span>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% else %}
+          <div class="p-4 bg-surface-container-low rounded-xl text-center">
+            <p class="text-on-surface-variant/60 text-sm">Extraction confidence data not available.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Row 1, Col 2: Conversational Audit -->
+    <div class="bg-surface-container-highest rounded-2xl p-6 border-t border-primary/30 relative overflow-hidden shadow-2xl">
+      <div class="absolute top-0 right-0 p-4">
+        <span class="material-symbols-outlined text-primary/20 text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">forum</span>
+      </div>
+      <div class="relative z-10">
+        <h4 class="text-primary font-headline font-bold text-lg mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">forum</span>
+          Conversational Audit
+        </h4>
+        {% if conversationalAudit %}
+          <div class="p-4 bg-primary-container/10 rounded-xl border border-primary/20 space-y-3">
+            {% for entry in conversationalAudit %}
+              <div class="flex items-start gap-2">
+                {% if entry.type == "violation" %}
+                  <span class="material-symbols-outlined text-yellow-400 text-lg flex-shrink-0 mt-0.5" style="font-variation-settings: 'FILL' 1;">warning</span>
+                {% elif entry.type == "remark" %}
+                  <span class="material-symbols-outlined text-primary text-lg flex-shrink-0 mt-0.5" style="font-variation-settings: 'FILL' 1;">info</span>
+                {% elif entry.type == "correction" %}
+                  <span class="material-symbols-outlined text-tertiary text-lg flex-shrink-0 mt-0.5">edit</span>
+                {% else %}
+                  <span class="material-symbols-outlined text-on-surface-variant text-lg flex-shrink-0 mt-0.5">chat_bubble</span>
+                {% endif %}
+                <div class="flex-1">
+                  <p class="text-sm text-on-surface leading-relaxed">{{ entry.text }}</p>
+                  {% if entry.children %}
+                    {% for child in entry.children %}
+                      <div class="mt-1.5 ml-2 flex items-start gap-1.5">
+                        <span class="text-on-surface-variant/40 text-xs font-mono leading-none mt-1">&#x2514;</span>
+                        <p class="text-xs text-on-surface-variant/80 italic leading-relaxed">{{ child.text }}</p>
+                      </div>
+                    {% endfor %}
+                  {% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="p-4 bg-surface-container-low rounded-xl text-center">
+            <p class="text-on-surface-variant/60 text-sm">No policy observations during intake.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Row 2, Col 1: Compliance Check -->
+    {% if complianceFindings %}
       {% set cverd = complianceFindings.verdict | default("") %}
       {% set cFail = cverd == 'fail' %}
       <div class="bg-surface-container-highest rounded-2xl p-6 border-t {% if cFail %}border-error/30{% else %}border-secondary/30{% endif %} relative overflow-hidden shadow-2xl">
@@ -229,7 +312,7 @@
         <div class="relative z-10">
           <h4 class="{% if cFail %}text-error{% else %}text-secondary{% endif %} font-headline font-bold text-lg mb-4 flex items-center gap-2">
             <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">{% if cFail %}gpp_bad{% else %}verified_user{% endif %}</span>
-            Compliance
+            Compliance Check
           </h4>
           <div class="p-4 {% if cFail %}bg-error-container/10 rounded-xl border border-error/20{% else %}bg-secondary-container/10 rounded-xl border border-secondary/20{% endif %}">
             {% set violations = complianceFindings.violations | default([]) %}
@@ -239,7 +322,7 @@
                   <div class="p-2 {% if cFail %}bg-error/5 rounded-lg border border-error/10{% else %}bg-secondary/5 rounded-lg border border-secondary/10{% endif %} text-xs">
                     <span class="font-bold {% if cFail %}text-error{% else %}text-secondary{% endif %}">{{ v.field | default("Field") }}</span>
                     {% if v.value and v.limit %}
-                      <span class="text-on-surface-variant"> — {{ v.value }} / limit {{ v.limit }}</span>
+                      <span class="text-on-surface-variant"> --- {{ v.value }} / limit {{ v.limit }}</span>
                     {% endif %}
                     {% if v.severity %}
                       <span class="ml-1 text-[9px] uppercase font-bold text-on-surface-variant/60">({{ v.severity }})</span>
@@ -270,22 +353,38 @@
           </div>
         </div>
       </div>
-      {% endif %}
+    {% else %}
+      <!-- Compliance: Pending Review -->
+      <div class="bg-surface-container-highest rounded-2xl p-6 border-t border-outline-variant/20 shadow-2xl">
+        <h4 class="text-on-surface-variant font-headline font-bold text-lg mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined">hourglass_empty</span>
+          Compliance Check
+        </h4>
+        <div class="p-4 bg-surface-container-low rounded-xl text-center">
+          <span class="text-xs font-bold text-on-surface-variant/60 uppercase tracking-widest">Pending Review</span>
+          <p class="text-on-surface-variant/40 text-xs mt-1">Refresh page to check status</p>
+        </div>
+      </div>
+    {% endif %}
 
-      <!-- Fraud Card -->
-      {% if fraudFindings %}
+    <!-- Row 2, Col 2: Fraud Analysis -->
+    {% if fraudFindings %}
       {% set fverd = fraudFindings.verdict | default("") %}
       {% set fFail = fverd in ['duplicate', 'suspicious'] %}
-      <div class="bg-surface-container-highest rounded-2xl p-6 border-t {% if fFail %}border-error/30{% else %}border-secondary/30{% endif %} relative overflow-hidden shadow-2xl">
+      {% set fLegit = fverd == 'legit' %}
+      <div class="bg-surface-container-highest rounded-2xl p-6 border-t {% if fFail %}border-error/30{% elif fLegit %}border-green-500/30{% else %}border-secondary/30{% endif %} relative overflow-hidden shadow-2xl">
         <div class="absolute top-0 right-0 p-4">
-          <span class="material-symbols-outlined {% if fFail %}text-error/20{% else %}text-secondary/20{% endif %} text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">shield</span>
+          <span class="material-symbols-outlined {% if fFail %}text-error/20{% elif fLegit %}text-green-500/20{% else %}text-secondary/20{% endif %} text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">shield</span>
         </div>
         <div class="relative z-10">
-          <h4 class="{% if fFail %}text-error{% else %}text-secondary{% endif %} font-headline font-bold text-lg mb-4 flex items-center gap-2">
-            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">{% if fverd == 'duplicate' %}content_copy{% elif fverd == 'suspicious' %}warning_amber{% else %}security{% endif %}</span>
-            Fraud Check
+          <h4 class="{% if fFail %}text-error{% elif fLegit %}text-green-400{% else %}text-secondary{% endif %} font-headline font-bold text-lg mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">{% if fverd == 'duplicate' %}content_copy{% elif fverd == 'suspicious' %}warning_amber{% elif fLegit %}verified_user{% else %}security{% endif %}</span>
+            Fraud Analysis
+            {% if fLegit %}
+              <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 uppercase tracking-widest ml-auto">LEGIT</span>
+            {% endif %}
           </h4>
-          <div class="p-4 {% if fFail %}bg-error-container/10 rounded-xl border border-error/20{% else %}bg-secondary-container/10 rounded-xl border border-secondary/20{% endif %}">
+          <div class="p-4 {% if fFail %}bg-error-container/10 rounded-xl border border-error/20{% elif fLegit %}bg-green-500/5 rounded-xl border border-green-500/20{% else %}bg-secondary-container/10 rounded-xl border border-secondary/20{% endif %}">
             {% set flags = fraudFindings.flags | default([]) %}
             {% if flags %}
               <div class="space-y-2 mb-3">
@@ -293,7 +392,7 @@
                   <div class="p-2 bg-error/5 rounded-lg border border-error/10 text-xs">
                     <span class="font-bold text-error">{{ flag.type | default("Flag") | replace("_", " ") | title }}</span>
                     {% if flag.description %}
-                      <span class="text-on-surface-variant"> — {{ flag.description }}</span>
+                      <span class="text-on-surface-variant"> --- {{ flag.description }}</span>
                     {% endif %}
                     {% if flag.confidence is number %}
                       <span class="ml-1 text-[9px] text-on-surface-variant/60">({{ (flag.confidence * 100)|int }}%)</span>
@@ -309,93 +408,33 @@
               <p class="text-xs text-error mb-2">Duplicate matches: {{ dupes | join(", ") }}</p>
             {% endif %}
             {% if fraudFindings.summary %}
-              <p class="text-sm font-medium leading-relaxed {% if fFail %}text-error/80{% else %}text-secondary/80{% endif %}">{{ fraudFindings.summary }}</p>
+              <p class="text-sm font-medium leading-relaxed {% if fFail %}text-error/80{% elif fLegit %}text-green-300{% else %}text-secondary/80{% endif %}">{{ fraudFindings.summary }}</p>
             {% elif not flags %}
               <p class="text-on-surface text-sm font-medium leading-relaxed">No fraud indicators detected.</p>
             {% endif %}
           </div>
         </div>
       </div>
-      {% endif %}
-
-      <!-- Reviewer Decision Form (escalated claims only) -->
-      {% if showActions %}
-      <div class="bg-surface-container-low rounded-2xl p-6 shadow-xl border border-outline-variant/10">
-        <h4 class="text-on-surface font-headline font-bold mb-4 flex items-center gap-2">
-          <span class="material-symbols-outlined text-secondary">notes</span>
-          Reviewer Decision
+    {% else %}
+      <!-- Fraud: Pending Review -->
+      <div class="bg-surface-container-highest rounded-2xl p-6 border-t border-outline-variant/20 shadow-2xl">
+        <h4 class="text-on-surface-variant font-headline font-bold text-lg mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined">hourglass_empty</span>
+          Fraud Analysis
         </h4>
-        <form id="decisionForm" class="space-y-4">
-          <input type="hidden" name="action" id="decisionAction" value="">
-          <!-- Reviewer Notes -->
-          <div class="space-y-2">
-            <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Internal Notes</label>
-            <textarea name="reviewerNotes"
-                      class="w-full bg-surface-container-lowest border-none rounded-xl text-on-surface text-sm p-4 focus:ring-2 focus:ring-secondary/50 h-28 placeholder:text-on-surface-variant/30 resize-none"
-                      placeholder="State the reasoning for approval or rejection..."></textarea>
-          </div>
-          <!-- Rejection Reasons -->
-          <div x-show="showRejectOptions" x-cloak class="p-4 bg-surface-container-highest rounded-xl border border-outline-variant/10 space-y-3">
-            <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Rejection Reason (Required)</p>
-            <div class="grid grid-cols-1 gap-2">
-              <label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
-                <input type="radio" name="rejectionReason" value="Duplicate submission"
-                       x-model="rejectionReason"
-                       class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-error">
-                <span class="text-sm text-on-surface-variant group-hover:text-on-surface">Duplicate submission</span>
-              </label>
-              <label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
-                <input type="radio" name="rejectionReason" value="Incomplete receipt details"
-                       x-model="rejectionReason"
-                       class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-error">
-                <span class="text-sm text-on-surface-variant group-hover:text-on-surface">Incomplete receipt details</span>
-              </label>
-              <label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
-                <input type="radio" name="rejectionReason" value="Policy violation"
-                       x-model="rejectionReason"
-                       class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-error">
-                <span class="text-sm text-on-surface-variant group-hover:text-on-surface">Policy violation</span>
-              </label>
-            </div>
-          </div>
-          <!-- Action Buttons -->
-          <div class="flex flex-col gap-3 pt-2">
-            <!-- Reject -->
-            <template x-if="!showRejectOptions">
-              <button type="button"
-                      @click="showRejectOptions = true; rejectionReason = ''"
-                      class="w-full py-4 bg-error-dim hover:bg-error text-white font-headline font-extrabold rounded-xl shadow-lg shadow-error/10 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
-                <span class="material-symbols-outlined">cancel</span>
-                Reject Claim
-              </button>
-            </template>
-            <template x-if="showRejectOptions">
-              <button type="button"
-                      :disabled="!rejectionReason"
-                      @click="if(rejectionReason) submitDecision('reject')"
-                      :class="rejectionReason ? 'bg-error hover:scale-[1.01] cursor-pointer' : 'bg-error/30 cursor-not-allowed'"
-                      class="w-full py-4 text-white font-headline font-extrabold rounded-xl shadow-lg uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95">
-                <span class="material-symbols-outlined">cancel</span>
-                Confirm Rejection
-              </button>
-            </template>
-            <!-- Approve -->
-            <button type="button"
-                    @click="submitDecision('approve')"
-                    class="w-full py-4 bg-gradient-to-r from-secondary to-secondary-dim text-on-secondary-fixed font-headline font-extrabold rounded-xl shadow-lg shadow-secondary/20 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
-              <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-              Approve Claim
-            </button>
-          </div>
-        </form>
+        <div class="p-4 bg-surface-container-low rounded-xl text-center">
+          <span class="text-xs font-bold text-on-surface-variant/60 uppercase tracking-widest">Pending Review</span>
+          <p class="text-on-surface-variant/40 text-xs mt-1">Refresh page to check status</p>
+        </div>
       </div>
-      {% endif %}
+    {% endif %}
 
-      <!-- AI Insight Card -->
+    <!-- Row 3: AI Insight (full width) -->
+    {% if advisorDecision or aiInsight %}
       {% set aApprove = advisorDecision == 'auto_approve' %}
       {% set aEscalate = advisorDecision == 'escalate_to_reviewer' %}
       {% set aReject = advisorDecision and not aApprove and not aEscalate %}
-      <div class="bg-surface-container-highest rounded-2xl p-6 border-t {% if aApprove %}border-secondary/30{% elif aEscalate %}border-tertiary/30{% else %}border-error/30{% endif %} relative overflow-hidden shadow-2xl">
+      <div class="md:col-span-2 bg-surface-container-highest rounded-2xl p-6 border-t {% if aApprove %}border-secondary/30{% elif aEscalate %}border-tertiary/30{% else %}border-error/30{% endif %} relative overflow-hidden shadow-2xl">
         <div class="absolute top-0 right-0 p-4">
           <span class="material-symbols-outlined {% if aApprove %}text-secondary/20{% elif aEscalate %}text-tertiary/20{% else %}text-error/20{% endif %} text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">psychology</span>
         </div>
@@ -423,8 +462,94 @@
           </div>
         </div>
       </div>
-    </section>
-  </div>
+    {% else %}
+      <!-- AI Insight: Pending Review -->
+      <div class="md:col-span-2 bg-surface-container-highest rounded-2xl p-6 border-t border-outline-variant/20 shadow-2xl">
+        <h4 class="text-on-surface-variant font-headline font-bold text-lg mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined">hourglass_empty</span>
+          AI Insight
+        </h4>
+        <div class="p-4 bg-surface-container-low rounded-xl text-center">
+          <span class="text-xs font-bold text-on-surface-variant/60 uppercase tracking-widest">Pending Review</span>
+          <p class="text-on-surface-variant/40 text-xs mt-1">Refresh page to check status</p>
+        </div>
+      </div>
+    {% endif %}
+
+    <!-- Reviewer Decision Form (escalated claims only, full width) -->
+    {% if showActions %}
+    <div class="md:col-span-2 bg-surface-container-low rounded-2xl p-6 shadow-xl border border-outline-variant/10">
+      <h4 class="text-on-surface font-headline font-bold mb-4 flex items-center gap-2">
+        <span class="material-symbols-outlined text-secondary">notes</span>
+        Reviewer Decision
+      </h4>
+      <form id="decisionForm" class="space-y-4">
+        <input type="hidden" name="action" id="decisionAction" value="">
+        <!-- Reviewer Notes -->
+        <div class="space-y-2">
+          <label class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Internal Notes</label>
+          <textarea name="reviewerNotes"
+                    class="w-full bg-surface-container-lowest border-none rounded-xl text-on-surface text-sm p-4 focus:ring-2 focus:ring-secondary/50 h-28 placeholder:text-on-surface-variant/30 resize-none"
+                    placeholder="State the reasoning for approval or rejection..."></textarea>
+        </div>
+        <!-- Rejection Reasons -->
+        <div x-show="showRejectOptions" x-cloak class="p-4 bg-surface-container-highest rounded-xl border border-outline-variant/10 space-y-3">
+          <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Rejection Reason (Required)</p>
+          <div class="grid grid-cols-1 gap-2">
+            <label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
+              <input type="radio" name="rejectionReason" value="Duplicate submission"
+                     x-model="rejectionReason"
+                     class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-error">
+              <span class="text-sm text-on-surface-variant group-hover:text-on-surface">Duplicate submission</span>
+            </label>
+            <label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
+              <input type="radio" name="rejectionReason" value="Incomplete receipt details"
+                     x-model="rejectionReason"
+                     class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-error">
+              <span class="text-sm text-on-surface-variant group-hover:text-on-surface">Incomplete receipt details</span>
+            </label>
+            <label class="flex items-center gap-3 p-2 hover:bg-surface-bright rounded-lg cursor-pointer transition-colors group">
+              <input type="radio" name="rejectionReason" value="Policy violation"
+                     x-model="rejectionReason"
+                     class="w-4 h-4 text-error bg-surface-container border-outline-variant focus:ring-error">
+              <span class="text-sm text-on-surface-variant group-hover:text-on-surface">Policy violation</span>
+            </label>
+          </div>
+        </div>
+        <!-- Action Buttons -->
+        <div class="flex flex-col gap-3 pt-2">
+          <!-- Reject -->
+          <template x-if="!showRejectOptions">
+            <button type="button"
+                    @click="showRejectOptions = true; rejectionReason = ''"
+                    class="w-full py-4 bg-error-dim hover:bg-error text-white font-headline font-extrabold rounded-xl shadow-lg shadow-error/10 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined">cancel</span>
+              Reject Claim
+            </button>
+          </template>
+          <template x-if="showRejectOptions">
+            <button type="button"
+                    :disabled="!rejectionReason"
+                    @click="if(rejectionReason) submitDecision('reject')"
+                    :class="rejectionReason ? 'bg-error hover:scale-[1.01] cursor-pointer' : 'bg-error/30 cursor-not-allowed'"
+                    class="w-full py-4 text-white font-headline font-extrabold rounded-xl shadow-lg uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95">
+              <span class="material-symbols-outlined">cancel</span>
+              Confirm Rejection
+            </button>
+          </template>
+          <!-- Approve -->
+          <button type="button"
+                  @click="submitDecision('approve')"
+                  class="w-full py-4 bg-gradient-to-r from-secondary to-secondary-dim text-on-secondary-fixed font-headline font-extrabold rounded-xl shadow-lg shadow-secondary/20 hover:scale-[1.01] active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+            Approve Claim
+          </button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+
+  </section>
   {% endif %}
 </div>
 {% endblock %}

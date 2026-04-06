@@ -116,7 +116,7 @@ async def _fetchAiInsight(employeeId: str) -> dict | None:
         result = await session.execute(
             select(
                 func.count(Claim.id).label("total"),
-                func.count(Claim.id).filter(Claim.status == "approved").label("approved"),
+                func.count(Claim.id).filter(Claim.status.in_(["ai_approved", "manually_approved"])).label("approved"),
                 User.displayName,
             )
             .outerjoin(User, User.employeeId == Claim.employeeId)
@@ -153,6 +153,68 @@ def _parseFlagReason(intakeFindings: dict | None) -> dict | None:
         "explanation": str(explanation),
         "confidence": float(confidence) if confidence is not None else 0.5,
     }
+
+
+def _parseIntakeAgentFindings(intakeFindings: dict | None) -> dict | None:
+    """Extract confidence scores from intake_findings and compute summary stats."""
+    if not intakeFindings:
+        return None
+    scores = intakeFindings.get("confidenceScores", {})
+    if not scores or not isinstance(scores, dict):
+        return None
+    values = [v for v in scores.values() if isinstance(v, (int, float))]
+    if not values:
+        return None
+    avgConfidence = sum(values) / len(values)
+    lowestField = min(scores, key=lambda k: scores[k] if isinstance(scores[k], (int, float)) else float("inf"))
+    lowestScore = scores[lowestField]
+    return {
+        "avgConfidence": round(avgConfidence, 3),
+        "lowestField": lowestField,
+        "lowestScore": round(float(lowestScore), 3),
+        "scores": scores,
+    }
+
+
+def _parseConversationalAudit(intakeFindings: dict | None) -> list[dict]:
+    """Extract timeline entries from intake_findings for the Conversational Audit card."""
+    if not intakeFindings:
+        return []
+    entries = []
+
+    # Policy violations
+    policyViolation = intakeFindings.get("policyViolation")
+    if policyViolation:
+        violationTexts = [policyViolation] if isinstance(policyViolation, str) else policyViolation
+        for vText in violationTexts:
+            entry = {"type": "violation", "icon": "warning", "text": str(vText), "children": []}
+            # Attach justification as child of the first violation
+            justification = intakeFindings.get("justification")
+            if justification and not entries:
+                entry["children"].append({"type": "justification", "text": str(justification)})
+            entries.append(entry)
+
+    # If justification exists but no violations, add it standalone
+    if not entries:
+        justification = intakeFindings.get("justification")
+        if justification:
+            entries.append({"type": "justification", "icon": "edit", "text": str(justification), "children": []})
+
+    # Remarks / soft cap breaches
+    remarks = intakeFindings.get("remarks")
+    if remarks:
+        remarkTexts = [remarks] if isinstance(remarks, str) else remarks
+        for rText in remarkTexts:
+            entries.append({"type": "remark", "icon": "info", "text": str(rText), "children": []})
+
+    # Field corrections
+    corrections = intakeFindings.get("corrections")
+    if corrections:
+        correctionTexts = [corrections] if isinstance(corrections, str) else corrections
+        for cText in correctionTexts:
+            entries.append({"type": "correction", "icon": "edit", "text": str(cText), "children": []})
+
+    return entries
 
 
 def _parseJsonField(value) -> dict | None:
@@ -237,6 +299,8 @@ async def reviewPage(request: Request, claimId: int):
                 "claim": None,
                 "receipt": None,
                 "flagReason": None,
+                "intakeAgentFindings": None,
+                "conversationalAudit": [],
                 "aiInsight": None,
                 "showActions": False,
                 "complianceFindings": None,
@@ -249,6 +313,8 @@ async def reviewPage(request: Request, claimId: int):
     claim, receipt = _buildClaimContext(row)
     intakeFindings = _parseJsonField(row.get("intake_findings")) or {}
     flagReason = _parseFlagReason(intakeFindings)
+    intakeAgentFindings = _parseIntakeAgentFindings(intakeFindings)
+    conversationalAudit = _parseConversationalAudit(intakeFindings)
     aiInsight = await _fetchAiInsight(row["employee_id"])
     showActions = claim["status"] == "escalated"
 
@@ -266,6 +332,8 @@ async def reviewPage(request: Request, claimId: int):
             "claim": claim,
             "receipt": receipt,
             "flagReason": flagReason,
+            "intakeAgentFindings": intakeAgentFindings,
+            "conversationalAudit": conversationalAudit,
             "aiInsight": aiInsight,
             "showActions": showActions,
             "complianceFindings": claim["complianceFindings"],
@@ -289,6 +357,8 @@ async def reviewDetailApi(request: Request, claimId: int):
     claim, receipt = _buildClaimContext(row)
     intakeFindings = _parseJsonField(row.get("intake_findings")) or {}
     flagReason = _parseFlagReason(intakeFindings)
+    intakeAgentFindings = _parseIntakeAgentFindings(intakeFindings)
+    conversationalAudit = _parseConversationalAudit(intakeFindings)
     aiInsight = await _fetchAiInsight(row["employee_id"])
     showActions = claim["status"] == "escalated"
 
@@ -297,6 +367,8 @@ async def reviewDetailApi(request: Request, claimId: int):
             "claim": claim,
             "receipt": receipt,
             "flagReason": flagReason,
+            "intakeAgentFindings": intakeAgentFindings,
+            "conversationalAudit": conversationalAudit,
             "aiInsight": aiInsight,
             "showActions": showActions,
             "complianceFindings": claim["complianceFindings"],
@@ -333,7 +405,7 @@ async def reviewDecisionApi(
             status_code=422,
         )
 
-    newStatus = "approved" if action == "approve" else "rejected"
+    newStatus = "manually_approved" if action == "approve" else "manually_rejected"
     auditAction = "claim_approved" if action == "approve" else "claim_rejected"
     newValue = json.dumps(
         {

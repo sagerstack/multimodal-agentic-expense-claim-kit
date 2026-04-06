@@ -353,7 +353,7 @@ def testComplianceAndFraudFindingsInTemplateContext(client):
     assert response.status_code == 200
     # Compliance card should appear (it's in the template when complianceFindings is set)
     assert "Compliance" in response.text
-    assert "Fraud Check" in response.text
+    assert "Fraud Analysis" in response.text
 
 
 def testReviewApiIncludesAgentFindings(client):
