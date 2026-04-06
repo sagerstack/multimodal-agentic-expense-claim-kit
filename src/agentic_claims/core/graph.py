@@ -3,8 +3,6 @@
 import logging
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
-logger = logging.getLogger(__name__)
 from langgraph.graph import END, START, StateGraph
 from psycopg_pool import AsyncConnectionPool
 
@@ -12,8 +10,11 @@ from agentic_claims.agents.advisor.node import advisorNode
 from agentic_claims.agents.compliance.node import complianceNode
 from agentic_claims.agents.fraud.node import fraudNode
 from agentic_claims.agents.intake.node import intakeNode
+from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.state import ClaimState
+
+logger = logging.getLogger(__name__)
 
 
 def evaluatorGate(state: ClaimState) -> str:
@@ -31,6 +32,37 @@ def evaluatorGate(state: ClaimState) -> str:
     return result
 
 
+async def markAiReviewedNode(state: ClaimState) -> dict:
+    """Write ai_reviewed status to DB after compliance+fraud complete, before advisor.
+
+    Non-fatal: if the DB call fails, the advisor will still run and set the
+    final status. This intermediate status provides audit trail visibility.
+    """
+    dbClaimId = state.get("dbClaimId")
+    claimId = state.get("claimId", "unknown")
+
+    if dbClaimId is not None:
+        try:
+            settings = getSettings()
+            await mcpCallTool(
+                serverUrl=settings.db_mcp_url,
+                toolName="updateClaimStatus",
+                arguments={
+                    "claimId": dbClaimId,
+                    "newStatus": "ai_reviewed",
+                    "actor": "system",
+                },
+            )
+            logger.info("markAiReviewedNode: status set to ai_reviewed", extra={"claimId": claimId, "dbClaimId": dbClaimId})
+        except Exception as e:
+            logger.warning(
+                "markAiReviewedNode: failed to update status — continuing to advisor",
+                extra={"claimId": claimId, "error": str(e)},
+            )
+
+    return {"status": "ai_reviewed"}
+
+
 def buildGraph() -> StateGraph:
     """Build the StateGraph with 4 nodes and parallel fan-out topology.
 
@@ -45,10 +77,11 @@ def buildGraph() -> StateGraph:
     """
     builder = StateGraph(ClaimState)
 
-    # Add 4 agent nodes
+    # Add agent nodes
     builder.add_node("intake", intakeNode)
     builder.add_node("compliance", complianceNode)
     builder.add_node("fraud", fraudNode)
+    builder.add_node("markAiReviewed", markAiReviewedNode)
     builder.add_node("advisor", advisorNode)
 
     # Wire the graph with Evaluator Gate
@@ -66,9 +99,10 @@ def buildGraph() -> StateGraph:
     builder.add_edge("postSubmission", "compliance")
     builder.add_edge("postSubmission", "fraud")
 
-    # Fan-in to advisor
-    builder.add_edge("compliance", "advisor")
-    builder.add_edge("fraud", "advisor")
+    # Fan-in to markAiReviewed, then advisor
+    builder.add_edge("compliance", "markAiReviewed")
+    builder.add_edge("fraud", "markAiReviewed")
+    builder.add_edge("markAiReviewed", "advisor")
     builder.add_edge("advisor", END)
 
     return builder

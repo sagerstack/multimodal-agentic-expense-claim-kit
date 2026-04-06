@@ -23,16 +23,19 @@ def buildAgentLlm(settings, temperature: float = 0.1, useFallback: bool = False)
         else settings.openrouter_model_llm
     )
 
+    timeoutSeconds = getattr(settings, "openrouter_timeout", 120)
+
     llm = ChatOpenRouter(
         model=modelName,
         openrouter_api_key=settings.openrouter_api_key,
         temperature=temperature,
         max_retries=settings.openrouter_max_retries,
         max_tokens=settings.openrouter_llm_max_tokens,
+        timeout=timeoutSeconds,
     )
 
     # Bypass SSL verification (Zscaler corporate proxy workaround)
-    llm.client.sdk_configuration.client = httpx.Client(verify=False, follow_redirects=True)
-    llm.client.sdk_configuration.async_client = httpx.AsyncClient(verify=False, follow_redirects=True)
+    llm.client.sdk_configuration.client = httpx.Client(verify=False, follow_redirects=True, timeout=timeoutSeconds)
+    llm.client.sdk_configuration.async_client = httpx.AsyncClient(verify=False, follow_redirects=True, timeout=timeoutSeconds)
 
     return llm

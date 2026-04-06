@@ -18,7 +18,7 @@ from agentic_claims.web.employeeIdExtractor import extractEmployeeId
 from agentic_claims.web.imagePathContext import imagePathVar
 from agentic_claims.web.session import getSessionIds
 from agentic_claims.web.sessionQueues import getOrCreateQueue, removeQueue
-from agentic_claims.web.sseHelpers import runGraph
+from agentic_claims.web.sseHelpers import runGraph, runPostSubmissionAgents
 from agentic_claims.web.templating import templates
 
 logger = logging.getLogger(__name__)
@@ -87,14 +87,32 @@ async def streamChat(request: Request):
 
         logger.info("Queue got input: threadId=%s", graphInput.get("threadId"))
 
-        employeeIdVar.set(request.session.get("employee_id"))
-        imagePathVar.set(getImagePath(claimId))
+        try:
+            employeeIdVar.set(request.session.get("employee_id"))
+            imagePathVar.set(getImagePath(sessionIds["claimId"]))
 
-        async for sseEvent in runGraph(graph, graphInput, request, templates):
-            yield sseEvent
+            async for sseEvent in runGraph(graph, graphInput, request, templates):
+                yield sseEvent
 
-        logger.info("Stream complete, yielding done event")
+            logger.info("Stream complete, yielding done event")
+        except Exception as e:
+            logger.exception("SSE stream error: %s", e)
+            yield ServerSentEvent(raw_data=str(e), event="error")
+
         yield ServerSentEvent(raw_data="<!-- done -->", event="done")
+
+        # BUG-026: launch background task for post-submission agents if flagged
+        backgroundTask = getattr(request.state, "backgroundTask", None)
+        if backgroundTask:
+            asyncio.create_task(
+                runPostSubmissionAgents(
+                    backgroundTask["graph"],
+                    backgroundTask["threadId"],
+                    backgroundTask["claimId"],
+                )
+            )
+            request.state.backgroundTask = None
+            logger.info("Background post-submission task launched for claim %s", backgroundTask["claimId"])
 
 
 @router.get("/chat/receipt-image")

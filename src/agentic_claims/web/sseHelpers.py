@@ -503,6 +503,30 @@ def _buildGraphInput(graphInput: dict) -> dict:
     }
 
 
+async def runPostSubmissionAgents(graph, threadId: str, claimId: str):
+    """Run compliance, fraud, and advisor agents in the background.
+
+    Resumes the graph from its last checkpoint (after intake node with
+    claimSubmitted=True). The evaluatorGate routes to postSubmission ->
+    compliance || fraud -> markAiReviewed -> advisor.
+    """
+    config = {"configurable": {"thread_id": threadId}}
+    try:
+        currentState = await graph.aget_state(config)
+        if not currentState.values.get("claimSubmitted"):
+            logger.error(
+                "Checkpoint guard failed for claim %s: claimSubmitted is not True",
+                claimId,
+            )
+            return
+
+        logger.info("Background post-submission started for claim %s", claimId)
+        await graph.ainvoke(None, config=config)
+        logger.info("Background post-submission completed for claim %s", claimId)
+    except Exception as e:
+        logger.error("Background post-submission failed for claim %s: %s", claimId, e, exc_info=True)
+
+
 async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2Templates):
     """Translate LangGraph astream_events into SSE events.
 
@@ -527,6 +551,8 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     # BUG-016: once submitClaim completes, post-submission agent LLM events
     # must not overwrite the intake agent's clean submission response.
     claimSubmittedFlag = False
+    # BUG-026: after submitClaim, capture the final response then break early
+    shouldTerminateEarly = False
 
     # Decision Pathway state
     pathwayActiveTools: set = set()
@@ -545,7 +571,10 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     threadId = graphInput["threadId"]
     config = {"configurable": {"thread_id": threadId}}
 
-    # Reconstruct pathway state from graph state (preserves progress across turns)
+    # BUG-024 fix: only detect hasImage from prior state (so "Receipt Uploaded"
+    # shows as completed if the image was uploaded in a prior turn during
+    # clarification). Do NOT pre-populate pathwayCompletedTools — only
+    # on_tool_start/on_tool_end events from the CURRENT stream should drive it.
     try:
         t0 = time.time()
         priorState = await graph.aget_state(config=config)
@@ -553,27 +582,11 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
         if priorState and priorState.values:
             sv = priorState.values
             if sv.get("extractedReceipt"):
-                pathwayCompletedTools.add("extractReceiptFields")
-                hasImage = True  # receipt was uploaded in a prior turn
-                pathwayExtractionDetails = _extractExtractionDetails(sv["extractedReceipt"])
-                if "extractReceiptFields" not in pathwayToolTimestamps:
-                    pathwayToolTimestamps["extractReceiptFields"] = _nowTimestamp()
+                hasImage = True
                 if "receiptUploaded" not in pathwayToolTimestamps:
                     pathwayToolTimestamps["receiptUploaded"] = _nowTimestamp()
-            if sv.get("violations") is not None:
-                pathwayCompletedTools.add("searchPolicies")
-                if "searchPolicies" not in pathwayToolTimestamps:
-                    pathwayToolTimestamps["searchPolicies"] = _nowTimestamp()
-            if sv.get("claimSubmitted"):
-                pathwayCompletedTools.add("submitClaim")
-                if "submitClaim" not in pathwayToolTimestamps:
-                    pathwayToolTimestamps["submitClaim"] = _nowTimestamp()
-                if "searchPolicies" not in pathwayCompletedTools:
-                    pathwayCompletedTools.add("searchPolicies")
-                if "searchPolicies" not in pathwayToolTimestamps:
-                    pathwayToolTimestamps["searchPolicies"] = _nowTimestamp()
     except Exception as e:
-        logger.debug(f"Could not reconstruct pathway from graph state: {e}")
+        logger.debug(f"Could not check prior state for hasImage: {e}")
 
     yield ServerSentEvent(raw_data="<!-- thinking -->", event=SseEvent.THINKING_START)
 
@@ -692,6 +705,13 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         finalResponse = _stripToolCallJson(tokenBuffer)
                     tokenBuffer = ""
                     reasoningBuffer = ""
+
+                    # BUG-026: if submitClaim already completed, we have the final
+                    # response — break out of astream_events to return early. The
+                    # post-submission agents will run as a background task.
+                    if claimSubmittedFlag:
+                        shouldTerminateEarly = True
+                        break
 
             elif eventKind == "on_tool_start":
                 toolName = event.get("name", "unknown")
@@ -818,44 +838,58 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
         except Exception as e:
             logger.error(f"Error rendering summary panel: {e}", exc_info=True)
 
-    # BUG-016: after the graph completes, refresh the submission table from DB.
-    # The advisor node may have updated the claim status (e.g. submitted ->
-    # escalated) AFTER the submitClaim TABLE_UPDATE was already emitted during
-    # the streaming loop. Fetching from DB here gives the authoritative status.
-    if claimSubmittedFlag:
-        try:
-            dbClaims = await fetchClaimsForTable()
-            if dbClaims:
-                sessionTotal = sum(
-                    float(c.get("total_amount", 0) or 0)
-                    for c in dbClaims
-                    if c.get("total_amount") and str(c.get("total_amount")) != "--"
-                )
-                finalTableHtml = templates.get_template("partials/submission_table.html").render(
-                    claims=dbClaims,
-                    sessionTotal=f"SGD {sessionTotal:.2f}",
-                    itemCount=len(dbClaims),
-                )
-                yield ServerSentEvent(raw_data=finalTableHtml, event=SseEvent.TABLE_UPDATE)
-        except Exception as e:
-            logger.error(f"Error rendering final table update after advisor: {e}", exc_info=True)
-
-    # Check for interrupt via graph state
-    try:
-        if finalState and finalState.next:
-            for task in finalState.tasks:
-                if hasattr(task, "interrupts") and task.interrupts:
-                    payload = task.interrupts[0].value
-                    question = (
-                        payload.get("question", str(payload))
-                        if isinstance(payload, dict)
-                        else str(payload)
+    # BUG-026: if we terminated early for background processing, store the
+    # background task info on request.state so chat.py can launch it after
+    # the SSE generator completes. Skip the final table refresh and interrupt
+    # check since advisor hasn't run yet.
+    if shouldTerminateEarly:
+        if not hasattr(request.state, "backgroundTask"):
+            request.state.backgroundTask = None
+        request.state.backgroundTask = {
+            "graph": graph,
+            "threadId": threadId,
+            "claimId": graphInput.get("claimId", ""),
+        }
+        logger.info("Background task queued for post-submission agents (claim %s)", graphInput.get("claimId", ""))
+    else:
+        # BUG-016: after the graph completes, refresh the submission table from DB.
+        # The advisor node may have updated the claim status (e.g. submitted ->
+        # escalated) AFTER the submitClaim TABLE_UPDATE was already emitted during
+        # the streaming loop. Fetching from DB here gives the authoritative status.
+        if claimSubmittedFlag:
+            try:
+                dbClaims = await fetchClaimsForTable()
+                if dbClaims:
+                    sessionTotal = sum(
+                        float(c.get("total_amount", 0) or 0)
+                        for c in dbClaims
+                        if c.get("total_amount") and str(c.get("total_amount")) != "--"
                     )
-                    request.session["awaiting_clarification"] = True
-                    yield ServerSentEvent(raw_data=question, event=SseEvent.INTERRUPT)
-                    return
-    except Exception as e:
-        logger.error(f"Error checking interrupt state: {e}", exc_info=True)
+                    finalTableHtml = templates.get_template("partials/submission_table.html").render(
+                        claims=dbClaims,
+                        sessionTotal=f"SGD {sessionTotal:.2f}",
+                        itemCount=len(dbClaims),
+                    )
+                    yield ServerSentEvent(raw_data=finalTableHtml, event=SseEvent.TABLE_UPDATE)
+            except Exception as e:
+                logger.error(f"Error rendering final table update after advisor: {e}", exc_info=True)
+
+        # Check for interrupt via graph state
+        try:
+            if finalState and finalState.next:
+                for task in finalState.tasks:
+                    if hasattr(task, "interrupts") and task.interrupts:
+                        payload = task.interrupts[0].value
+                        question = (
+                            payload.get("question", str(payload))
+                            if isinstance(payload, dict)
+                            else str(payload)
+                        )
+                        request.session["awaiting_clarification"] = True
+                        yield ServerSentEvent(raw_data=question, event=SseEvent.INTERRUPT)
+                        return
+        except Exception as e:
+            logger.error(f"Error checking interrupt state: {e}", exc_info=True)
 
     # Extract final response text
     finalText = ""
