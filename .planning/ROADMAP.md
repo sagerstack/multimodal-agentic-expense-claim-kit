@@ -23,7 +23,8 @@ See MILESTONES.md for archived v1.0 details.
 - [x] **Phase 6.1: Model Upgrade + UX Fixes** -- Switch LLM from QwQ-32B to Qwen3-235B-A22B (fast MoE, no CoT chains), swap to v2 system prompt, fix submission summary panel (100% on submit, show Claim ID, correct amounts)
 - [x] **Phase 6.2: Chat UI Refresh + Employee ID Fix** -- Apply Stitch "Updated Branding" design to Chat Page (Decision Pathway sidebar, bottom submission table, message styling, top nav) and fix BUG-015 (server-side employee ID extraction)
 - [x] **Phase 6.3: User Authentication + Dual Roles + Reviewer Pages** -- Login, auth, roles, Dashboard, Audit Log, Claim Review (absorbs Phase 8 + 9)
-- [ ] **Phase 8: Compliance, Fraud + Advisor Agents** -- Replace stubs with LLM-powered agents: policy audit, duplicate/anomaly detection, decision routing (auto-approve, return, escalate)
+- [x] **Phase 8: Compliance, Fraud + Advisor Agents** -- Replace stubs with LLM-powered agents: policy audit, duplicate/anomaly detection, decision routing (auto-approve, return, escalate)
+- [ ] **Phase 8.1: Bug Fixes + UX Polish** -- Fix Phase 8 QA bugs (BUG-016–025), restructure claim status lifecycle (8 statuses), Claims page "My Claims" section, draft status in table, LLM timeout handling
 - [ ] **Phase 10: Browser E2E Tests** -- Playwright test suite covering all 4 pages against a live server
 
 ---
@@ -180,11 +181,87 @@ Plans:
 **Plans:** 5 plans
 
 Plans:
-- [ ] 08-01-PLAN.md -- Foundation: ClaimState expansion (4 fields), Alembic migration 006 (4 columns), ORM model update, shared agent utilities (extractJsonBlock, buildAgentLlm), intake node fix (violations + dbClaimId)
-- [ ] 08-02-PLAN.md -- Compliance Agent: Evaluator pattern node (RAG query + LLM verdict), system prompt, audit logging, 4+ unit tests
-- [ ] 08-03-PLAN.md -- Fraud Agent: Tool Call pattern node (3 DB queries + LLM reasoning), SQL injection fix, deterministic duplicate detection, system prompt, 5+ unit tests
-- [ ] 08-04-PLAN.md -- Advisor Agent: Reflection + Routing pattern node (ReAct with 3 tools), decision routing, DB status + findings persistence, email notifications, 6+ unit tests
-- [ ] 08-05-PLAN.md -- UI updates: Audit Log 7-step timeline with agent colors, Claim Review compliance/fraud cards, Dashboard status breakdown KPIs, approve/reject restricted to escalated claims
+- [x] 08-01-PLAN.md -- Foundation: ClaimState expansion (4 fields), Alembic migration 006 (4 columns), ORM model update, shared agent utilities (extractJsonBlock, buildAgentLlm), intake node fix (violations + dbClaimId)
+- [x] 08-02-PLAN.md -- Compliance Agent: Evaluator pattern node (RAG query + LLM verdict), system prompt, audit logging, 4+ unit tests
+- [x] 08-03-PLAN.md -- Fraud Agent: Tool Call pattern node (3 DB queries + LLM reasoning), SQL injection fix, deterministic duplicate detection, system prompt, 5+ unit tests
+- [x] 08-04-PLAN.md -- Advisor Agent: Reflection + Routing pattern node (ReAct with 3 tools), decision routing, DB status + findings persistence, email notifications, 6+ unit tests
+- [x] 08-05-PLAN.md -- UI updates: Audit Log 7-step timeline with agent colors, Claim Review compliance/fraud cards, Dashboard status breakdown KPIs, approve/reject restricted to escalated claims
+
+---
+
+### Phase 8.1: Bug Fixes + UX Polish
+
+**Goal:** Fix all bugs discovered during Phase 8 QA, restructure the claim status lifecycle, and polish the Claims page UX. The chat flow completes reliably (no silent hangs), the Decision Pathway accurately reflects the current processing step, claim statuses clearly distinguish AI vs human decisions, and the Claims page shows the user's own claim history.
+
+**Depends on:** Phase 8
+
+**Bugs in scope:**
+
+| Bug | Summary | Status |
+|-----|---------|--------|
+| BUG-016 | Advisor raw JSON leaks into chat + claim stuck PENDING | Resolved (commit `6f4ac6a`) |
+| BUG-017 | Audit Log page crashes on dict confidence value | Resolved (commit `5c89708`) |
+| BUG-018 | Duplicate intake audit entries | Resolved (commit `3d75e1b`) |
+| BUG-019 | Advisor silent failure — claim stuck PENDING | Resolved (commit `7f231be`) |
+| BUG-020 | Receipt image NULL in database | Resolved (ContextVar injection) |
+| BUG-021 | Intelligence cards invisible on dark theme | Resolved (card restyling) |
+| BUG-022 | Approval badge wrong for reviewer-approved claims | Resolved (approvedBy check) |
+| BUG-023 | Claim Review shows auto-approved for escalated claims | Resolved (approvedBy check) |
+| BUG-024 | Decision Pathway shows premature COMPLETED status | Open |
+| BUG-025 | Chat stuck at Analyzing with no error toast on LLM timeout | Open |
+| BUG-026 | Post-submission agents block SSE stream — should run in background | Open |
+
+**Feature changes in scope:**
+
+1. **Claim status lifecycle restructure** — Replace flat statuses with granular lifecycle:
+   ```
+   draft -> pending -> ai_reviewed -> ai_approved / ai_rejected / escalated -> manually_approved / manually_rejected
+   ```
+   - `draft`: claim being worked on (pre-submission)
+   - `pending`: submitted to DB, awaiting AI pipeline
+   - `ai_reviewed`: compliance + fraud agents completed analysis
+   - `ai_approved`: advisor auto-approved (clean claim)
+   - `ai_rejected`: advisor rejected (policy violations)
+   - `escalated`: advisor escalated for human review
+   - `manually_approved`: reviewer approved escalated claim
+   - `manually_rejected`: reviewer rejected escalated claim
+   - Impacts: advisor node, review router, dashboard KPIs, all templates, all tests (~65 locations)
+
+2. **Show draft status in Claims page submission table** — Display the in-progress claim as "draft" in the bottom table while user is working on it
+
+3. **Claims page "My Claims" section** — Add "My Claims" header to the submission table, filter to show only the logged-in user's historical claims (descending order), move table to the left, remove the "Current Report" summary card
+
+4. **Claim Review page layout restructure** — Move all intelligence cards (currently in sidebar) to stack horizontally in rows below the receipt/extracted fields section. Cards display in a responsive grid below the receipt details.
+
+5. **Rename "Flag Reason" to "Intake Agent Findings"** — This card shows extraction confidence scores per field with green highlighting for high confidence values. Replaces the current flag reason display with a confidence-focused view of the VLM extraction output.
+
+6. **New "Conversational Audit" card** — Added below Intake Agent Findings. Shows the Intake agent's observations from the chat conversation (policy violations, soft cap breaches, etc.) paired with the user's justification/response. Captures the back-and-forth between agent and claimant during submission.
+
+7. **Decouple post-submission agents from SSE stream** — After intake submits the claim to DB, the chat immediately returns the submission response to the user (done event fires). Compliance, fraud, and advisor agents run asynchronously in the background (e.g., `asyncio.create_task`). The user does not wait for post-submission processing. Claim Review page shows results when ready. This replaces the current blocking graph execution where the SSE stream waits for the full pipeline (`intake -> compliance || fraud -> advisor -> END`).
+
+**Additional fixes (not bug-numbered):**
+- Global error toast system added to `base.html` (catches SSE, HTMX, JS errors)
+- SSE stream try-except wrapper in `chat.py` (errors surface to UI instead of silent death)
+
+**Success Criteria:**
+1. A receipt upload + full claim submission flow completes without hanging — if the LLM times out, the user sees an error toast within 60 seconds
+2. The Decision Pathway only marks steps as COMPLETED after the corresponding tool actually executes in the current agent run (no premature completion from stale state)
+3. All Claim Review intelligence cards (Compliance, Fraud, AI Insight) are visually consistent with the Flag Reason card styling on the dark theme
+4. Any server-side error during SSE streaming surfaces as a red toast notification in the UI — no silent failures
+5. Claim statuses in the DB, UI badges, and KPI cards use the new 8-status lifecycle — no references to old "approved"/"rejected" statuses remain
+6. The submission table at the bottom of the Claims page shows "My Claims" header, only the logged-in user's claims (filtered by employee_id), ordered by most recent first, with no "Current Report" card
+7. In-progress claims appear as "draft" in the submission table
+8. Claim Review page shows all intelligence cards (Intake Agent Findings, Conversational Audit, Compliance, Fraud, AI Insight) stacked horizontally in rows below the receipt details — not in a sidebar
+9. "Intake Agent Findings" card displays per-field extraction confidence scores with green color for high confidence
+10. "Conversational Audit" card shows agent observations (policy violations, soft cap breaches) alongside user justifications from the intake conversation
+
+**Plans:** 4 plans
+
+Plans:
+- [ ] 08.1-01-PLAN.md -- Status lifecycle restructure: 8-state model (draft/pending/ai_reviewed/ai_approved/ai_rejected/escalated/manually_approved/manually_rejected) across advisor node, review router, dashboard, all templates, tests
+- [ ] 08.1-02-PLAN.md -- Background processing + bug fixes: Decouple post-submission agents from SSE (BUG-026), LLM timeout config (BUG-025), asyncio.create_task for compliance/fraud/advisor
+- [ ] 08.1-03-PLAN.md -- Draft claim + My Claims table: Create draft DB row on first message, employee_id-filtered "My Claims" section, 7-column table, click-to-audit navigation
+- [ ] 08.1-04-PLAN.md -- Claim Review card restructure: Move cards from sidebar to 2-col grid below receipt, new Intake Agent Findings + Conversational Audit cards, Pending Review badges, BUG-024 fix
 
 ---
 
@@ -214,7 +291,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 10
+v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
@@ -223,9 +300,10 @@ v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 10
 | 6.1. Model Upgrade + UX Fixes | 2/2 | Complete | 2026-04-04 |
 | 6.2. Chat UI Refresh + Employee ID Fix | 4/4 | Complete | 2026-04-05 |
 | 6.3. User Auth + Dual Roles + Reviewer Pages | 6/6 | Complete | 2026-04-05 |
-| 8. Compliance, Fraud + Advisor Agents | 0/5 | Not started | -- |
+| 8. Compliance, Fraud + Advisor Agents | 5/5 | Complete | 2026-04-06 |
+| 8.1. Bug Fixes + UX Polish | 0/4 | In progress | -- |
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
 
-**v2.0 total:** 18/25 plans complete
+**v2.0 total:** 23/29 plans complete
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)
