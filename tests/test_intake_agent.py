@@ -317,3 +317,48 @@ async def test_intakeNodeWritesIntakeFindingsToState():
 
     assert "intakeFindings" in result
     assert result["intakeFindings"].get("employeeId") == "EMP-123"
+
+
+@pytest.mark.asyncio
+async def test_intakeNodeBuffersPolicyCheckFromSearchPoliciesResult():
+    """intakeNode buffers a policy_check audit step when searchPolicies ToolMessage is present."""
+    policyResult = json.dumps({
+        "results": [
+            {"section": "Meals", "category": "meals", "score": 0.9}
+        ]
+    })
+    mockAgent = AsyncMock()
+    mockAgent.ainvoke = AsyncMock(
+        return_value={
+            "messages": [
+                ToolMessage(
+                    content=policyResult,
+                    name="searchPolicies",
+                    tool_call_id="call_policy_test",
+                ),
+                AIMessage(content="Policy checked."),
+            ]
+        }
+    )
+
+    mockBufferStep = MagicMock()
+
+    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+        with patch("agentic_claims.agents.intake.node.bufferStep", mockBufferStep):
+            state: ClaimState = {
+                "claimId": "session-uuid-policy",
+                "status": "draft",
+                "messages": [HumanMessage(content="Check policy")],
+            }
+            await intakeNode(state, RunnableConfig())
+
+    mockBufferStep.assert_called_once_with(
+        sessionClaimId="session-uuid-policy",
+        action="policy_check",
+        details={
+            "violations": [],
+            "policyRefs": [{"section": "Meals", "category": "meals", "score": 0.9}],
+            "compliant": True,
+            "query": "intake policy check",
+        },
+    )
