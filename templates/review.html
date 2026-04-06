@@ -290,8 +290,10 @@
                   {% if flag.description %}
                     <span class="text-on-surface-variant"> — {{ flag.description }}</span>
                   {% endif %}
-                  {% if flag.confidence %}
+                  {% if flag.confidence is number %}
                     <span class="ml-1 text-[9px] text-on-surface-variant/60">({{ (flag.confidence * 100)|int }}%)</span>
+                  {% elif flag.confidence %}
+                    <span class="ml-1 text-[9px] text-on-surface-variant/60">({{ flag.confidence }})</span>
                   {% endif %}
                 </div>
               {% endfor %}
