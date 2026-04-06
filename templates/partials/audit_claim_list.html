@@ -8,9 +8,7 @@
     {% else %}
       bg-surface-container-low border border-outline-variant/10 hover:bg-surface-bright hover:border-secondary/30
     {% endif %}"
-    hx-get="/api/audit/{{ c.id }}/timeline"
-    hx-target="#timeline-detail"
-    hx-swap="innerHTML">
+    onclick="window.location='/audit/{{ c.id }}'">
     <div class="flex justify-between items-start mb-3">
       <div>
         <h4 class="font-headline font-bold text-lg text-on-surface">{{ c.claimNumber }}</h4>
