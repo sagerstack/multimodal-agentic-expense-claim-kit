@@ -27,20 +27,33 @@ def bufferStep(sessionClaimId: str, action: str, details: dict) -> None:
     """Buffer an audit step for later flushing.
 
     Called during intake processing before the DB claim ID exists.
+    Idempotent per action: if the action is already buffered for this session
+    (from a prior turn's message scan), it is silently skipped. This prevents
+    BUG-018 where multi-turn conversations cause duplicate audit_log rows.
 
     Args:
         sessionClaimId: Session-scoped UUID string (from ClaimState.claimId)
         action: Audit action label (e.g., 'receipt_uploaded', 'ai_extraction')
         details: Structured data for this step (confidence, violations, etc.)
     """
+    if sessionClaimId not in _auditBuffer:
+        _auditBuffer[sessionClaimId] = []
+
+    # BUG-018: skip if this action is already buffered for this session
+    existing = _auditBuffer[sessionClaimId]
+    if any(e["action"] == action for e in existing):
+        logger.debug(
+            "Audit step already buffered — skipping duplicate",
+            extra={"sessionClaimId": sessionClaimId, "action": action},
+        )
+        return
+
     entry = {
         "action": action,
         "details": details,
         "bufferedAt": datetime.now(timezone.utc).isoformat(),
     }
-    if sessionClaimId not in _auditBuffer:
-        _auditBuffer[sessionClaimId] = []
-    _auditBuffer[sessionClaimId].append(entry)
+    existing.append(entry)
     logger.debug(
         "Audit step buffered",
         extra={"sessionClaimId": sessionClaimId, "action": action},

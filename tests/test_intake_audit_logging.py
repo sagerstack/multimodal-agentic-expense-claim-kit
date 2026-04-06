@@ -156,3 +156,66 @@ async def testLogIntakeStepHandlesError():
     # Must not raise
     with patch("agentic_claims.agents.intake.auditLogger.mcpCallTool", mockMcp):
         await logIntakeStep(claimId=99, action="test_step", details={"x": 1})
+
+
+# ---------------------------------------------------------------------------
+# BUG-018: deduplication tests
+# ---------------------------------------------------------------------------
+
+
+def testBufferStepDeduplicatesActionPerSession():
+    """BUG-018: calling bufferStep twice for the same action in one session only stores one entry."""
+    from agentic_claims.agents.intake.auditLogger import _auditBuffer, bufferStep
+
+    sessionId = "session-dedup-001"
+
+    bufferStep(sessionId, "receipt_uploaded", {"imagePath": "first.jpg"})
+    bufferStep(sessionId, "receipt_uploaded", {"imagePath": "second.jpg"})  # duplicate action
+
+    entries = _auditBuffer[sessionId]
+    actions = [e["action"] for e in entries]
+    assert actions.count("receipt_uploaded") == 1
+
+
+def testBufferStepDeduplicatesAcrossMultipleTurnActions():
+    """BUG-018: a full multi-turn scenario — receipt_uploaded + ai_extraction buffered twice each."""
+    from agentic_claims.agents.intake.auditLogger import _auditBuffer, bufferStep
+
+    sessionId = "session-dedup-002"
+
+    # Turn 1 buffers
+    bufferStep(sessionId, "receipt_uploaded", {"imagePath": "r.jpg"})
+    bufferStep(sessionId, "ai_extraction", {"confidence": 0.9})
+    bufferStep(sessionId, "policy_check", {"violations": []})
+
+    # Turn 2: intakeNode re-scans all messages and buffers the same actions again
+    bufferStep(sessionId, "receipt_uploaded", {"imagePath": "r.jpg"})
+    bufferStep(sessionId, "ai_extraction", {"confidence": 0.9})
+    bufferStep(sessionId, "policy_check", {"violations": []})
+
+    entries = _auditBuffer[sessionId]
+    assert len(entries) == 3  # exactly one entry per unique action
+
+
+@pytest.mark.asyncio
+async def testFlushStepsOnlyFlushesUniqueActions():
+    """BUG-018: after dedup, flush makes exactly one MCP call per unique action."""
+    from agentic_claims.agents.intake.auditLogger import bufferStep, flushSteps
+
+    sessionId = "session-dedup-flush"
+
+    # Simulate two turns each buffering the same steps
+    bufferStep(sessionId, "receipt_uploaded", {"imagePath": "x.jpg"})
+    bufferStep(sessionId, "ai_extraction", {"confidence": 0.88})
+    bufferStep(sessionId, "receipt_uploaded", {"imagePath": "x.jpg"})  # duplicate
+    bufferStep(sessionId, "ai_extraction", {"confidence": 0.88})  # duplicate
+
+    mockMcp = AsyncMock(return_value={"id": 1})
+
+    with patch("agentic_claims.agents.intake.auditLogger.mcpCallTool", mockMcp):
+        await flushSteps(sessionClaimId=sessionId, dbClaimId=55)
+
+    # Only 2 unique actions → 2 MCP calls
+    assert mockMcp.call_count == 2
+    actions = [c.kwargs["arguments"]["action"] for c in mockMcp.call_args_list]
+    assert sorted(actions) == ["ai_extraction", "receipt_uploaded"]
