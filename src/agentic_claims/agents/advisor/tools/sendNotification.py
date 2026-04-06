@@ -81,6 +81,7 @@ async def sendNotification(
             "to": toEmail,
             "claimNumber": claimNumber,
             "status": status,
+            "subject": subject,
             "message": message,
         },
     )

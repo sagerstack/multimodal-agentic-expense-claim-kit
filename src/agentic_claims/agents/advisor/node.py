@@ -285,6 +285,27 @@ async def advisorNode(state: ClaimState) -> dict:
                 extra={"claimId": claimId, "error": str(e)},
             )
 
+        try:
+            await mcpCallTool(
+                serverUrl=settings.db_mcp_url,
+                toolName="updateClaimStatus",
+                arguments={
+                    "claimId": dbClaimId,
+                    "newStatus": newStatus,
+                    "actor": "advisor_agent",
+                    "complianceFindings": complianceFindings,
+                    "fraudFindings": fraudFindings,
+                    "advisorDecision": advisorDecision,
+                    "approvedBy": approvedBy,
+                },
+            )
+            logger.debug("Advisor updateClaimStatus written", extra={"claimId": claimId, "newStatus": newStatus, "approvedBy": approvedBy})
+        except Exception as e:
+            logger.warning(
+                "Failed to write advisor updateClaimStatus — continuing",
+                extra={"claimId": claimId, "error": str(e)},
+            )
+
     # ------------------------------------------------------------------
     # 6. Build human-readable summary — only this message goes into state
     # ------------------------------------------------------------------

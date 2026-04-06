@@ -1,7 +1,7 @@
 """Unit tests for the advisor agent node."""
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
@@ -215,10 +215,17 @@ async def testAdvisorReadsDbClaimIdFromState():
 
         await advisorNode(state)
 
-    # The audit log MCP call should use claimId=99 from state
-    mockMcp.assert_called_once()
-    callKwargs = mockMcp.call_args.kwargs
-    assert callKwargs["arguments"]["claimId"] == 99
+    # Both insertAuditLog and updateClaimStatus are called with claimId=99 from state
+    assert mockMcp.call_count == 2
+    # First call is insertAuditLog
+    firstCall = mockMcp.call_args_list[0].kwargs
+    assert firstCall["arguments"]["claimId"] == 99
+    assert firstCall["toolName"] == "insertAuditLog"
+    # Second call is updateClaimStatus with approvedBy="agent"
+    secondCall = mockMcp.call_args_list[1].kwargs
+    assert secondCall["arguments"]["claimId"] == 99
+    assert secondCall["toolName"] == "updateClaimStatus"
+    assert secondCall["arguments"]["approvedBy"] == "agent"
 
 
 @pytest.mark.asyncio
