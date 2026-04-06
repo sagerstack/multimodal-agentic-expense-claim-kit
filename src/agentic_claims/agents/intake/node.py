@@ -140,6 +140,12 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
                 claimNumber = claimRecord.get("claim_number")
                 if claimNumber:
                     stateUpdate["claimNumber"] = claimNumber
+                dbClaimId = claimRecord.get("id")
+                if dbClaimId is not None:
+                    try:
+                        stateUpdate["dbClaimId"] = int(dbClaimId)
+                    except (TypeError, ValueError):
+                        pass
             elif msg.name == "extractReceiptFields":
                 stateUpdate["extractedReceipt"] = content
             elif msg.name == "convertCurrency":
@@ -152,6 +158,10 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
                     stateUpdate["violations"] = []
         except (json.JSONDecodeError, TypeError):
             pass
+
+    # Ensure violations is always written to state (empty list if no policy search ran)
+    if "violations" not in stateUpdate:
+        stateUpdate["violations"] = []
 
     logger.info("intakeNode completed", extra={"elapsed": f"{time.time() - nodeStart:.2f}s", "stateUpdateKeys": list(stateUpdate.keys())})
     return stateUpdate
