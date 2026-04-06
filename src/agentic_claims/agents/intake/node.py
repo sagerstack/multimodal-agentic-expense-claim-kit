@@ -164,6 +164,29 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
                         pass
             elif msg.name == "extractReceiptFields":
                 stateUpdate["extractedReceipt"] = content
+                # Buffer receipt_uploaded and ai_extraction audit steps directly in
+                # intakeNode using the session claimId from state — this is the
+                # authoritative buffer call (immune to LLM passing wrong claimId)
+                sessionClaimId = state.get("claimId", "")
+                if sessionClaimId:
+                    fields = content.get("fields", {})
+                    confidence = content.get("confidence", {})
+                    imagePath = content.get("imagePath")
+                    bufferStep(
+                        sessionClaimId=sessionClaimId,
+                        action="receipt_uploaded",
+                        details={"imagePath": imagePath},
+                    )
+                    bufferStep(
+                        sessionClaimId=sessionClaimId,
+                        action="ai_extraction",
+                        details={
+                            "confidence": confidence,
+                            "merchant": fields.get("merchant"),
+                            "amount": fields.get("totalAmount"),
+                            "fields": fields,
+                        },
+                    )
             elif msg.name == "convertCurrency":
                 stateUpdate["currencyConversion"] = content
             elif msg.name == "searchPolicies":

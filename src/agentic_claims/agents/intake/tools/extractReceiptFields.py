@@ -10,11 +10,10 @@ from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 from langchain_openrouter import ChatOpenRouter
 
-from agentic_claims.agents.intake.auditLogger import bufferStep
 from agentic_claims.agents.intake.prompts.vlmExtractionPrompt import VLM_EXTRACTION_PROMPT
 from agentic_claims.agents.intake.utils.imageQuality import checkImageQuality
 from agentic_claims.core.config import getSettings
-from agentic_claims.core.imageStore import getImage
+from agentic_claims.core.imageStore import getImage, getImagePath
 
 logger = logging.getLogger(__name__)
 
@@ -147,25 +146,12 @@ async def extractReceiptFields(claimId: str) -> dict:
                 },
             )
 
-            # Buffer audit steps — flushed to DB when claim is submitted
+            # Include imagePath in result so LLM passes it in receiptData.imagePath
+            # and so intakeNode can buffer it in the receipt_uploaded audit step
             if "fields" in result:
-                fields = result.get("fields", {})
-                confidence = result.get("confidence", {})
-                bufferStep(
-                    sessionClaimId=claimId,
-                    action="receipt_uploaded",
-                    details={"imagePath": None, "imageQuality": qualityCheck},
-                )
-                bufferStep(
-                    sessionClaimId=claimId,
-                    action="ai_extraction",
-                    details={
-                        "confidence": confidence,
-                        "merchant": fields.get("merchant"),
-                        "amount": fields.get("totalAmount"),
-                        "fields": fields,
-                    },
-                )
+                imagePath = getImagePath(claimId)
+                if imagePath:
+                    result["imagePath"] = imagePath
 
             return result
         except json.JSONDecodeError as e:

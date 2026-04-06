@@ -362,3 +362,49 @@ async def test_intakeNodeBuffersPolicyCheckFromSearchPoliciesResult():
             "query": "intake policy check",
         },
     )
+
+
+@pytest.mark.asyncio
+async def test_intakeNodeBuffersReceiptUploadedAndAiExtractionFromExtractReceiptFields():
+    """intakeNode buffers receipt_uploaded and ai_extraction when extractReceiptFields ToolMessage is present."""
+    extractResult = json.dumps({
+        "fields": {"merchant": "TestMart", "totalAmount": 50.0},
+        "confidence": {"merchant": 0.95},
+        "imagePath": "uploads/test-session.jpg",
+    })
+    mockAgent = AsyncMock()
+    mockAgent.ainvoke = AsyncMock(
+        return_value={
+            "messages": [
+                ToolMessage(
+                    content=extractResult,
+                    name="extractReceiptFields",
+                    tool_call_id="call_extract_test",
+                ),
+                AIMessage(content="Extracted receipt."),
+            ]
+        }
+    )
+
+    bufferedCalls = []
+    mockBufferStep = MagicMock(side_effect=lambda **kwargs: bufferedCalls.append(kwargs))
+
+    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+        with patch("agentic_claims.agents.intake.node.bufferStep", mockBufferStep):
+            state: ClaimState = {
+                "claimId": "session-uuid-extract",
+                "status": "draft",
+                "messages": [HumanMessage(content="Process receipt")],
+            }
+            result = await intakeNode(state, RunnableConfig())
+
+    actions = [c["action"] for c in bufferedCalls]
+    assert "receipt_uploaded" in actions
+    assert "ai_extraction" in actions
+
+    receiptStep = next(c for c in bufferedCalls if c["action"] == "receipt_uploaded")
+    assert receiptStep["sessionClaimId"] == "session-uuid-extract"
+    assert receiptStep["details"]["imagePath"] == "uploads/test-session.jpg"
+
+    aiStep = next(c for c in bufferedCalls if c["action"] == "ai_extraction")
+    assert aiStep["details"]["merchant"] == "TestMart"
