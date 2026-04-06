@@ -81,6 +81,20 @@ Bugs discovered during Phase 2.3 UAT testing. Resolved bugs documented for refer
 
 ## Open
 
+### BUG-018: Duplicate intake audit entries (receipt_uploaded, ai_extraction) — **RESOLVED Phase 8 QA**
+- **Found**: Phase 8 UAT (DB inspection, claim 19)
+- **Root cause**: `bufferStep` had no deduplication. In multi-turn conversations `intakeNode` re-scanned all accumulated messages on each turn and called `bufferStep` again for prior turns' tool messages. `flushSteps` flushed all N copies.
+- **Fix**: Made `bufferStep` idempotent per action — silently skips if the action is already buffered for that session.
+- **Files**: `src/agentic_claims/agents/intake/auditLogger.py`
+- **Commit**: `3d75e1b`
+
+### BUG-019: Advisor silent failure — claim 17 stuck in PENDING — **RESOLVED Phase 8 QA**
+- **Found**: Phase 8 UAT (DB inspection, claim 17)
+- **Root cause**: Any exception beyond 402 credit errors in `advisorNode` (network timeout, LLM parse failure, etc.) propagated uncaught, leaving the claim in "pending" with no audit_log entry.
+- **Fix**: Added `_advisorErrorFallback` that catches all non-402 exceptions, writes an `advisor_decision` audit entry with `reason: advisor_error`, calls `updateClaimStatus` to set status to "escalated", and returns a valid state update.
+- **Files**: `src/agentic_claims/agents/advisor/node.py`
+- **Commit**: `7f231be`
+
 ### BUG-016: Advisor raw JSON response leaks into chat UI + claim status stuck on PENDING — **RESOLVED Phase 8 QA**
 - **Found**: Phase 8 UAT (browser)
 - **Fix**:
