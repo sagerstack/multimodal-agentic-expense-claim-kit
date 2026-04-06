@@ -104,7 +104,12 @@ def _buildTimelineSteps(auditRows: list) -> list[dict]:
 
         if stepName == "AI Extraction":
             conf = details.get("confidence") or details.get("vlm_confidence")
-            stepData["confidence"] = float(conf) if conf is not None else None
+            if isinstance(conf, dict):
+                conf = conf.get("score") or conf.get("value") or conf.get("confidence")
+            try:
+                stepData["confidence"] = float(conf) if conf is not None else None
+            except (TypeError, ValueError):
+                stepData["confidence"] = None
             extracted = details.get("extracted") or {}
             stepData["merchant"] = extracted.get("merchant") or details.get("merchant")
             stepData["amount"] = extracted.get("total_amount") or details.get("total_amount")
@@ -299,13 +304,17 @@ async def auditPage(request: Request, claimId: str):
 
     try:
         allClaims = await _fetchAllClaims()
+    except Exception:
+        logger.exception("Audit DB query failed fetching claims list")
+        allClaims = []
+
+    try:
         if claimIdInt is not None:
             timelineSteps = await _fetchTimeline(claimIdInt)
             insights = await _fetchInsights(claimIdInt)
             claim = await _fetchClaimSummary(claimIdInt)
     except Exception:
-        logger.exception("Audit DB query failed — rendering with empty data")
-        allClaims = []
+        logger.exception("Audit DB query failed for claim %s", claimId)
 
     return templates.TemplateResponse(
         request,

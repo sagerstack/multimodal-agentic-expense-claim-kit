@@ -415,3 +415,79 @@ def testBuildTimelineParallelStepsHaveParallelFlag():
     # Other steps should not have parallel=True
     receiptStep = next(s for s in steps if s["name"] == "Receipt Uploaded")
     assert receiptStep["parallel"] is False
+
+
+# ── BUG-017 tests ──
+
+
+def testBuildTimelineStepsDictConfidenceWithScoreKey():
+    """BUG-017: dict confidence with 'score' key is unwrapped to float."""
+    from agentic_claims.web.routers.audit import _buildTimelineSteps
+
+    rows = [
+        _makeAuditRow("ai_extraction", '{"confidence": {"score": 0.844}}'),
+    ]
+    steps = _buildTimelineSteps(rows)
+    aiStep = next(s for s in steps if s["name"] == "AI Extraction")
+    assert aiStep["status"] == "completed"
+    assert aiStep["confidence"] == pytest.approx(0.844)
+
+
+def testBuildTimelineStepsDictConfidenceWithValueKey():
+    """BUG-017: dict confidence with 'value' key is unwrapped to float."""
+    from agentic_claims.web.routers.audit import _buildTimelineSteps
+
+    rows = [
+        _makeAuditRow("ai_extraction", '{"confidence": {"value": 0.91}}'),
+    ]
+    steps = _buildTimelineSteps(rows)
+    aiStep = next(s for s in steps if s["name"] == "AI Extraction")
+    assert aiStep["confidence"] == pytest.approx(0.91)
+
+
+def testBuildTimelineStepsDictConfidenceWithNestedConfidenceKey():
+    """BUG-017: dict confidence with nested 'confidence' key is unwrapped to float."""
+    from agentic_claims.web.routers.audit import _buildTimelineSteps
+
+    rows = [
+        _makeAuditRow("ai_extraction", '{"confidence": {"confidence": 0.76}}'),
+    ]
+    steps = _buildTimelineSteps(rows)
+    aiStep = next(s for s in steps if s["name"] == "AI Extraction")
+    assert aiStep["confidence"] == pytest.approx(0.76)
+
+
+def testBuildTimelineStepsBadConfidenceTypeReturnsNone():
+    """BUG-017: an unrecognisable confidence value gracefully becomes None."""
+    from agentic_claims.web.routers.audit import _buildTimelineSteps
+
+    # Store confidence as an unrecognisable type (list) — should not raise
+    rows = [
+        _makeAuditRow("ai_extraction", '{"confidence": [1, 2, 3]}'),
+    ]
+    steps = _buildTimelineSteps(rows)
+    aiStep = next(s for s in steps if s["name"] == "AI Extraction")
+    assert aiStep["confidence"] is None
+
+
+def testAuditPageClaimsListNotEmptyWhenTimelineFails(client):
+    """BUG-017: allClaims is still populated even when _fetchTimeline raises."""
+    _p = "agentic_claims.web.routers.audit"
+    mockClaims = [
+        {
+            "id": 5,
+            "claimNumber": "CLM-005",
+            "status": "submitted",
+            "totalAmount": 88.0,
+            "currency": "SGD",
+            "createdAt": "2026-04-05T10:00:00",
+        }
+    ]
+    with patch(f"{_p}._fetchAllClaims", new=AsyncMock(return_value=mockClaims)):
+        with patch(f"{_p}._fetchTimeline", side_effect=TypeError("float() arg must be a real number, not 'dict'")):
+            with patch(f"{_p}._fetchInsights", new=AsyncMock(return_value={"anomalyCount": 0, "costBenchmark": None})):
+                with patch(f"{_p}._fetchClaimSummary", new=AsyncMock(return_value=None)):
+                    response = client.get("/audit/5")
+    assert response.status_code == 200
+    # The claims sidebar must include claim data — not be wiped to []
+    assert "CLM-005" in response.text
