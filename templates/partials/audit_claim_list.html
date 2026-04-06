@@ -1,7 +1,8 @@
 <!-- Audit claim list partial — left panel claim cards -->
 {% if allClaims %}
   {% for c in allClaims %}
-  <div class="group relative p-5 rounded-2xl cursor-pointer transition-all
+  <button type="button"
+    class="group relative p-5 rounded-2xl cursor-pointer transition-all w-full text-left
     {% if c.id == selectedClaimId %}
       bg-surface-bright border-l-4 border-secondary shadow-[0_4px_20px_rgba(0,0,0,0.3)]
     {% else %}
@@ -9,9 +10,7 @@
     {% endif %}"
     hx-get="/api/audit/{{ c.id }}/timeline"
     hx-target="#timeline-detail"
-    hx-swap="innerHTML"
-    hx-trigger="click"
-    @click="selectedClaimId = {{ c.id }}">
+    hx-swap="innerHTML">
     <div class="flex justify-between items-start mb-3">
       <div>
         <h4 class="font-headline font-bold text-lg text-on-surface">{{ c.claimNumber }}</h4>
@@ -34,7 +33,7 @@
     <span class="text-xl font-headline font-extrabold text-on-surface">
       {{ c.currency }} {{ "%.2f"|format(c.totalAmount) }}
     </span>
-  </div>
+  </button>
   {% endfor %}
 {% else %}
   <p class="text-xs text-on-surface-variant/50 text-center py-12">No decisions recorded yet.</p>
