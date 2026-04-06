@@ -98,7 +98,7 @@ def testReviewPageReturns200(client):
     """GET /review/1 returns 200 with review page content."""
     response = client.get("/review/1")
     assert response.status_code == 200
-    assert "Review Flagged Claim" in response.text
+    assert "Claim Review" in response.text
 
 
 def testSessionCookieSetOnFirstVisit(client):
