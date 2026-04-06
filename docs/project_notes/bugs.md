@@ -81,6 +81,22 @@ Bugs discovered during Phase 2.3 UAT testing. Resolved bugs documented for refer
 
 ## Open
 
+### BUG-016: Advisor raw JSON response leaks into chat UI + claim status stuck on PENDING — **RESOLVED Phase 8 QA**
+- **Found**: Phase 8 UAT (browser)
+- **Fix**:
+  1. `finalResponse` now only updated from the first non-empty assignment. Intake agent captures it first; subsequent advisor `on_chat_model_end` events are ignored.
+  2. Added post-loop TABLE_UPDATE after graph completes that re-fetches claim status from DB whenever `claimSubmittedFlag` is True, so advisor status transitions are reflected.
+- **Files**: `src/agentic_claims/web/sseHelpers.py`
+- **Commit**: `6f4ac6a`
+
+### BUG-017: Audit Log page crashes on dict confidence value — renders empty — **RESOLVED Phase 8 QA**
+- **Found**: Phase 8 UAT (browser)
+- **Fix**:
+  1. Added `isinstance(conf, dict)` check before `float()` in `_buildTimelineSteps` with `score`/`value`/`confidence` key unwrapping and a `try/except (TypeError, ValueError)` guard.
+  2. Split single try block into two independent blocks so `_fetchAllClaims` failure cannot be triggered by a `_fetchTimeline` exception.
+- **Files**: `src/agentic_claims/web/routers/audit.py`
+- **Commit**: `5c89708`
+
 ### BUG-015: Model fails to use user-provided employee ID
 - **Found**: Phase 6.1 UAT (browser, QA cycles 3-4 + post-delivery testing)
 - **Symptom**: Two failure modes observed:
