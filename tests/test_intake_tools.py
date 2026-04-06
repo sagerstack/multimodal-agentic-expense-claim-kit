@@ -326,3 +326,100 @@ async def testSubmitClaimPassesIntakeFindings():
         callKwargs = mockMcpCall.call_args[1] if mockMcpCall.call_args[1] else {}
         arguments = callArgs[2] if len(callArgs) > 2 else callKwargs.get("arguments")
         assert arguments["intakeFindings"] == intakeFindings
+
+
+# ==================== BUG-020: imagePathVar injection Tests ====================
+
+
+@pytest.mark.asyncio
+async def testSubmitClaimInjectsImagePathFromContextVar():
+    """Verify submitClaim injects imagePath from imagePathVar when receiptData lacks it."""
+    from agentic_claims.web.imagePathContext import imagePathVar
+
+    mockResult = {
+        "claim": {"id": 101, "claim_number": "CLM-BUG020"},
+        "receipt": {"id": 201, "claim_id": 101},
+    }
+
+    with patch("agentic_claims.agents.intake.tools.submitClaim.mcpCallTool") as mockMcpCall:
+        mockMcpCall.return_value = mockResult
+
+        claimData = {"claimantId": "EMP-999", "amountSgd": 50.0}
+        receiptData = {
+            "merchant": "Test Cafe",
+            "date": "2026-04-06",
+            "totalAmount": 50.0,
+        }
+
+        token = imagePathVar.set("uploads/test-claim-id.jpg")
+        try:
+            await submitClaim.ainvoke({"claimData": claimData, "receiptData": receiptData})
+        finally:
+            imagePathVar.reset(token)
+
+        callKwargs = mockMcpCall.call_args[1] if mockMcpCall.call_args[1] else {}
+        arguments = callKwargs.get("arguments") or (mockMcpCall.call_args[0][2] if len(mockMcpCall.call_args[0]) > 2 else {})
+        assert arguments.get("imagePath") == "uploads/test-claim-id.jpg"
+
+
+@pytest.mark.asyncio
+async def testSubmitClaimDoesNotOverrideExistingImagePath():
+    """Verify submitClaim does not overwrite imagePath already in receiptData."""
+    from agentic_claims.web.imagePathContext import imagePathVar
+
+    mockResult = {
+        "claim": {"id": 102, "claim_number": "CLM-BUG020B"},
+        "receipt": {"id": 202, "claim_id": 102},
+    }
+
+    with patch("agentic_claims.agents.intake.tools.submitClaim.mcpCallTool") as mockMcpCall:
+        mockMcpCall.return_value = mockResult
+
+        claimData = {"claimantId": "EMP-999", "amountSgd": 75.0}
+        receiptData = {
+            "merchant": "Test Bistro",
+            "date": "2026-04-06",
+            "totalAmount": 75.0,
+            "imagePath": "uploads/existing-path.jpg",
+        }
+
+        token = imagePathVar.set("uploads/context-var-path.jpg")
+        try:
+            await submitClaim.ainvoke({"claimData": claimData, "receiptData": receiptData})
+        finally:
+            imagePathVar.reset(token)
+
+        callKwargs = mockMcpCall.call_args[1] if mockMcpCall.call_args[1] else {}
+        arguments = callKwargs.get("arguments") or (mockMcpCall.call_args[0][2] if len(mockMcpCall.call_args[0]) > 2 else {})
+        # receiptData.imagePath already present, should NOT be overridden by context var
+        assert arguments.get("imagePath") == "uploads/existing-path.jpg"
+
+
+@pytest.mark.asyncio
+async def testSubmitClaimWithNoImagePathVarDoesNotError():
+    """Verify submitClaim works normally when imagePathVar is not set."""
+    from agentic_claims.web.imagePathContext import imagePathVar
+
+    mockResult = {
+        "claim": {"id": 103, "claim_number": "CLM-BUG020C"},
+        "receipt": {"id": 203, "claim_id": 103},
+    }
+
+    with patch("agentic_claims.agents.intake.tools.submitClaim.mcpCallTool") as mockMcpCall:
+        mockMcpCall.return_value = mockResult
+
+        claimData = {"claimantId": "EMP-999", "amountSgd": 25.0}
+        receiptData = {
+            "merchant": "Quick Stop",
+            "date": "2026-04-06",
+            "totalAmount": 25.0,
+        }
+
+        # Explicitly clear the context var
+        token = imagePathVar.set(None)
+        try:
+            result = await submitClaim.ainvoke({"claimData": claimData, "receiptData": receiptData})
+        finally:
+            imagePathVar.reset(token)
+
+        assert "claim" in result

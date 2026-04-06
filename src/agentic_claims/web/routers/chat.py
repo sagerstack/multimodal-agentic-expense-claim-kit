@@ -12,9 +12,10 @@ from starlette.responses import Response
 
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
-from agentic_claims.core.imageStore import clearImage, getImage, storeImage
+from agentic_claims.core.imageStore import clearImage, getImage, getImagePath, storeImage
 from agentic_claims.web.employeeIdContext import employeeIdVar
 from agentic_claims.web.employeeIdExtractor import extractEmployeeId
+from agentic_claims.web.imagePathContext import imagePathVar
 from agentic_claims.web.session import getSessionIds
 from agentic_claims.web.sessionQueues import getOrCreateQueue, removeQueue
 from agentic_claims.web.sseHelpers import runGraph
@@ -87,6 +88,7 @@ async def streamChat(request: Request):
         logger.info("Queue got input: threadId=%s", graphInput.get("threadId"))
 
         employeeIdVar.set(request.session.get("employee_id"))
+        imagePathVar.set(getImagePath(claimId))
 
         async for sseEvent in runGraph(graph, graphInput, request, templates):
             yield sseEvent

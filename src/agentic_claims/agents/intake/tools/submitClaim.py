@@ -10,6 +10,7 @@ from agentic_claims.agents.intake.auditLogger import flushSteps
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
 from agentic_claims.web.employeeIdContext import employeeIdVar
+from agentic_claims.web.imagePathContext import imagePathVar
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,18 @@ async def submitClaim(
             },
         )
         claimData["claimantId"] = serverEmployeeId
+
+    # Server-side image path injection (BUG-020 fix)
+    # The LLM does not reliably pass imagePath through receiptData, so we inject
+    # it server-side from the context var set by the chat router. Only inject if
+    # the receiptData does not already carry an imagePath.
+    serverImagePath = imagePathVar.get(None)
+    if serverImagePath and not receiptData.get("imagePath"):
+        logger.info(
+            "Server-side image path injection",
+            extra={"serverImagePath": serverImagePath},
+        )
+        receiptData["imagePath"] = serverImagePath
 
     # Log tool entry
     logger.info(
