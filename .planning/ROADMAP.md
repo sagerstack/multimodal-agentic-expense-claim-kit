@@ -22,7 +22,8 @@ See MILESTONES.md for archived v1.0 details.
 - [x] **Phase 7: SSE Streaming + Full Chat Page** -- SSE event taxonomy, streaming pipeline, V1 migration, complete Chat Page feature set
 - [x] **Phase 6.1: Model Upgrade + UX Fixes** -- Switch LLM from QwQ-32B to Qwen3-235B-A22B (fast MoE, no CoT chains), swap to v2 system prompt, fix submission summary panel (100% on submit, show Claim ID, correct amounts)
 - [x] **Phase 6.2: Chat UI Refresh + Employee ID Fix** -- Apply Stitch "Updated Branding" design to Chat Page (Decision Pathway sidebar, bottom submission table, message styling, top nav) and fix BUG-015 (server-side employee ID extraction)
-- [ ] **Phase 6.3: User Authentication + Dual Roles + Reviewer Pages** -- Login, auth, roles, Dashboard, Audit Log, Claim Review (absorbs Phase 8 + 9)
+- [x] **Phase 6.3: User Authentication + Dual Roles + Reviewer Pages** -- Login, auth, roles, Dashboard, Audit Log, Claim Review (absorbs Phase 8 + 9)
+- [ ] **Phase 8: Compliance, Fraud + Advisor Agents** -- Replace stubs with LLM-powered agents: policy audit, duplicate/anomaly detection, decision routing (auto-approve, return, escalate)
 - [ ] **Phase 10: Browser E2E Tests** -- Playwright test suite covering all 4 pages against a live server
 
 ---
@@ -149,12 +150,37 @@ Plans:
 **Plans:** 6 plans
 
 Plans:
-- [ ] 06.3-01-PLAN.md -- Auth foundation: Users table + migration + seed data, User model, auth middleware, login/logout endpoints, login template (Stitch design), auth tests
-- [ ] 06.3-02-PLAN.md -- Sidebar + role routing: Update base.html to 2-entry sidebar, role-based route protection, profile dropdown with logout
-- [ ] 06.3-03-PLAN.md -- Dashboard page: KPI API endpoints, claims table with dual navigation, AI Efficiency chart, Stitch template
-- [ ] 06.3-04-PLAN.md -- Audit Log page: Timeline API endpoints, list-detail template with HTMX, decision timeline, confidence scores, intelligence insights
-- [ ] 06.3-05-PLAN.md -- Claim Review page: Claim detail + decision API endpoints, receipt zoom, extracted fields, approve/reject with audit logging
-- [ ] 06.3-06-PLAN.md -- Intake audit logging: Buffer + flush pattern for audit_log entries during intake agent processing
+- [x] 06.3-01-PLAN.md -- Auth foundation: Users table + migration + seed data, User model, auth middleware, login/logout endpoints, login template (Stitch design), auth tests
+- [x] 06.3-02-PLAN.md -- Sidebar + role routing: Update base.html to 2-entry sidebar, role-based route protection, profile dropdown with logout
+- [x] 06.3-03-PLAN.md -- Dashboard page: KPI API endpoints, claims table with dual navigation, AI Efficiency chart, Stitch template
+- [x] 06.3-04-PLAN.md -- Audit Log page: Timeline API endpoints, list-detail template with HTMX, decision timeline, confidence scores, intelligence insights
+- [x] 06.3-05-PLAN.md -- Claim Review page: Claim detail + decision API endpoints, receipt zoom, extracted fields, approve/reject with audit logging
+- [x] 06.3-06-PLAN.md -- Intake audit logging: Buffer + flush pattern for audit_log entries during intake agent processing
+
+---
+
+### Phase 8: Compliance, Fraud + Advisor Agents
+
+**Goal:** The three post-submission agents are fully implemented with LLM-powered reasoning, replacing the current stubs. After a claim is submitted via the Intake Agent, the Compliance Agent audits the claim against company policies (using RAG search), the Fraud Agent detects duplicates and anomalies (amount thresholds, frequency patterns), and the Advisor Agent synthesizes both reports to route the claim: auto-approve (clean), return-to-claimant (violations), or escalate-to-reviewer (suspicious). Each agent writes structured findings to ClaimState and audit_log entries for the decision timeline. The claim status is updated in the database based on the Advisor's routing decision.
+
+**Depends on:** Phase 6.3
+
+**Requirements:** ORCH-03, ORCH-04, ORCH-05, ORCH-06, ORCH-07, APRV-01, APRV-02, APRV-03, REVW-09
+
+**Success Criteria** (what must be TRUE when Phase 8 completes):
+1. After a claim is submitted, the Compliance Agent queries the RAG MCP server with the claim's category and amount, evaluates policy rules, and writes a structured compliance report to `ClaimState.complianceFindings` with pass/fail status, violated rules (if any), and policy references
+2. After a claim is submitted, the Fraud Agent checks for duplicate claims (same employee + merchant + date), flags anomalous amounts exceeding category thresholds, and writes a structured fraud report to `ClaimState.fraudFindings` with risk score, flags raised, and supporting evidence
+3. Compliance and Fraud agents execute in parallel (same LangGraph superstep) -- verifiable by checking that both nodes run in the same superstep via graph execution logs
+4. The Advisor Agent receives both compliance and fraud reports, synthesizes a decision, and routes the claim: status "approved" (clean claim, no violations, low risk), status "returned" (policy violations found), or status "escalated" (fraud flags raised or mixed signals requiring human review)
+5. The Advisor Agent writes a contextual insight note to ClaimState that is displayed on the Claim Review page's AI Insight card (REVW-09)
+6. Each agent writes audit_log entries for its processing step, visible in the Audit Log decision timeline
+7. The claim status in the database is updated to match the Advisor's routing decision (approved/returned/escalated)
+8. All existing tests pass without regression; new unit tests cover each agent's decision logic with at least 3 scenarios per agent (clean claim, violation, suspicious)
+
+**Plans:** TBD (to be created by `/gsd:plan-phase 8`)
+
+Plans:
+- [ ] _Plans not yet created_
 
 ---
 
@@ -162,7 +188,7 @@ Plans:
 
 **Goal:** A Playwright test suite covers the happy path through all 4 pages and one escalation path -- all tests use sentinel elements and `waitForSelector` (never `waitForTimeout`), run against a live uvicorn server in a background thread, and pass reliably in CI.
 
-**Depends on:** Phase 6.3
+**Depends on:** Phase 8
 
 **Requirements:** TEST-01, TEST-02, TEST-03, TEST-04, TEST-05
 
@@ -184,7 +210,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 10
+v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
@@ -192,9 +218,10 @@ v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 10
 | 7. SSE Streaming + Full Chat Page | 3/3 | Complete | 2026-04-02 |
 | 6.1. Model Upgrade + UX Fixes | 2/2 | Complete | 2026-04-04 |
 | 6.2. Chat UI Refresh + Employee ID Fix | 4/4 | Complete | 2026-04-05 |
-| 6.3. User Auth + Dual Roles + Reviewer Pages | 0/6 | Not started | -- |
+| 6.3. User Auth + Dual Roles + Reviewer Pages | 6/6 | Complete | 2026-04-05 |
+| 8. Compliance, Fraud + Advisor Agents | 0/TBD | Not started | -- |
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
 
-**v2.0 total:** 12/20 plans complete
+**v2.0 total:** 18/20+ plans complete (Phase 8 plans TBD)
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)

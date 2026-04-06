@@ -7,12 +7,13 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import RedirectResponse
+from starlette.responses import JSONResponse, RedirectResponse
 from starlette.staticfiles import StaticFiles
 
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.graph import getCompiledGraph
 from agentic_claims.core.logging import setupLogging
+from agentic_claims.web.routers.audit import router as auditRouter
 from agentic_claims.web.routers.auth import router as authRouter
 from agentic_claims.web.routers.chat import router as chatRouter
 from agentic_claims.web.routers.dashboard import router as dashboardRouter
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 # Paths that do not require authentication
 _PUBLIC_PATHS = {"/login", "/logout"}
 _PUBLIC_PREFIXES = ("/static/",)
+# API/SSE paths return 401 JSON instead of 302 redirect (prevents EventSource loops)
+_API_PREFIXES = ("/chat/", "/api/")
 
 
 def _findProjectRoot() -> Path:
@@ -102,6 +105,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if path in _PUBLIC_PATHS or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
             return await callNext(request)
         if not request.session.get("user_id"):
+            # Return 401 for API/SSE paths to prevent EventSource redirect loops
+            if any(path.startswith(p) for p in _API_PREFIXES):
+                return JSONResponse(
+                    {"detail": "Not authenticated"}, status_code=401
+                )
             return RedirectResponse("/login", status_code=302)
         return await callNext(request)
 
@@ -127,6 +135,7 @@ app.mount("/static", StaticFiles(directory=str(projectRoot / "static")), name="s
 
 app.include_router(authRouter)
 app.include_router(chatRouter)
+app.include_router(auditRouter)
 app.include_router(dashboardRouter)
 app.include_router(reviewRouter)
 app.include_router(pagesRouter)

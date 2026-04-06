@@ -64,9 +64,7 @@ def _mockAuthDb(mockUser):
     stack.enter_context(
         patch("agentic_claims.web.auth.create_async_engine", return_value=mockEngine)
     )
-    stack.enter_context(
-        patch("agentic_claims.web.auth.AsyncSession", return_value=mockSessionCtx)
-    )
+    stack.enter_context(patch("agentic_claims.web.auth.AsyncSession", return_value=mockSessionCtx))
     return stack
 
 
