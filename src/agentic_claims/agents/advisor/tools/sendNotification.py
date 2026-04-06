@@ -53,8 +53,8 @@ async def sendNotification(
 
     if recipientType == "claimant":
         toEmail = f"{employeeId}@sutd.edu.sg"
-        status = "approved" if decision == "auto_approve" else (
-            "rejected" if decision == "return_to_claimant" else "escalated"
+        status = "ai_approved" if decision == "auto_approve" else (
+            "ai_rejected" if decision == "return_to_claimant" else "escalated"
         )
     else:
         toEmail = REVIEWER_EMAIL

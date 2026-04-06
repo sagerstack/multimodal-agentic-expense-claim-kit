@@ -67,13 +67,13 @@ def testAuditLogModelStructure():
         claimId=1,
         action="status_change",
         oldValue="draft",
-        newValue="submitted",
+        newValue="pending",
         actor="EMP-001",
     )
 
     assert audit_log.action == "status_change"
     assert audit_log.oldValue == "draft"
-    assert audit_log.newValue == "submitted"
+    assert audit_log.newValue == "pending"
     assert audit_log.actor == "EMP-001"
 
     # Check relationship exists
@@ -129,7 +129,7 @@ def testClaimAgentOutputColumnsExist():
     claim = Claim(
         claimNumber="CLM-002",
         employeeId="EMP-001",
-        status="submitted",
+        status="pending",
         totalAmount=Decimal("200.00"),
         currency="SGD",
     )

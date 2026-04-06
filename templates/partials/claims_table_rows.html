@@ -15,21 +15,37 @@
       {{ claim.currency }} {{ "%.2f"|format(claim.totalAmount) }}
     </td>
     <td class="px-8 py-5">
-      {% if claim.status in ["submitted", "pending"] %}
+      {% if claim.status == "draft" %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-outline-variant/20 text-on-surface-variant text-[10px] font-bold uppercase tracking-widest">
+          <span class="w-1.5 h-1.5 rounded-full bg-on-surface-variant"></span>Draft
+        </span>
+      {% elif claim.status == "pending" %}
         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest">
-          <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>Pending
+          <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>Pending
         </span>
-      {% elif claim.status == "approved" %}
+      {% elif claim.status == "ai_reviewed" %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest">
+          <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>AI Reviewed
+        </span>
+      {% elif claim.status == "ai_approved" %}
         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary/10 text-secondary text-[10px] font-bold uppercase tracking-widest">
-          <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>Approved
+          <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>AI Approved
         </span>
-      {% elif claim.status in ["escalated", "flagged"] %}
+      {% elif claim.status == "manually_approved" %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-widest">
+          <span class="material-symbols-outlined text-xs">verified_user</span>Approved
+        </span>
+      {% elif claim.status == "escalated" %}
         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-bold uppercase tracking-widest">
           <span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>Escalated
         </span>
-      {% elif claim.status == "rejected" %}
+      {% elif claim.status == "ai_rejected" %}
         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-error/10 text-error text-[10px] font-bold uppercase tracking-widest">
-          <span class="w-1.5 h-1.5 rounded-full bg-error"></span>Rejected
+          <span class="w-1.5 h-1.5 rounded-full bg-error"></span>AI Rejected
+        </span>
+      {% elif claim.status == "manually_rejected" %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-error/10 text-error text-[10px] font-bold uppercase tracking-widest">
+          <span class="material-symbols-outlined text-xs">cancel</span>Rejected
         </span>
       {% else %}
         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-outline-variant/20 text-on-surface-variant text-[10px] font-bold uppercase tracking-widest">

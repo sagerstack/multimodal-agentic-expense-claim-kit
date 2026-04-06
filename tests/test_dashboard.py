@@ -72,10 +72,10 @@ def employeeClient():
 def _mockKpiSession(pending=3, approved=10, escalated=2, rejected=1):
     """Build a mock async session that returns KPI status rows."""
     rows = [
-        ("submitted", pending),
-        ("approved", approved),
+        ("pending", pending),
+        ("ai_approved", approved),
         ("escalated", escalated),
-        ("rejected", rejected),
+        ("ai_rejected", rejected),
     ]
     mockResult = MagicMock()
     mockResult.all.return_value = rows
@@ -89,8 +89,8 @@ def _mockKpiSession(pending=3, approved=10, escalated=2, rejected=1):
 def _mockClaimsSession():
     """Build a mock async session that returns claims rows."""
     rows = [
-        (1, "CLM-001", "EMP001", "submitted", Decimal("45.00"), "SGD", None, "Alice Tan"),
-        (2, "CLM-002", "EMP002", "approved", Decimal("120.00"), "SGD", None, None),
+        (1, "CLM-001", "EMP001", "pending", Decimal("45.00"), "SGD", None, "Alice Tan"),
+        (2, "CLM-002", "EMP002", "ai_approved", Decimal("120.00"), "SGD", None, None),
     ]
     mockResult = MagicMock()
     mockResult.all.return_value = rows

@@ -98,7 +98,7 @@ def testTimelineEndpointReturnsSteps(client):
     mockClaimRow = MagicMock()
     mockClaimRow.id = 1
     mockClaimRow.claimNumber = "CLM-001"
-    mockClaimRow.status = "submitted"
+    mockClaimRow.status = "pending"
     mockClaimRow.totalAmount = Decimal("45.00")
     mockClaimRow.currency = "SGD"
     mockClaimRow.merchant = "Starbucks"
@@ -229,7 +229,7 @@ def testClaimsListEndpointReturnsSortedList(client):
     row1 = MagicMock()
     row1.id = 2
     row1.claimNumber = "CLM-002"
-    row1.status = "approved"
+    row1.status = "ai_approved"
     row1.totalAmount = Decimal("200.00")
     row1.currency = "SGD"
     row1.createdAt = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
@@ -237,7 +237,7 @@ def testClaimsListEndpointReturnsSortedList(client):
     row2 = MagicMock()
     row2.id = 1
     row2.claimNumber = "CLM-001"
-    row2.status = "submitted"
+    row2.status = "pending"
     row2.totalAmount = Decimal("45.00")
     row2.currency = "SGD"
     row2.createdAt = datetime(2026, 4, 4, 12, 0, tzinfo=timezone.utc)
@@ -477,7 +477,7 @@ def testAuditPageClaimsListNotEmptyWhenTimelineFails(client):
         {
             "id": 5,
             "claimNumber": "CLM-005",
-            "status": "submitted",
+            "status": "pending",
             "totalAmount": 88.0,
             "currency": "SGD",
             "createdAt": "2026-04-05T10:00:00",

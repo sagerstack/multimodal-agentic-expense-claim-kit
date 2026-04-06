@@ -4,8 +4,8 @@ Calls the DB MCP server's `updateClaimStatus` tool to persist the advisor's
 routing decision back to PostgreSQL and create an audit log entry.
 
 Status transitions driven by advisor decision:
-  auto_approve        → "approved"
-  return_to_claimant  → "rejected"
+  auto_approve        → "ai_approved"
+  return_to_claimant  → "ai_rejected"
   escalate_to_reviewer → "escalated"
 """
 
@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 # Maps advisor decision strings to DB status values
 DECISION_TO_STATUS = {
-    "auto_approve": "approved",
-    "return_to_claimant": "rejected",
+    "auto_approve": "ai_approved",
+    "return_to_claimant": "ai_rejected",
     "escalate_to_reviewer": "escalated",
 }
 

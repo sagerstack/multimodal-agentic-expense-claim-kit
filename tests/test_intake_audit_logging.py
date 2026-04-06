@@ -134,7 +134,7 @@ async def testLogIntakeStepCallsMcp():
         await logIntakeStep(
             claimId=10,
             action="final_decision",
-            details={"decision": "approved", "confidence": 0.95},
+            details={"decision": "ai_approved", "confidence": 0.95},
         )
 
     mockMcp.assert_called_once()
@@ -143,7 +143,7 @@ async def testLogIntakeStepCallsMcp():
     assert call.kwargs["arguments"]["claimId"] == 10
     assert call.kwargs["arguments"]["action"] == "final_decision"
     assert call.kwargs["arguments"]["actor"] == "intake_agent"
-    assert '"decision": "approved"' in call.kwargs["arguments"]["newValue"]
+    assert '"decision": "ai_approved"' in call.kwargs["arguments"]["newValue"]
 
 
 @pytest.mark.asyncio

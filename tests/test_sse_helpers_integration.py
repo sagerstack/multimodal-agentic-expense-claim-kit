@@ -317,7 +317,7 @@ async def testRunGraphIntakeResponseNotOverwrittenByAdvisor():
             "receipt_date": "2026-04-05",
             "total_amount": "42.00",
             "currency": "SGD",
-            "status": "submitted",
+            "status": "pending",
             "created_at": "2026-04-05 10:00",
             "claim_number": "CLM-042",
         }

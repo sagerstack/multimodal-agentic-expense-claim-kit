@@ -10,7 +10,7 @@ import pytest
 def makeState(overrides: dict | None = None) -> dict:
     base = {
         "claimId": "test-claim-123",
-        "status": "submitted",
+        "status": "pending",
         "messages": [],
         "extractedReceipt": {
             "fields": {

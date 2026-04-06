@@ -31,7 +31,7 @@ _FAKE_CLAIM_ROW = {
     "id": 42,
     "claim_number": "CLM-0042",
     "employee_id": "EMP001",
-    "status": "submitted",
+    "status": "pending",
     "total_amount": Decimal("120.00"),
     "currency": "SGD",
     "created_at": None,
@@ -133,7 +133,7 @@ def testClaimDetailEndpointReturnsFullData(client):
     claim = data["claim"]
     assert claim["id"] == 42
     assert claim["claimNumber"] == "CLM-0042"
-    assert claim["status"] == "submitted"
+    assert claim["status"] == "pending"
     assert claim["totalAmount"] == 120.0
 
     receipt = data["receipt"]
@@ -422,7 +422,7 @@ def testApprovedByAiShowsAutoApprovedBadge(client):
     """BUG-022: when approved_by is 'agent', badge should say 'AUTO-APPROVED BY AI'."""
     aiApprovedRow = {
         **_FAKE_CLAIM_ROW,
-        "status": "approved",
+        "status": "ai_approved",
         "approved_by": "agent",
     }
     _path = "agentic_claims.web.routers.review"
@@ -438,7 +438,7 @@ def testApprovedByReviewerShowsReviewerBadge(client):
     """BUG-022/BUG-023: when approved_by is a reviewer employee ID, badge should say 'APPROVED BY REVIEWER'."""
     reviewerApprovedRow = {
         **_FAKE_CLAIM_ROW,
-        "status": "approved",
+        "status": "manually_approved",
         "approved_by": "EMP002",
     }
     _path = "agentic_claims.web.routers.review"
@@ -454,7 +454,7 @@ def testApprovedByNullShowsAutoApprovedBadge(client):
     """BUG-022: when approved_by is NULL (legacy), badge defaults to 'AUTO-APPROVED BY AI'."""
     nullApprovedRow = {
         **_FAKE_CLAIM_ROW,
-        "status": "approved",
+        "status": "ai_approved",
         "approved_by": None,
     }
     _path = "agentic_claims.web.routers.review"

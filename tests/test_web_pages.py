@@ -46,10 +46,10 @@ def client():
     testApp.include_router(pagesRouter)
     testApp.state.graph = MagicMock()
 
-    emptyKpis = {"pending": 0, "autoApproved": 0, "escalated": 0}
+    emptyKpis = {"draft": 0, "pending": 0, "aiReviewed": 0, "autoApproved": 0, "escalated": 0, "rejected": 0}
     fakeClaimRow = {
         "id": 1, "claim_number": "CLM-0001", "employee_id": "EMP001",
-        "status": "submitted", "total_amount": 45.0, "currency": "SGD",
+        "status": "pending", "total_amount": 45.0, "currency": "SGD",
         "created_at": None, "intake_findings": {},
         "receipt_id": 1, "merchant": "Test", "date": "2026-04-01",
         "receipt_amount": 45.0, "receipt_currency": "SGD", "image_path": None,

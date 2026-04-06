@@ -16,13 +16,21 @@
           {{ c.createdAt[:10] if c.createdAt else "Unknown date" }}
         </p>
       </div>
-      {% if c.status in ["submitted", "pending"] %}
+      {% if c.status == "draft" %}
+        <span class="px-2 py-1 rounded bg-outline-variant/20 text-on-surface-variant text-[10px] font-bold uppercase tracking-wider">Draft</span>
+      {% elif c.status == "pending" %}
         <span class="px-2 py-1 rounded bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">Pending</span>
-      {% elif c.status == "approved" %}
-        <span class="px-2 py-1 rounded bg-secondary/10 text-secondary text-[10px] font-bold uppercase tracking-wider">Approved</span>
-      {% elif c.status in ["escalated", "flagged"] %}
+      {% elif c.status == "ai_reviewed" %}
+        <span class="px-2 py-1 rounded bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">AI Reviewed</span>
+      {% elif c.status == "ai_approved" %}
+        <span class="px-2 py-1 rounded bg-secondary/10 text-secondary text-[10px] font-bold uppercase tracking-wider">AI Approved</span>
+      {% elif c.status == "manually_approved" %}
+        <span class="px-2 py-1 rounded bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-wider">Approved</span>
+      {% elif c.status == "escalated" %}
         <span class="px-2 py-1 rounded bg-tertiary/10 text-tertiary text-[10px] font-bold uppercase tracking-wider">Escalated</span>
-      {% elif c.status == "rejected" %}
+      {% elif c.status == "ai_rejected" %}
+        <span class="px-2 py-1 rounded bg-error/10 text-error text-[10px] font-bold uppercase tracking-wider">AI Rejected</span>
+      {% elif c.status == "manually_rejected" %}
         <span class="px-2 py-1 rounded bg-error/10 text-error text-[10px] font-bold uppercase tracking-wider">Rejected</span>
       {% else %}
         <span class="px-2 py-1 rounded bg-outline-variant/20 text-on-surface-variant text-[10px] font-bold uppercase tracking-wider">{{ c.status | title }}</span>

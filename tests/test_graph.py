@@ -9,6 +9,11 @@ from agentic_claims.core.graph import buildGraph
 from agentic_claims.core.state import ClaimState
 
 
+async def _mockMarkAiReviewedNode(state: ClaimState) -> dict:
+    """Mock markAiReviewedNode that skips DB call."""
+    return {"status": "ai_reviewed"}
+
+
 @pytest.mark.asyncio
 async def test_pendingClaimEndsAfterIntake():
     """Verify pending claim (not submitted) ends after intake without routing to compliance/fraud."""
@@ -57,7 +62,10 @@ async def test_submittedClaimRoutesToComplianceAndFraud():
             "claimSubmitted": True,  # Key: claim IS submitted
         }
 
-    with patch("agentic_claims.core.graph.intakeNode", mockIntakeNode):
+    with (
+        patch("agentic_claims.core.graph.intakeNode", mockIntakeNode),
+        patch("agentic_claims.core.graph.markAiReviewedNode", _mockMarkAiReviewedNode),
+    ):
         # Build graph without checkpointer
         graph = buildGraph().compile()
 
@@ -75,7 +83,7 @@ async def test_submittedClaimRoutesToComplianceAndFraud():
         # Verify claimSubmitted is True
         assert result.get("claimSubmitted", False) is True, "Claim should be submitted"
 
-        # Verify all 4 agents ran (intake + compliance + fraud + advisor)
+        # Verify all agents ran (intake + compliance + fraud + markAiReviewed + advisor)
         messageContents = [msg.content for msg in result["messages"]]
         allContent = " ".join(messageContents)
 
@@ -95,7 +103,10 @@ async def test_complianceAndFraudRunInParallel():
             "claimSubmitted": True,
         }
 
-    with patch("agentic_claims.core.graph.intakeNode", mockIntakeNode):
+    with (
+        patch("agentic_claims.core.graph.intakeNode", mockIntakeNode),
+        patch("agentic_claims.core.graph.markAiReviewedNode", _mockMarkAiReviewedNode),
+    ):
         # Build graph without checkpointer
         graph = buildGraph().compile()
 
@@ -135,6 +146,12 @@ async def test_complianceAndFraudRunInParallel():
             abs(complianceIdx - fraudIdx) <= 1
         ), "Compliance and Fraud should run in parallel (same superstep)"
 
+        # Verify markAiReviewed runs between compliance/fraud and advisor
+        markReviewedIdx = allNodes.index("markAiReviewed")
+        assert (
+            complianceIdx < markReviewedIdx < advisorIdx
+        ), "markAiReviewed should run between compliance/fraud fan-in and advisor"
+
 
 @pytest.mark.asyncio
 async def test_claimStatePassedBetweenNodes():
@@ -146,7 +163,10 @@ async def test_claimStatePassedBetweenNodes():
             "claimSubmitted": True,
         }
 
-    with patch("agentic_claims.core.graph.intakeNode", mockIntakeNode):
+    with (
+        patch("agentic_claims.core.graph.intakeNode", mockIntakeNode),
+        patch("agentic_claims.core.graph.markAiReviewedNode", _mockMarkAiReviewedNode),
+    ):
         # Build graph without checkpointer
         graph = buildGraph().compile()
 
@@ -166,7 +186,7 @@ async def test_claimStatePassedBetweenNodes():
 
         # Verify status transitions: draft -> escalated (advisor error fallback escalates safely)
         # When advisor cannot connect to DB or LLM, it escalates rather than silently approving
-        assert result["status"] in ("approved", "escalated", "rejected"), "Final status should be a valid terminal status"
+        assert result["status"] in ("ai_approved", "escalated", "ai_rejected"), "Final status should be a valid terminal status"
 
 
 @pytest.mark.asyncio
@@ -212,7 +232,10 @@ async def test_evaluatorGateWithSubmittedClaim():
             "claimSubmitted": True,  # Key flag
         }
 
-    with patch("agentic_claims.core.graph.intakeNode", mockIntakeNode):
+    with (
+        patch("agentic_claims.core.graph.intakeNode", mockIntakeNode),
+        patch("agentic_claims.core.graph.markAiReviewedNode", _mockMarkAiReviewedNode),
+    ):
         # Build graph
         graph = buildGraph().compile()
 
@@ -228,9 +251,10 @@ async def test_evaluatorGateWithSubmittedClaim():
         async for update in graph.astream(initialState, stream_mode="updates"):
             nodesSeen.extend(list(update.keys()))
 
-        # Should see intake, postSubmission, compliance, fraud, advisor
+        # Should see intake, postSubmission, compliance, fraud, markAiReviewed, advisor
         assert "intake" in nodesSeen, "Intake should execute"
         assert "postSubmission" in nodesSeen, "PostSubmission should execute"
         assert "compliance" in nodesSeen, "Compliance should execute"
         assert "fraud" in nodesSeen, "Fraud should execute"
+        assert "markAiReviewed" in nodesSeen, "markAiReviewed should execute"
         assert "advisor" in nodesSeen, "Advisor should execute"

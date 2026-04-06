@@ -9,7 +9,7 @@ import pytest
 def makeState(overrides: dict | None = None) -> dict:
     base = {
         "claimId": "test-fraud-claim-001",
-        "status": "submitted",
+        "status": "pending",
         "messages": [],
         "extractedReceipt": {
             "fields": {
@@ -99,7 +99,7 @@ async def testFraudExactDuplicateShortCircuit():
         "id": 5,
         "claim_number": "CLAIM-005",
         "employee_id": "1010736",
-        "status": "approved",
+        "status": "ai_approved",
         "total_amount": "45.00",
         "merchant": "The Canteen",
         "receipt_date": "2026-04-06",

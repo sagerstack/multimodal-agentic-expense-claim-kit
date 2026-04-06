@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 def makeState(overrides: dict | None = None) -> dict:
     base = {
         "claimId": "test-advisor-001",
-        "status": "submitted",
+        "status": "pending",
         "messages": [],
         "claimNumber": "CLAIM-007",
         "dbClaimId": 42,
@@ -101,7 +101,7 @@ async def testAdvisorAutoApproveCleanClaim():
         result = await advisorNode(state)
 
     assert result["advisorDecision"] == "auto_approve"
-    assert result["status"] == "approved"
+    assert result["status"] == "ai_approved"
     assert len(result["messages"]) == 1
     assert "AUTO-APPROVED" in result["messages"][0].content.upper()
 
@@ -136,7 +136,7 @@ async def testAdvisorReturnToClaimantViolation():
         result = await advisorNode(state)
 
     assert result["advisorDecision"] == "return_to_claimant"
-    assert result["status"] == "rejected"
+    assert result["status"] == "ai_rejected"
 
 
 @pytest.mark.asyncio
