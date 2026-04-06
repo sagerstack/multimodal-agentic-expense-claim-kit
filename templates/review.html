@@ -7,16 +7,30 @@
   <header class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
     <div>
       <div class="flex items-center gap-3 mb-2">
-        <span class="bg-error/10 text-error text-[10px] font-bold px-2 py-0.5 rounded-full border border-error/20 flex items-center gap-1">
-          <span class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span>
-          ESCALATION
-        </span>
+        {% if claim and claim.status == "escalated" %}
+          <span class="bg-error/10 text-error text-[10px] font-bold px-2 py-0.5 rounded-full border border-error/20 flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span>
+            ESCALATION
+          </span>
+        {% elif claim and claim.status == "approved" %}
+          <span class="bg-secondary/10 text-secondary text-[10px] font-bold px-2 py-0.5 rounded-full border border-secondary/20 flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+            AUTO-APPROVED BY AI
+          </span>
+        {% elif claim and claim.status == "rejected" %}
+          <span class="bg-error/10 text-error text-[10px] font-bold px-2 py-0.5 rounded-full border border-error/20 flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs" style="font-variation-settings: 'FILL' 1;">cancel</span>
+            REJECTED
+          </span>
+        {% else %}
+          <span class="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full border border-primary/20">REVIEW</span>
+        {% endif %}
         <span class="text-on-surface-variant/40 text-xs">
           {% if claim %}{{ claim.claimNumber }}{% else %}Claim #{{ claimId }}{% endif %}
         </span>
       </div>
-      <h1 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface leading-none">Review Flagged Claim</h1>
-      <p class="text-on-surface-variant mt-2 max-w-xl">Inspect AI extraction results and approve or reject the claim below.</p>
+      <h1 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface leading-none">Claim Review</h1>
+      <p class="text-on-surface-variant mt-2 max-w-xl">Inspect AI extraction results, compliance and fraud findings.</p>
     </div>
     <a href="/dashboard"
        class="px-6 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface hover:bg-surface-bright transition-all font-bold flex items-center gap-2 self-start">
@@ -151,7 +165,7 @@
     <!-- Right: Intelligence Panel -->
     <section class="col-span-12 xl:col-span-4 space-y-6">
 
-      <!-- Flag Reason Card -->
+      <!-- Flag Reason Card (Intake) -->
       <div class="bg-surface-container-highest rounded-2xl p-6 border-t border-error/30 relative overflow-hidden shadow-2xl">
         <div class="absolute top-0 right-0 p-4">
           <span class="material-symbols-outlined text-error/20 text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">security</span>
@@ -173,13 +187,129 @@
                 </div>
               </div>
             {% else %}
-              <p class="text-on-surface-variant text-sm italic">No flag reason available. No policy violations were detected during AI intake.</p>
+              <p class="text-on-surface-variant text-sm italic">No policy violations detected during AI intake.</p>
             {% endif %}
           </div>
         </div>
       </div>
 
-      <!-- Reviewer Decision Form -->
+      <!-- Compliance Card -->
+      {% if complianceFindings %}
+      {% set cverd = complianceFindings.verdict | default("") %}
+      <div class="bg-surface-container-low rounded-2xl p-6 border-t
+        {% if cverd == 'fail' %}border-red-500/30{% else %}border-green-500/30{% endif %} shadow-xl relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-4">
+          <span class="material-symbols-outlined text-4xl rotate-12
+            {% if cverd == 'fail' %}text-red-500/15{% else %}text-green-500/15{% endif %}"
+            style="font-variation-settings: 'FILL' 1;">policy</span>
+        </div>
+        <div class="relative z-10">
+          <div class="flex items-center justify-between mb-4">
+            <h4 class="font-headline font-bold text-lg flex items-center gap-2
+              {% if cverd == 'fail' %}text-red-400{% else %}text-green-400{% endif %}">
+              <span class="material-symbols-outlined text-sm
+                {% if cverd == 'fail' %}text-red-400{% else %}text-green-400{% endif %}">
+                {% if cverd == 'fail' %}gpp_bad{% else %}verified_user{% endif %}
+              </span>
+              Compliance
+            </h4>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest
+              {% if cverd == 'fail' %}bg-red-500/10 text-red-400{% else %}bg-green-500/10 text-green-400{% endif %}">
+              {{ cverd | upper if cverd else "CHECKED" }}
+            </span>
+          </div>
+          {% set violations = complianceFindings.violations | default([]) %}
+          {% if violations %}
+            <div class="space-y-2 mb-3">
+              {% for v in violations[:3] %}
+                <div class="p-2 bg-red-500/5 rounded-lg border border-red-500/10 text-xs">
+                  <span class="font-bold text-red-400">{{ v.field | default("Field") }}</span>
+                  {% if v.value and v.limit %}
+                    <span class="text-on-surface-variant"> — {{ v.value }} / limit {{ v.limit }}</span>
+                  {% endif %}
+                  {% if v.severity %}
+                    <span class="ml-1 text-[9px] uppercase font-bold text-on-surface-variant/60">({{ v.severity }})</span>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% set clauses = complianceFindings.citedClauses | default([]) %}
+          {% if clauses %}
+            <div class="flex flex-wrap gap-1 mb-3">
+              {% for clause in clauses[:4] %}
+                <span class="text-[9px] px-1.5 py-0.5 rounded bg-surface-container-highest text-primary/80 border border-primary/20">{{ clause }}</span>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% set thresholds = [] %}
+          {% if complianceFindings.requiresManagerApproval %}{% set _ = thresholds.append("Manager") %}{% endif %}
+          {% if complianceFindings.requiresDirectorApproval %}{% set _ = thresholds.append("Director") %}{% endif %}
+          {% if thresholds %}
+            <p class="text-xs text-on-surface-variant mb-2">Approval required: {{ thresholds | join(", ") }}</p>
+          {% endif %}
+          {% if complianceFindings.summary %}
+            <p class="text-xs text-on-surface-variant/70 leading-relaxed italic">{{ complianceFindings.summary }}</p>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Fraud Card -->
+      {% if fraudFindings %}
+      {% set fverd = fraudFindings.verdict | default("") %}
+      <div class="bg-surface-container-low rounded-2xl p-6 border-t
+        {% if fverd == 'duplicate' %}border-red-500/30{% elif fverd == 'suspicious' %}border-orange-500/30{% else %}border-green-500/30{% endif %} shadow-xl relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-4">
+          <span class="material-symbols-outlined text-4xl rotate-12
+            {% if fverd == 'duplicate' %}text-red-500/15{% elif fverd == 'suspicious' %}text-orange-500/15{% else %}text-green-500/15{% endif %}"
+            style="font-variation-settings: 'FILL' 1;">shield</span>
+        </div>
+        <div class="relative z-10">
+          <div class="flex items-center justify-between mb-4">
+            <h4 class="font-headline font-bold text-lg flex items-center gap-2
+              {% if fverd == 'duplicate' %}text-red-400{% elif fverd == 'suspicious' %}text-orange-400{% else %}text-green-400{% endif %}">
+              <span class="material-symbols-outlined text-sm">
+                {% if fverd == 'duplicate' %}content_copy{% elif fverd == 'suspicious' %}warning_amber{% else %}security{% endif %}
+              </span>
+              Fraud Check
+            </h4>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest
+              {% if fverd == 'duplicate' %}bg-red-500/10 text-red-400
+              {% elif fverd == 'suspicious' %}bg-orange-500/10 text-orange-400
+              {% else %}bg-green-500/10 text-green-400{% endif %}">
+              {{ fverd | upper if fverd else "CHECKED" }}
+            </span>
+          </div>
+          {% set flags = fraudFindings.flags | default([]) %}
+          {% if flags %}
+            <div class="space-y-2 mb-3">
+              {% for flag in flags[:3] %}
+                <div class="p-2 bg-orange-500/5 rounded-lg border border-orange-500/10 text-xs">
+                  <span class="font-bold text-orange-400">{{ flag.type | default("Flag") | replace("_", " ") | title }}</span>
+                  {% if flag.description %}
+                    <span class="text-on-surface-variant"> — {{ flag.description }}</span>
+                  {% endif %}
+                  {% if flag.confidence %}
+                    <span class="ml-1 text-[9px] text-on-surface-variant/60">({{ (flag.confidence * 100)|int }}%)</span>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% set dupes = fraudFindings.duplicateClaims | default([]) %}
+          {% if dupes %}
+            <p class="text-xs text-red-400 mb-2">Duplicate matches: {{ dupes | join(", ") }}</p>
+          {% endif %}
+          {% if fraudFindings.summary %}
+            <p class="text-xs text-on-surface-variant/70 leading-relaxed italic">{{ fraudFindings.summary }}</p>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Reviewer Decision Form (escalated claims only) -->
+      {% if showActions %}
       <div class="bg-surface-container-low rounded-2xl p-6 shadow-xl border border-outline-variant/10">
         <h4 class="text-on-surface font-headline font-bold mb-4 flex items-center gap-2">
           <span class="material-symbols-outlined text-secondary">notes</span>
@@ -249,6 +379,7 @@
           </div>
         </form>
       </div>
+      {% endif %}
 
       <!-- AI Insight Card -->
       <div class="bg-surface-container-low rounded-2xl p-6 border border-secondary/10 relative overflow-hidden shadow-xl">
@@ -259,6 +390,19 @@
           </div>
           <h5 class="text-secondary font-headline font-bold">AI Insight</h5>
         </div>
+        {% if advisorDecision %}
+          <div class="mb-3 p-3 rounded-xl border
+            {% if advisorDecision == 'auto_approve' %}bg-green-500/5 border-green-500/20
+            {% elif advisorDecision == 'escalate_to_reviewer' %}bg-purple-500/5 border-purple-500/20
+            {% else %}bg-red-500/5 border-red-500/20{% endif %}">
+            <p class="text-xs font-bold uppercase tracking-widest
+              {% if advisorDecision == 'auto_approve' %}text-green-400
+              {% elif advisorDecision == 'escalate_to_reviewer' %}text-purple-400
+              {% else %}text-red-400{% endif %} mb-1">
+              Advisor: {{ advisorDecision.replace("_", " ") }}
+            </p>
+          </div>
+        {% endif %}
         {% if aiInsight %}
           <p class="text-on-surface text-sm leading-relaxed">
             <span class="font-bold text-on-surface">{{ aiInsight.employeeName }}</span> has

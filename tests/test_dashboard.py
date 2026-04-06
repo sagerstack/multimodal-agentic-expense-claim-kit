@@ -69,12 +69,13 @@ def employeeClient():
             yield c
 
 
-def _mockKpiSession(pending=3, approved=10, escalated=2):
+def _mockKpiSession(pending=3, approved=10, escalated=2, rejected=1):
     """Build a mock async session that returns KPI status rows."""
     rows = [
         ("submitted", pending),
         ("approved", approved),
         ("escalated", escalated),
+        ("rejected", rejected),
     ]
     mockResult = MagicMock()
     mockResult.all.return_value = rows
@@ -113,7 +114,7 @@ def _mockEfficiencySession():
 
 
 def testKpisEndpointReturnsCorrectShape(client):
-    """GET /api/dashboard/kpis returns JSON with pending, autoApproved, escalated."""
+    """GET /api/dashboard/kpis returns JSON with pending, autoApproved, escalated, rejected."""
     mockSession = _mockKpiSession(pending=3, approved=10, escalated=2)
     with patch("agentic_claims.web.routers.dashboard.getAsyncSession", return_value=mockSession):
         response = client.get("/api/dashboard/kpis")
@@ -122,6 +123,7 @@ def testKpisEndpointReturnsCorrectShape(client):
     assert "pending" in data
     assert "autoApproved" in data
     assert "escalated" in data
+    assert "rejected" in data
     assert data["pending"] == 3
     assert data["autoApproved"] == 10
     assert data["escalated"] == 2
@@ -244,3 +246,16 @@ def testDashboardPageNotInPagesRouter():
 
     routes = [r.path for r in pages.router.routes]
     assert "/dashboard" not in routes
+
+
+def testKpisEndpointIncludesRejectedCount(client):
+    """GET /api/dashboard/kpis returns rejected count in status breakdown."""
+    mockSession = _mockKpiSession(pending=2, approved=8, escalated=3, rejected=4)
+    with patch("agentic_claims.web.routers.dashboard.getAsyncSession", return_value=mockSession):
+        response = client.get("/api/dashboard/kpis")
+    assert response.status_code == 200
+    data = response.json()
+    assert "rejected" in data
+    assert data["rejected"] == 4
+    assert data["pending"] == 2
+    assert data["escalated"] == 3

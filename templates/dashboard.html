@@ -24,7 +24,7 @@
   </header>
 
   <!-- Bento Grid KPI Cards -->
-  <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+  <section class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
     <!-- Total Pending -->
     <div class="bg-surface-container-low p-8 rounded-3xl border-t border-outline-variant/15 flex flex-col justify-between h-48 hover:bg-surface-bright transition-all duration-300">
       <div class="flex justify-between items-start">
@@ -32,7 +32,7 @@
       </div>
       <div>
         <h4 class="text-4xl font-headline font-extrabold tracking-tight">{{ kpis.pending }}</h4>
-        <p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Total Pending Claims</p>
+        <p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Pending</p>
       </div>
     </div>
     <!-- Auto-Approved -->
@@ -45,7 +45,7 @@
           <h4 class="text-4xl font-headline font-extrabold tracking-tight">{{ kpis.autoApproved }}</h4>
           <div class="w-2 h-2 rounded-full bg-secondary animate-pulse mb-1"></div>
         </div>
-        <p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Auto-Approved by AI</p>
+        <p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Approved</p>
       </div>
     </div>
     <!-- Escalated -->
@@ -55,7 +55,17 @@
       </div>
       <div>
         <h4 class="text-4xl font-headline font-extrabold tracking-tight">{{ kpis.escalated }}</h4>
-        <p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Escalated to Human</p>
+        <p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Escalated</p>
+      </div>
+    </div>
+    <!-- Rejected -->
+    <div class="bg-surface-container-low p-8 rounded-3xl border-t border-error/20 flex flex-col justify-between h-48 hover:bg-surface-bright transition-all duration-300">
+      <div class="flex justify-between items-start">
+        <span class="material-symbols-outlined text-error text-3xl">cancel</span>
+      </div>
+      <div>
+        <h4 class="text-4xl font-headline font-extrabold tracking-tight">{{ kpis.rejected }}</h4>
+        <p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Rejected</p>
       </div>
     </div>
   </section>

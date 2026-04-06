@@ -148,19 +148,27 @@ def testTimelineEndpointReturnsSteps(client):
     assert "Receipt Uploaded" in response.text
     assert "AI Extraction" in response.text
     assert "Policy Check" in response.text
-    assert "Final Decision" in response.text
+    assert "Claim Submitted" in response.text
 
 
 def testTimelineEndpointHandlesMissingSteps(client):
-    """No audit entries returns all 4 steps as pending."""
+    """No audit entries returns all 7 steps as pending."""
     from agentic_claims.web.routers.audit import _buildTimelineSteps
 
     steps = _buildTimelineSteps([])
-    assert len(steps) == 4
+    assert len(steps) == 7
     for step in steps:
         assert step["status"] == "pending"
     names = [s["name"] for s in steps]
-    assert names == ["Receipt Uploaded", "AI Extraction", "Policy Check", "Final Decision"]
+    assert names == [
+        "Receipt Uploaded",
+        "AI Extraction",
+        "Policy Check",
+        "Claim Submitted",
+        "Compliance Check",
+        "Fraud Check",
+        "Advisor Decision",
+    ]
 
 
 def testInsightsEndpointReturnsAnomalyAndBenchmark(client):
@@ -320,3 +328,90 @@ def testBuildTimelineStepsPolicyCompliant():
     policyStep = next(s for s in steps if s["name"] == "Policy Check")
     assert policyStep["compliant"] is True
     assert policyStep["violations"] == []
+
+
+def testBuildTimelineAllSevenSteps():
+    """_buildTimelineSteps produces 7 ordered steps when all audit_log actions present."""
+    from agentic_claims.web.routers.audit import _buildTimelineSteps
+
+    rows = [
+        _makeAuditRow("receipt_uploaded", "{}"),
+        _makeAuditRow("ai_extraction", '{"confidence": 0.92}'),
+        _makeAuditRow("policy_check", '{"compliant": true, "policyRefs": [], "violations": []}'),
+        _makeAuditRow("claim_submitted", "{}"),
+        _makeAuditRow(
+            "compliance_check",
+            '{"verdict": "pass", "violations": [], "citedClauses": ["Meals 3.1"], "summary": "All good"}',
+        ),
+        _makeAuditRow(
+            "fraud_check",
+            '{"verdict": "legit", "flags": [], "duplicateClaims": [], "summary": "No fraud detected"}',
+        ),
+        _makeAuditRow(
+            "advisor_decision",
+            '{"decision": "auto_approve", "reasoning": "Clean claim", "complianceSummary": "pass", "fraudSummary": "legit"}',
+        ),
+    ]
+    steps = _buildTimelineSteps(rows)
+    assert len(steps) == 7
+    names = [s["name"] for s in steps]
+    assert names == [
+        "Receipt Uploaded",
+        "AI Extraction",
+        "Policy Check",
+        "Claim Submitted",
+        "Compliance Check",
+        "Fraud Check",
+        "Advisor Decision",
+    ]
+    for step in steps:
+        assert step["status"] == "completed"
+
+
+def testBuildTimelineComplianceCheckColorAndDetails():
+    """_buildTimelineSteps sets correct color and details for compliance_check action."""
+    from agentic_claims.web.routers.audit import _buildTimelineSteps
+
+    # Fail verdict should produce red color
+    rowsFail = [
+        _makeAuditRow(
+            "compliance_check",
+            '{"verdict": "fail", "violations": [{"field": "amount"}], "citedClauses": ["Meals 2.3"], "summary": "Exceeds cap"}',
+        ),
+    ]
+    stepsFail = _buildTimelineSteps(rowsFail)
+    compStep = next(s for s in stepsFail if s["name"] == "Compliance Check")
+    assert compStep["color"] == "red"
+    assert compStep["complianceVerdict"] == "fail"
+    assert compStep["violationCount"] == 1
+    assert "Meals 2.3" in compStep["citedClauses"]
+    assert compStep["complianceSummary"] == "Exceeds cap"
+
+    # Pass verdict should produce green color
+    rowsPass = [
+        _makeAuditRow(
+            "compliance_check",
+            '{"verdict": "pass", "violations": [], "citedClauses": [], "summary": "OK"}',
+        ),
+    ]
+    stepsPass = _buildTimelineSteps(rowsPass)
+    compStepPass = next(s for s in stepsPass if s["name"] == "Compliance Check")
+    assert compStepPass["color"] == "green"
+
+
+def testBuildTimelineParallelStepsHaveParallelFlag():
+    """_buildTimelineSteps sets parallel=True for Compliance Check and Fraud Check steps."""
+    from agentic_claims.web.routers.audit import _buildTimelineSteps
+
+    rows = [
+        _makeAuditRow("compliance_check", '{"verdict": "pass", "violations": [], "summary": ""}'),
+        _makeAuditRow("fraud_check", '{"verdict": "legit", "flags": [], "summary": ""}'),
+    ]
+    steps = _buildTimelineSteps(rows)
+    compStep = next(s for s in steps if s["name"] == "Compliance Check")
+    fraudStep = next(s for s in steps if s["name"] == "Fraud Check")
+    assert compStep["parallel"] is True
+    assert fraudStep["parallel"] is True
+    # Other steps should not have parallel=True
+    receiptStep = next(s for s in steps if s["name"] == "Receipt Uploaded")
+    assert receiptStep["parallel"] is False

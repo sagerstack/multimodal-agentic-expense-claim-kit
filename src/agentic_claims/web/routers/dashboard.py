@@ -20,10 +20,11 @@ router = APIRouter()
 _PENDING_STATUSES = {"submitted", "pending"}
 _APPROVED_STATUSES = {"approved"}
 _ESCALATED_STATUSES = {"escalated", "flagged"}
+_REJECTED_STATUSES = {"rejected"}
 
 
 async def _queryKpis() -> dict:
-    """Query KPI counts from claims table."""
+    """Query KPI counts from claims table with status breakdown."""
     async with getAsyncSession() as session:
         result = await session.execute(
             select(Claim.status, func.count(Claim.id).label("cnt")).group_by(Claim.status)
@@ -33,6 +34,7 @@ async def _queryKpis() -> dict:
     pending = 0
     autoApproved = 0
     escalated = 0
+    rejected = 0
     for status, cnt in rows:
         if status in _PENDING_STATUSES:
             pending += cnt
@@ -40,8 +42,15 @@ async def _queryKpis() -> dict:
             autoApproved += cnt
         elif status in _ESCALATED_STATUSES:
             escalated += cnt
+        elif status in _REJECTED_STATUSES:
+            rejected += cnt
 
-    return {"pending": pending, "autoApproved": autoApproved, "escalated": escalated}
+    return {
+        "pending": pending,
+        "autoApproved": autoApproved,
+        "escalated": escalated,
+        "rejected": rejected,
+    }
 
 
 async def _queryClaims() -> list[dict]:
@@ -135,7 +144,7 @@ async def dashboardPage(request: Request):
         claims = await _queryClaims()
     except Exception:
         logger.exception("Dashboard DB query failed — rendering with empty data")
-        kpis = {"pending": 0, "autoApproved": 0, "escalated": 0}
+        kpis = {"pending": 0, "autoApproved": 0, "escalated": 0, "rejected": 0}
         claims = []
 
     return templates.TemplateResponse(

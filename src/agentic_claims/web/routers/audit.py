@@ -23,25 +23,58 @@ _ACTION_TO_STEP = {
     "receipt_uploaded": "Receipt Uploaded",
     "ai_extraction": "AI Extraction",
     "policy_check": "Policy Check",
-    "claim_submitted": "Final Decision",
+    "claim_submitted": "Claim Submitted",
+    "compliance_check": "Compliance Check",
+    "fraud_check": "Fraud Check",
+    "advisor_decision": "Advisor Decision",
+    # Backwards compat: old claims that have these actions map to Final Decision
     "claim_approved": "Final Decision",
     "claim_rejected": "Final Decision",
     "status_change": "Final Decision",
 }
 
-_TIMELINE_ORDER = ["Receipt Uploaded", "AI Extraction", "Policy Check", "Final Decision"]
+_TIMELINE_ORDER = [
+    "Receipt Uploaded",
+    "AI Extraction",
+    "Policy Check",
+    "Claim Submitted",
+    "Compliance Check",
+    "Fraud Check",
+    "Advisor Decision",
+]
 
 _STEP_ICONS = {
     "Receipt Uploaded": "cloud_upload",
     "AI Extraction": "troubleshoot",
     "Policy Check": "rule",
+    "Claim Submitted": "send",
+    "Compliance Check": "policy",
+    "Fraud Check": "shield",
+    "Advisor Decision": "gavel",
     "Final Decision": "verified",
 }
 
+# Agent-specific colors per step (Tailwind color name used in template)
+_STEP_COLORS = {
+    "Receipt Uploaded": "blue",
+    "AI Extraction": "blue",
+    "Policy Check": "blue",
+    "Claim Submitted": "blue",
+    "Compliance Check": "green",  # overridden to red in _buildTimelineSteps when verdict=fail
+    "Fraud Check": "orange",
+    "Advisor Decision": "purple",
+    "Final Decision": "blue",
+}
+
+# Steps that run in parallel (same superstep)
+_PARALLEL_STEPS = {"Compliance Check", "Fraud Check"}
+
 
 def _buildTimelineSteps(auditRows: list) -> list[dict]:
-    """Map audit_log rows to 4 ordered timeline steps."""
+    """Map audit_log rows to 7 ordered timeline steps with agent-specific colors."""
     stepMap: dict[str, dict] = {}
+    # Track the action for each step (needed for Final Decision outcome label)
+    stepAction: dict[str, str] = {}
 
     for row in auditRows:
         action = row.action
@@ -57,12 +90,16 @@ def _buildTimelineSteps(auditRows: list) -> list[dict]:
         except Exception:
             pass
 
+        color = _STEP_COLORS.get(stepName, "blue")
+
         stepData: dict = {
             "name": stepName,
             "icon": _STEP_ICONS.get(stepName, "circle"),
             "status": "completed",
             "timestamp": row.timestamp.isoformat() if row.timestamp else None,
             "details": details,
+            "color": color,
+            "parallel": stepName in _PARALLEL_STEPS,
         }
 
         if stepName == "AI Extraction":
@@ -84,7 +121,31 @@ def _buildTimelineSteps(auditRows: list) -> list[dict]:
             stepData["rejectionReason"] = details.get("rejectionReason")
             stepData["reviewerNotes"] = details.get("reviewerNotes")
 
+        elif stepName == "Compliance Check":
+            verdict = details.get("verdict", "")
+            # Override color: red for fail, green for pass
+            stepData["color"] = "red" if verdict == "fail" else "green"
+            stepData["complianceVerdict"] = verdict
+            violations = details.get("violations") or []
+            stepData["violationCount"] = len(violations)
+            stepData["citedClauses"] = details.get("citedClauses") or []
+            stepData["complianceSummary"] = details.get("summary") or ""
+
+        elif stepName == "Fraud Check":
+            stepData["fraudVerdict"] = details.get("verdict", "")
+            flags = details.get("flags") or []
+            stepData["flagCount"] = len(flags)
+            stepData["duplicateClaims"] = details.get("duplicateClaims") or []
+            stepData["fraudSummary"] = details.get("summary") or ""
+
+        elif stepName == "Advisor Decision":
+            stepData["advisorDecision"] = details.get("decision") or details.get("verdict") or ""
+            stepData["advisorReasoning"] = details.get("reasoning") or ""
+            stepData["complianceSummary"] = details.get("complianceSummary") or ""
+            stepData["fraudSummary"] = details.get("fraudSummary") or ""
+
         stepMap[stepName] = stepData
+        stepAction[stepName] = action
 
     # Build ordered list, filling missing steps as pending
     steps = []
@@ -99,13 +160,15 @@ def _buildTimelineSteps(auditRows: list) -> list[dict]:
                     "status": "pending",
                     "timestamp": None,
                     "details": {},
+                    "color": _STEP_COLORS.get(name, "blue"),
+                    "parallel": name in _PARALLEL_STEPS,
                 }
             )
     return steps
 
 
 async def _fetchTimeline(claimId: int) -> list[dict]:
-    """Fetch audit_log entries and build 4-step timeline."""
+    """Fetch audit_log entries and build 7-step timeline."""
     async with getAsyncSession() as session:
         result = await session.execute(
             select(AuditLog).where(AuditLog.claimId == claimId).order_by(AuditLog.timestamp.asc())
@@ -266,7 +329,7 @@ async def auditPage(request: Request, claimId: str):
 
 @router.get("/api/audit/{claimId}/timeline")
 async def auditTimelineApi(request: Request, claimId: int):
-    """Return 4-step timeline JSON for a claim's audit_log entries."""
+    """Return 7-step timeline HTML partial for a claim's audit_log entries."""
     currentUser = getCurrentUser(request)
     if currentUser["role"] != "reviewer":
         return JSONResponse({"error": "Forbidden"}, status_code=403)

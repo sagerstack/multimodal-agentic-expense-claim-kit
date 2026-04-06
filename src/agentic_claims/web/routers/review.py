@@ -38,7 +38,8 @@ async def _fetchClaimDetail(claimId: int) -> dict | None:
                 SELECT
                     c.id, c.claim_number, c.employee_id, c.status,
                     c.total_amount, c.currency, c.created_at,
-                    c.intake_findings,
+                    c.intake_findings, c.compliance_findings, c.fraud_findings,
+                    c.advisor_decision, c.approved_by,
                     r.id AS receipt_id, r.merchant, r.date, r.total_amount AS receipt_amount,
                     r.currency AS receipt_currency, r.image_path,
                     r.line_items, r.original_currency, r.original_amount, r.converted_amount_sgd,
@@ -106,6 +107,20 @@ def _parseFlagReason(intakeFindings: dict | None) -> dict | None:
     }
 
 
+def _parseJsonField(value) -> dict | None:
+    """Parse a JSONB field that may be a dict, JSON string, or None."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return None
+    return None
+
+
 def _buildClaimContext(row: dict) -> tuple[dict, dict | None]:
     """Build claim and receipt context dicts from a DB row."""
     claim = {
@@ -117,6 +132,10 @@ def _buildClaimContext(row: dict) -> tuple[dict, dict | None]:
         "currency": row["currency"] or "SGD",
         "createdAt": row["created_at"].isoformat() if row["created_at"] else None,
         "employeeName": row.get("display_name") or row["employee_id"],
+        "complianceFindings": _parseJsonField(row.get("compliance_findings")),
+        "fraudFindings": _parseJsonField(row.get("fraud_findings")),
+        "advisorDecision": row.get("advisor_decision"),
+        "approvedBy": row.get("approved_by"),
     }
     receipt = None
     if row.get("receipt_id"):
@@ -171,19 +190,19 @@ async def reviewPage(request: Request, claimId: int):
                 "receipt": None,
                 "flagReason": None,
                 "aiInsight": None,
+                "showActions": False,
+                "complianceFindings": None,
+                "fraudFindings": None,
+                "advisorDecision": None,
             },
             status_code=404,
         )
 
     claim, receipt = _buildClaimContext(row)
-    intakeFindings = row.get("intake_findings")
-    if isinstance(intakeFindings, str):
-        try:
-            intakeFindings = json.loads(intakeFindings)
-        except Exception:
-            intakeFindings = {}
+    intakeFindings = _parseJsonField(row.get("intake_findings")) or {}
     flagReason = _parseFlagReason(intakeFindings)
     aiInsight = await _fetchAiInsight(row["employee_id"])
+    showActions = claim["status"] == "escalated"
 
     return templates.TemplateResponse(
         request,
@@ -200,6 +219,10 @@ async def reviewPage(request: Request, claimId: int):
             "receipt": receipt,
             "flagReason": flagReason,
             "aiInsight": aiInsight,
+            "showActions": showActions,
+            "complianceFindings": claim["complianceFindings"],
+            "fraudFindings": claim["fraudFindings"],
+            "advisorDecision": claim["advisorDecision"],
         },
     )
 
@@ -216,14 +239,10 @@ async def reviewDetailApi(request: Request, claimId: int):
         return JSONResponse({"error": "Claim not found"}, status_code=404)
 
     claim, receipt = _buildClaimContext(row)
-    intakeFindings = row.get("intake_findings") or {}
-    if isinstance(intakeFindings, str):
-        try:
-            intakeFindings = json.loads(intakeFindings)
-        except Exception:
-            intakeFindings = {}
+    intakeFindings = _parseJsonField(row.get("intake_findings")) or {}
     flagReason = _parseFlagReason(intakeFindings)
     aiInsight = await _fetchAiInsight(row["employee_id"])
+    showActions = claim["status"] == "escalated"
 
     return JSONResponse(
         {
@@ -231,6 +250,10 @@ async def reviewDetailApi(request: Request, claimId: int):
             "receipt": receipt,
             "flagReason": flagReason,
             "aiInsight": aiInsight,
+            "showActions": showActions,
+            "complianceFindings": claim["complianceFindings"],
+            "fraudFindings": claim["fraudFindings"],
+            "advisorDecision": claim["advisorDecision"],
         }
     )
 
@@ -274,13 +297,16 @@ async def reviewDecisionApi(
     actor = currentUser["displayName"] or currentUser["username"]
     nowUtc = datetime.now(timezone.utc)
 
+    reviewerEmployeeId = currentUser["employeeId"]
+
     async with getAsyncSession() as session:
-        # Update claim status
+        # Update claim status and set approved_by to reviewer's employee ID
         updateStmt = (
             update(Claim)
             .where(Claim.id == claimId)
             .values(
                 status=newStatus,
+                approvedBy=reviewerEmployeeId,
                 **({"approvalDate": nowUtc} if action == "approve" else {}),
             )
         )

@@ -38,6 +38,10 @@ _FAKE_CLAIM_ROW = {
     "intake_findings": {
         "violations": [{"description": "Amount exceeds policy limit", "score": 0.92}]
     },
+    "compliance_findings": None,
+    "fraud_findings": None,
+    "advisor_decision": None,
+    "approved_by": None,
     "receipt_id": 10,
     "merchant": "Starbucks",
     "date": "2026-04-01",
@@ -49,6 +53,24 @@ _FAKE_CLAIM_ROW = {
     "original_amount": None,
     "converted_amount_sgd": None,
     "display_name": "Alice Tan",
+}
+
+_FAKE_ESCALATED_CLAIM_ROW = {
+    **_FAKE_CLAIM_ROW,
+    "status": "escalated",
+    "compliance_findings": {
+        "verdict": "fail",
+        "violations": [{"field": "amount", "value": "520", "limit": "500"}],
+        "citedClauses": ["Meals 3.2"],
+        "summary": "Amount exceeds daily meal cap",
+    },
+    "fraud_findings": {
+        "verdict": "legit",
+        "flags": [],
+        "duplicateClaims": [],
+        "summary": "No fraud indicators detected",
+    },
+    "advisor_decision": "escalate_to_reviewer",
 }
 
 _FAKE_AI_INSIGHT = {
@@ -251,7 +273,7 @@ def testReviewPageReturns200WithClaimData(client):
         with patch(f"{_path}._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
             response = client.get("/review/42")
     assert response.status_code == 200
-    assert "Review Flagged Claim" in response.text
+    assert "Claim Review" in response.text
     assert "CLM-0042" in response.text
     assert "Starbucks" in response.text
 
@@ -301,3 +323,79 @@ def testParseFlagReasonNullWhenEmpty():
     assert _parseFlagReason({}) is None
     assert _parseFlagReason(None) is None
     assert _parseFlagReason({"violations": []}) is None
+
+
+def testShowActionsOnlyForEscalatedClaims(client):
+    """reviewPage renders approve/reject form only when claim.status == 'escalated'."""
+    _path = "agentic_claims.web.routers.review"
+    # Escalated claim -> decision form rendered
+    with patch(f"{_path}._fetchClaimDetail", new=AsyncMock(return_value=_FAKE_ESCALATED_CLAIM_ROW)):
+        with patch(f"{_path}._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
+            response = client.get("/review/42")
+    assert response.status_code == 200
+    # The decision form should appear for escalated claims
+    assert 'id="decisionForm"' in response.text
+
+    # Submitted (non-escalated) claim -> decision form NOT rendered
+    with patch(f"{_path}._fetchClaimDetail", new=AsyncMock(return_value=_FAKE_CLAIM_ROW)):
+        with patch(f"{_path}._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
+            response = client.get("/review/42")
+    assert response.status_code == 200
+    assert 'id="decisionForm"' not in response.text
+
+
+def testComplianceAndFraudFindingsInTemplateContext(client):
+    """reviewPage passes complianceFindings and fraudFindings to template context."""
+    _path = "agentic_claims.web.routers.review"
+    with patch(f"{_path}._fetchClaimDetail", new=AsyncMock(return_value=_FAKE_ESCALATED_CLAIM_ROW)):
+        with patch(f"{_path}._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
+            response = client.get("/review/42")
+    assert response.status_code == 200
+    # Compliance card should appear (it's in the template when complianceFindings is set)
+    assert "Compliance" in response.text
+    assert "Fraud Check" in response.text
+
+
+def testReviewApiIncludesAgentFindings(client):
+    """GET /api/review/{claimId} includes complianceFindings and fraudFindings in JSON."""
+    _path = "agentic_claims.web.routers.review"
+    with patch(f"{_path}._fetchClaimDetail", new=AsyncMock(return_value=_FAKE_ESCALATED_CLAIM_ROW)):
+        with patch(f"{_path}._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
+            response = client.get("/api/review/42")
+    assert response.status_code == 200
+    data = response.json()
+    assert "complianceFindings" in data
+    assert "fraudFindings" in data
+    assert "showActions" in data
+    assert "advisorDecision" in data
+    assert data["showActions"] is True
+    assert data["complianceFindings"]["verdict"] == "fail"
+    assert data["fraudFindings"]["verdict"] == "legit"
+    assert data["advisorDecision"] == "escalate_to_reviewer"
+
+
+def testApproveClaimSetsApprovedBy(client):
+    """POST /api/review/{claimId}/decision sets approved_by to reviewer's employee ID."""
+    mockSession = AsyncMock()
+    capturedValues = {}
+
+    async def captureExecute(stmt, *args, **kwargs):
+        # Capture the update statement values
+        if hasattr(stmt, "_values"):
+            capturedValues.update(stmt._values)
+        return MagicMock()
+
+    mockSession.execute = captureExecute
+    mockSession.add = MagicMock()
+    mockSession.commit = AsyncMock()
+    mockSession.__aenter__ = AsyncMock(return_value=mockSession)
+    mockSession.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("agentic_claims.web.routers.review.getAsyncSession", return_value=mockSession):
+        response = client.post(
+            "/api/review/42/decision",
+            data={"action": "approve", "reviewerNotes": "Approved by reviewer"},
+        )
+    assert response.status_code == 204
+    # Verify commit was called (approved_by written in same transaction)
+    assert mockSession.commit.called
