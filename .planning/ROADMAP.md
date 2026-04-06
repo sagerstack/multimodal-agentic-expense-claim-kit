@@ -177,10 +177,14 @@ Plans:
 7. The claim status in the database is updated to match the Advisor's routing decision (approved/returned/escalated)
 8. All existing tests pass without regression; new unit tests cover each agent's decision logic with at least 3 scenarios per agent (clean claim, violation, suspicious)
 
-**Plans:** TBD (to be created by `/gsd:plan-phase 8`)
+**Plans:** 5 plans
 
 Plans:
-- [ ] _Plans not yet created_
+- [ ] 08-01-PLAN.md -- Foundation: ClaimState expansion (4 fields), Alembic migration 006 (4 columns), ORM model update, shared agent utilities (extractJsonBlock, buildAgentLlm), intake node fix (violations + dbClaimId)
+- [ ] 08-02-PLAN.md -- Compliance Agent: Evaluator pattern node (RAG query + LLM verdict), system prompt, audit logging, 4+ unit tests
+- [ ] 08-03-PLAN.md -- Fraud Agent: Tool Call pattern node (3 DB queries + LLM reasoning), SQL injection fix, deterministic duplicate detection, system prompt, 5+ unit tests
+- [ ] 08-04-PLAN.md -- Advisor Agent: Reflection + Routing pattern node (ReAct with 3 tools), decision routing, DB status + findings persistence, email notifications, 6+ unit tests
+- [ ] 08-05-PLAN.md -- UI updates: Audit Log 7-step timeline with agent colors, Claim Review compliance/fraud cards, Dashboard status breakdown KPIs, approve/reject restricted to escalated claims
 
 ---
 
@@ -219,9 +223,9 @@ v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 10
 | 6.1. Model Upgrade + UX Fixes | 2/2 | Complete | 2026-04-04 |
 | 6.2. Chat UI Refresh + Employee ID Fix | 4/4 | Complete | 2026-04-05 |
 | 6.3. User Auth + Dual Roles + Reviewer Pages | 6/6 | Complete | 2026-04-05 |
-| 8. Compliance, Fraud + Advisor Agents | 0/TBD | Not started | -- |
+| 8. Compliance, Fraud + Advisor Agents | 0/5 | Not started | -- |
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
 
-**v2.0 total:** 18/20+ plans complete (Phase 8 plans TBD)
+**v2.0 total:** 18/25 plans complete
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)
