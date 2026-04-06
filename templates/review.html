@@ -13,10 +13,17 @@
             ESCALATION
           </span>
         {% elif claim and claim.status == "approved" %}
+          {% if claim.approvedBy == "agent" or not claim.approvedBy %}
           <span class="bg-secondary/10 text-secondary text-[10px] font-bold px-2 py-0.5 rounded-full border border-secondary/20 flex items-center gap-1">
             <span class="material-symbols-outlined text-xs" style="font-variation-settings: 'FILL' 1;">check_circle</span>
             AUTO-APPROVED BY AI
           </span>
+          {% else %}
+          <span class="bg-green-500/10 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-green-500/20 flex items-center gap-1">
+            <span class="material-symbols-outlined text-xs" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+            APPROVED BY REVIEWER
+          </span>
+          {% endif %}
         {% elif claim and claim.status == "rejected" %}
           <span class="bg-error/10 text-error text-[10px] font-bold px-2 py-0.5 rounded-full border border-error/20 flex items-center gap-1">
             <span class="material-symbols-outlined text-xs" style="font-variation-settings: 'FILL' 1;">cancel</span>
@@ -304,7 +311,13 @@
             <p class="text-xs text-red-400 mb-2">Duplicate matches: {{ dupes | join(", ") }}</p>
           {% endif %}
           {% if fraudFindings.summary %}
-            <p class="text-xs text-on-surface-variant/70 leading-relaxed italic">{{ fraudFindings.summary }}</p>
+            {% if fverd == 'legit' %}
+              <div class="p-4 bg-green-500/5 rounded-xl border border-green-500/20">
+                <p class="text-on-surface text-sm font-medium leading-relaxed text-green-300">{{ fraudFindings.summary }}</p>
+              </div>
+            {% else %}
+              <p class="text-xs text-on-surface-variant/70 leading-relaxed italic">{{ fraudFindings.summary }}</p>
+            {% endif %}
           {% endif %}
         </div>
       </div>

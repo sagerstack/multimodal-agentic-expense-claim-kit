@@ -374,6 +374,97 @@ def testReviewApiIncludesAgentFindings(client):
     assert data["advisorDecision"] == "escalate_to_reviewer"
 
 
+# ==================== BUG-021: Fraud LEGIT card styling ====================
+
+
+def testFraudLegitCardUsesGreenProminentStyling(client):
+    """BUG-021: fraud card with verdict='legit' must use prominent green card, not plain italic text."""
+    _path = "agentic_claims.web.routers.review"
+    with patch(f"{_path}._fetchClaimDetail", new=AsyncMock(return_value=_FAKE_ESCALATED_CLAIM_ROW)):
+        with patch(f"{_path}._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
+            response = client.get("/review/42")
+    assert response.status_code == 200
+    html = response.text
+    # The fraud findings section must contain a prominent green card element
+    # (not just plain italic text) — look for a green-coloured summary card
+    assert "bg-green-500" in html or "text-green-" in html
+    # The legit verdict badge should appear
+    assert "LEGIT" in html
+
+
+def testFraudLegitCardSummaryIsProminentNotPlainItalic(client):
+    """BUG-021: when fraud verdict is legit, the summary text must be in a green card, not plain italic."""
+    escalatedWithLegit = {
+        **_FAKE_ESCALATED_CLAIM_ROW,
+        "fraud_findings": {
+            "verdict": "legit",
+            "flags": [],
+            "duplicateClaims": [],
+            "summary": "No fraud indicators detected",
+        },
+    }
+    _path = "agentic_claims.web.routers.review"
+    with patch(f"{_path}._fetchClaimDetail", new=AsyncMock(return_value=escalatedWithLegit)):
+        with patch(f"{_path}._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
+            response = client.get("/review/42")
+    html = response.text
+    # The fraud summary text must appear
+    assert "No fraud indicators detected" in html
+    # The legit summary must be wrapped in a green card container (bg-green-500/5),
+    # mirroring the Flag Reason card's inner content card, not naked italic text
+    assert "bg-green-500/5" in html
+
+
+# ==================== BUG-022 + BUG-023: Approval badge ====================
+
+
+def testApprovedByAiShowsAutoApprovedBadge(client):
+    """BUG-022: when approved_by is 'agent', badge should say 'AUTO-APPROVED BY AI'."""
+    aiApprovedRow = {
+        **_FAKE_CLAIM_ROW,
+        "status": "approved",
+        "approved_by": "agent",
+    }
+    _path = "agentic_claims.web.routers.review"
+    with patch(f"{_path}._fetchClaimDetail", new=AsyncMock(return_value=aiApprovedRow)):
+        with patch(f"{_path}._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
+            response = client.get("/review/42")
+    assert response.status_code == 200
+    assert "AUTO-APPROVED BY AI" in response.text
+    assert "APPROVED BY REVIEWER" not in response.text
+
+
+def testApprovedByReviewerShowsReviewerBadge(client):
+    """BUG-022/BUG-023: when approved_by is a reviewer employee ID, badge should say 'APPROVED BY REVIEWER'."""
+    reviewerApprovedRow = {
+        **_FAKE_CLAIM_ROW,
+        "status": "approved",
+        "approved_by": "EMP002",
+    }
+    _path = "agentic_claims.web.routers.review"
+    with patch(f"{_path}._fetchClaimDetail", new=AsyncMock(return_value=reviewerApprovedRow)):
+        with patch(f"{_path}._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
+            response = client.get("/review/42")
+    assert response.status_code == 200
+    assert "APPROVED BY REVIEWER" in response.text
+    assert "AUTO-APPROVED BY AI" not in response.text
+
+
+def testApprovedByNullShowsAutoApprovedBadge(client):
+    """BUG-022: when approved_by is NULL (legacy), badge defaults to 'AUTO-APPROVED BY AI'."""
+    nullApprovedRow = {
+        **_FAKE_CLAIM_ROW,
+        "status": "approved",
+        "approved_by": None,
+    }
+    _path = "agentic_claims.web.routers.review"
+    with patch(f"{_path}._fetchClaimDetail", new=AsyncMock(return_value=nullApprovedRow)):
+        with patch(f"{_path}._fetchAiInsight", new=AsyncMock(return_value=_FAKE_AI_INSIGHT)):
+            response = client.get("/review/42")
+    assert response.status_code == 200
+    assert "AUTO-APPROVED BY AI" in response.text
+
+
 def testApproveClaimSetsApprovedBy(client):
     """POST /api/review/{claimId}/decision sets approved_by to reviewer's employee ID."""
     mockSession = AsyncMock()
