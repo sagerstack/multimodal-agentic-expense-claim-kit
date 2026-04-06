@@ -3,6 +3,9 @@
   <tr class="hover:bg-surface-bright/50 transition-colors group cursor-pointer"
       onclick="if(event.target.tagName !== 'A' && !event.target.closest('a')) window.location='/review/{{ claim.id }}'">
     <td class="px-8 py-5">
+      <p class="font-bold text-sm font-mono text-primary">{{ claim.claimNumber or "—" }}</p>
+    </td>
+    <td class="px-8 py-5">
       <p class="font-bold text-sm text-on-surface">{{ claim.employeeName }}</p>
     </td>
     <td class="px-8 py-5">
@@ -43,7 +46,7 @@
   {% endfor %}
 {% else %}
   <tr>
-    <td colspan="5" class="px-8 py-12 text-center text-on-surface-variant/50 text-sm">
+    <td colspan="6" class="px-8 py-12 text-center text-on-surface-variant/50 text-sm">
       No claims to display. Submit an expense to get started.
     </td>
   </tr>
