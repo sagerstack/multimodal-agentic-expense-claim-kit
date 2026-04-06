@@ -48,6 +48,32 @@ async def postMessage(
     if extractedId:
         request.session["employee_id"] = extractedId
 
+    # Create draft claim on first message in session
+    if not request.session.get("draft_created"):
+        try:
+            settings = getSettings()
+            draftResult = await mcpCallTool(
+                serverUrl=settings.db_mcp_url,
+                toolName="insertClaim",
+                arguments={
+                    "claimNumber": f"DRAFT-{claimId[:8]}",
+                    "employeeId": request.session["employee_id"],
+                    "status": "draft",
+                    "totalAmount": 0,
+                    "currency": "SGD",
+                },
+            )
+            if isinstance(draftResult, dict) and "id" in draftResult:
+                request.session["draft_claim_id"] = draftResult["id"]
+            elif isinstance(draftResult, dict):
+                claimData = draftResult.get("claim", {})
+                if isinstance(claimData, dict) and "id" in claimData:
+                    request.session["draft_claim_id"] = claimData["id"]
+            request.session["draft_created"] = True
+            logger.info("Draft claim created for session claimId=%s", claimId)
+        except Exception as e:
+            logger.warning("Failed to create draft claim: %s", e)
+
     awaitingClarification = request.session.get("awaiting_clarification", False)
 
     graphInput = {
@@ -141,27 +167,35 @@ async def resetChat(request: Request):
     request.session["thread_id"] = str(uuid.uuid4())
     request.session["claim_id"] = str(uuid.uuid4())
     request.session.pop("awaiting_clarification", None)
-    request.session.pop("employee_id", None)
+    request.session.pop("draft_created", None)
+    request.session.pop("draft_claim_id", None)
 
     return Response(status_code=204, headers={"HX-Redirect": "/"})
 
 
-async def fetchClaimsForTable() -> list[dict]:
-    """Fetch recent claims with receipt data from DB via MCP for the submission table."""
+async def fetchClaimsForTable(employeeId: str | None = None) -> list[dict]:
+    """Fetch recent claims with receipt data from DB via MCP for the submission table.
+
+    When employeeId is provided, only returns claims belonging to that user.
+    """
     try:
         settings = getSettings()
+        query = (
+            "SELECT c.id, c.claim_number, c.employee_id, c.status, "
+            "c.total_amount, c.currency, c.created_at, "
+            "r.merchant, r.date as receipt_date, "
+            "r.original_amount, r.original_currency, r.converted_amount_sgd, "
+            "r.line_items "
+            "FROM claims c LEFT JOIN receipts r ON r.claim_id = c.id "
+        )
+        if employeeId:
+            query += f"WHERE c.employee_id = '{employeeId}' "
+        query += "ORDER BY c.created_at DESC LIMIT 50"
+
         result = await mcpCallTool(
             serverUrl=settings.db_mcp_url,
             toolName="executeQuery",
-            arguments={
-                "query": (
-                    "SELECT c.id, c.claim_number, c.employee_id, c.status, "
-                    "c.total_amount, c.currency, c.created_at, "
-                    "r.merchant, r.date as receipt_date "
-                    "FROM claims c LEFT JOIN receipts r ON r.claim_id = c.id "
-                    "ORDER BY c.created_at DESC LIMIT 50"
-                )
-            },
+            arguments={"query": query},
         )
         if isinstance(result, list):
             for row in result:
@@ -177,6 +211,23 @@ async def fetchClaimsForTable() -> list[dict]:
                         row["created_at"] = sgt.strftime("%Y-%m-%d %H:%M")
                     except Exception:
                         row["created_at"] = rawTs[:16].replace("T", " ")
+
+                # Extract category from line_items JSON
+                lineItems = row.get("line_items")
+                if lineItems:
+                    try:
+                        import json as _json
+
+                        items = _json.loads(lineItems) if isinstance(lineItems, str) else lineItems
+                        if isinstance(items, list) and items:
+                            row["category"] = items[0].get("category", "--")
+                        else:
+                            row["category"] = "--"
+                    except Exception:
+                        row["category"] = "--"
+                else:
+                    row["category"] = "--"
+
             return result
         if isinstance(result, dict) and "error" in result:
             logger.warning("fetchClaimsForTable DB error: %s", result["error"])

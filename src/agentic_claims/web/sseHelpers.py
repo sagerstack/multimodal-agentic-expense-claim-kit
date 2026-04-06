@@ -19,16 +19,17 @@ from starlette.requests import Request
 from starlette.templating import Jinja2Templates
 
 from agentic_claims.core.config import getSettings
+from agentic_claims.web.employeeIdContext import employeeIdVar
 from agentic_claims.web.sseEvents import SseEvent
 
 logger = logging.getLogger(__name__)
 
 
-async def fetchClaimsForTable() -> list[dict]:
+async def fetchClaimsForTable(employeeId: str | None = None) -> list[dict]:
     """Thin wrapper so tests can patch agentic_claims.web.sseHelpers.fetchClaimsForTable."""
     from agentic_claims.web.routers.chat import fetchClaimsForTable as _fetchClaimsForTable
 
-    return await _fetchClaimsForTable()
+    return await _fetchClaimsForTable(employeeId=employeeId)
 
 
 TOOL_LABELS = {
@@ -792,7 +793,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     try:
                         renderClaims = tableClaims
                         if toolName == "submitClaim":
-                            dbClaims = await fetchClaimsForTable()
+                            dbClaims = await fetchClaimsForTable(employeeId=employeeIdVar.get(None))
                             if dbClaims:
                                 renderClaims = dbClaims
                         sessionTotal = sum(float(c.get("total_amount", 0) or 0) for c in renderClaims if c.get("total_amount") and str(c.get("total_amount")) != "--")
@@ -858,7 +859,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
         # the streaming loop. Fetching from DB here gives the authoritative status.
         if claimSubmittedFlag:
             try:
-                dbClaims = await fetchClaimsForTable()
+                dbClaims = await fetchClaimsForTable(employeeId=employeeIdVar.get(None))
                 if dbClaims:
                     sessionTotal = sum(
                         float(c.get("total_amount", 0) or 0)

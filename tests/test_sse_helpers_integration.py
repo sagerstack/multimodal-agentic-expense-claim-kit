@@ -376,5 +376,6 @@ async def testRunGraphFinalTableUpdateEmittedAfterAdvisorStatusChange():
         collected = await _collectEvents(graph, _baseGraphInput(), request)
 
     tableEvents = [e for e in collected if e.event == SseEvent.TABLE_UPDATE]
-    # At least one TABLE_UPDATE must have the final advisor status (template uppercases it)
-    assert any("ESCALATED" in e.raw_data for e in tableEvents)
+    # At least one TABLE_UPDATE must have the final advisor status (CSS uppercase renders it;
+    # HTML source uses title case "Escalated" from the 8-state badge template)
+    assert any("Escalated" in e.raw_data or "escalated" in e.raw_data for e in tableEvents)

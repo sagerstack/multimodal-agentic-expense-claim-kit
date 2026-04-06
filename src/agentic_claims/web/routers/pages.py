@@ -60,7 +60,7 @@ async def chatPage(request: Request):
         },
     ]
 
-    claims = await fetchClaimsForTable()
+    claims = await fetchClaimsForTable(employeeId=currentUser["employeeId"])
     sessionTotal = sum(float(c.get("total_amount", 0) or 0) for c in claims)
 
     return templates.TemplateResponse(
