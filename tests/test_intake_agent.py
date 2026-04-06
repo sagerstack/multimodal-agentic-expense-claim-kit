@@ -198,3 +198,122 @@ async def test_intakeNodeClaimSubmittedNotSetWithoutSubmitClaim():
         result = await intakeNode(state, RunnableConfig())
 
         assert "claimSubmitted" not in result, "claimSubmitted should NOT be set without submitClaim call"
+
+
+@pytest.mark.asyncio
+async def test_intakeNodeFlushesAuditBufferAfterSubmission():
+    """intakeNode calls flushSteps after submitClaim succeeds so intake audit steps are persisted."""
+    submitResult = json.dumps({
+        "claim": {"id": 7, "claim_number": "CLAIM-007"},
+        "receipt": {"id": 3},
+    })
+    mockAgent = AsyncMock()
+    mockAgent.ainvoke = AsyncMock(
+        return_value={
+            "messages": [
+                ToolMessage(
+                    content=submitResult,
+                    name="submitClaim",
+                    tool_call_id="call_flush_test",
+                ),
+                AIMessage(content="Claim submitted."),
+            ]
+        }
+    )
+
+    mockFlushSteps = AsyncMock()
+
+    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+        with patch("agentic_claims.agents.intake.node.flushSteps", mockFlushSteps):
+            state: ClaimState = {
+                "claimId": "session-uuid-001",
+                "status": "draft",
+                "messages": [HumanMessage(content="Submit")],
+            }
+            result = await intakeNode(state, RunnableConfig())
+
+    mockFlushSteps.assert_called_once_with(
+        sessionClaimId="session-uuid-001",
+        dbClaimId=7,
+    )
+    assert result.get("claimSubmitted") is True
+
+
+@pytest.mark.asyncio
+async def test_intakeNodeWritesClaimSubmittedAuditEntry():
+    """intakeNode writes a claim_submitted audit log entry after successful submission."""
+    submitResult = json.dumps({
+        "claim": {"id": 9, "claim_number": "CLAIM-009"},
+        "receipt": {"id": 5},
+    })
+    mockAgent = AsyncMock()
+    mockAgent.ainvoke = AsyncMock(
+        return_value={
+            "messages": [
+                ToolMessage(
+                    content=submitResult,
+                    name="submitClaim",
+                    tool_call_id="call_audit_test",
+                ),
+                AIMessage(content="Claim submitted."),
+            ]
+        }
+    )
+
+    mockFlushSteps = AsyncMock()
+    mockLogIntakeStep = AsyncMock()
+
+    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+        with patch("agentic_claims.agents.intake.node.flushSteps", mockFlushSteps):
+            with patch("agentic_claims.agents.intake.node.logIntakeStep", mockLogIntakeStep):
+                state: ClaimState = {
+                    "claimId": "session-uuid-002",
+                    "status": "draft",
+                    "messages": [HumanMessage(content="Submit")],
+                }
+                result = await intakeNode(state, RunnableConfig())
+
+    mockLogIntakeStep.assert_called_once()
+    callKwargs = mockLogIntakeStep.call_args.kwargs
+    assert callKwargs["claimId"] == 9
+    assert callKwargs["action"] == "claim_submitted"
+
+
+@pytest.mark.asyncio
+async def test_intakeNodeWritesIntakeFindingsToState():
+    """intakeNode writes intakeFindings to state from submitClaim result."""
+    submitResult = json.dumps({
+        "claim": {
+            "id": 11,
+            "claim_number": "CLAIM-011",
+            "intake_findings": {"employeeId": "EMP-123", "violations": []},
+        },
+        "receipt": {"id": 6},
+    })
+    mockAgent = AsyncMock()
+    mockAgent.ainvoke = AsyncMock(
+        return_value={
+            "messages": [
+                ToolMessage(
+                    content=submitResult,
+                    name="submitClaim",
+                    tool_call_id="call_findings_test",
+                ),
+                AIMessage(content="Claim submitted."),
+            ]
+        }
+    )
+
+    mockFlushSteps = AsyncMock()
+
+    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+        with patch("agentic_claims.agents.intake.node.flushSteps", mockFlushSteps):
+            state: ClaimState = {
+                "claimId": "session-uuid-003",
+                "status": "draft",
+                "messages": [HumanMessage(content="Submit")],
+            }
+            result = await intakeNode(state, RunnableConfig())
+
+    assert "intakeFindings" in result
+    assert result["intakeFindings"].get("employeeId") == "EMP-123"

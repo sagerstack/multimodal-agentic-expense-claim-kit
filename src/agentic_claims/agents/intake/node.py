@@ -9,6 +9,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_openrouter import ChatOpenRouter
 from langgraph.prebuilt import create_react_agent
 
+from agentic_claims.agents.intake.auditLogger import flushSteps, logIntakeStep
 from agentic_claims.agents.intake.prompts.agentSystemPrompt_v2 import INTAKE_AGENT_SYSTEM_PROMPT
 from agentic_claims.agents.intake.tools.convertCurrency import convertCurrency
 from agentic_claims.agents.intake.tools.extractReceiptFields import extractReceiptFields
@@ -143,7 +144,22 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
                 dbClaimId = claimRecord.get("id")
                 if dbClaimId is not None:
                     try:
-                        stateUpdate["dbClaimId"] = int(dbClaimId)
+                        parsedDbClaimId = int(dbClaimId)
+                        stateUpdate["dbClaimId"] = parsedDbClaimId
+                        # Flush buffered intake audit steps (receipt_uploaded, ai_extraction, policy_check)
+                        # using the session claim UUID as the buffer key
+                        sessionClaimId = state.get("claimId", "")
+                        await flushSteps(sessionClaimId=sessionClaimId, dbClaimId=parsedDbClaimId)
+                        # Write claim_submitted audit entry directly
+                        await logIntakeStep(
+                            claimId=parsedDbClaimId,
+                            action="claim_submitted",
+                            details={"claimNumber": claimNumber, "status": "pending"},
+                        )
+                        # Propagate intakeFindings from DB record to state for downstream agents
+                        intakeFindingsFromDb = claimRecord.get("intake_findings")
+                        if intakeFindingsFromDb and isinstance(intakeFindingsFromDb, dict):
+                            stateUpdate["intakeFindings"] = intakeFindingsFromDb
                     except (TypeError, ValueError):
                         pass
             elif msg.name == "extractReceiptFields":
