@@ -196,6 +196,12 @@ async def _advisorErrorFallback(
                     "complianceFindings": complianceFindings,
                     "fraudFindings": fraudFindings,
                     "advisorDecision": "escalate_to_reviewer",
+                    "advisorFindings": {
+                        "decision": "escalate_to_reviewer",
+                        "reasoning": "Advisor encountered an error and escalated the claim for manual review.",
+                        "complianceVerdict": complianceFindings.get("verdict"),
+                        "fraudVerdict": fraudFindings.get("verdict"),
+                    },
                     "approvedBy": "",
                 },
             )
@@ -398,14 +404,27 @@ async def advisorNode(state: ClaimState) -> dict:
     # ------------------------------------------------------------------
     # 5. Write advisor_decision audit log and persist findings to claims table
     # ------------------------------------------------------------------
+    # Extract LLM reasoning text from agent output
+    agentMessages = result.get("messages", [])
+    advisorReasoningText = ""
+    for msg in reversed(agentMessages):
+        if isinstance(msg, AIMessage) and isinstance(msg.content, str) and msg.content.strip():
+            advisorReasoningText = msg.content
+            break
+
+    advisorFindingsPayload = {
+        "decision": advisorDecision,
+        "reasoning": advisorReasoningText,
+        "complianceVerdict": complianceFindings.get("verdict"),
+        "fraudVerdict": fraudFindings.get("verdict"),
+    }
+
     if dbClaimId is not None:
         try:
             auditValue = json.dumps({
                 "decision": advisorDecision,
                 "complianceVerdict": complianceFindings.get("verdict"),
                 "fraudVerdict": fraudFindings.get("verdict"),
-                "complianceSummary": complianceFindings.get("summary"),
-                "fraudSummary": fraudFindings.get("summary"),
             })
             await mcpCallTool(
                 serverUrl=settings.db_mcp_url,
@@ -436,6 +455,7 @@ async def advisorNode(state: ClaimState) -> dict:
                     "complianceFindings": complianceFindings,
                     "fraudFindings": fraudFindings,
                     "advisorDecision": advisorDecision,
+                    "advisorFindings": advisorFindingsPayload,
                     "approvedBy": approvedBy,
                 },
             )

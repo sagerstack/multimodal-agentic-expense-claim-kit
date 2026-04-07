@@ -1,0 +1,575 @@
+{% extends "base.html" %}
+{% block title %}Claim Review{% endblock %}
+{% block content %}
+<div class="flex flex-col h-full overflow-hidden">
+
+  <!-- Header -->
+  <header class="flex justify-between items-center px-8 py-4 flex-shrink-0">
+    <div>
+      <div class="flex items-center gap-2 mb-1">
+        {% if claim and claim.status == "escalated" %}
+          <span class="px-2 py-0.5 rounded bg-error/20 text-error text-[10px] font-bold tracking-wider uppercase">Escalation</span>
+        {% elif claim and claim.status == "ai_approved" %}
+          <span class="px-2 py-0.5 rounded bg-secondary/20 text-secondary text-[10px] font-bold tracking-wider uppercase">Auto-Approved</span>
+        {% elif claim and claim.status == "manually_approved" %}
+          <span class="px-2 py-0.5 rounded bg-green-500/20 text-green-400 text-[10px] font-bold tracking-wider uppercase">Approved</span>
+        {% elif claim and claim.status == "ai_rejected" %}
+          <span class="px-2 py-0.5 rounded bg-error/20 text-error text-[10px] font-bold tracking-wider uppercase">AI Rejected</span>
+        {% elif claim and claim.status == "manually_rejected" %}
+          <span class="px-2 py-0.5 rounded bg-error/20 text-error text-[10px] font-bold tracking-wider uppercase">Rejected</span>
+        {% elif claim and claim.status == "ai_reviewed" %}
+          <span class="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold tracking-wider uppercase">AI Reviewed</span>
+        {% elif claim and claim.status == "pending" %}
+          <span class="px-2 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-bold tracking-wider uppercase">Pending</span>
+        {% elif claim and claim.status == "draft" %}
+          <span class="px-2 py-0.5 rounded bg-outline-variant/20 text-on-surface-variant text-[10px] font-bold tracking-wider uppercase">Draft</span>
+        {% endif %}
+        {% if claim and claim.status == "ai_approved" %}
+          {% if claim.approvedBy and claim.approvedBy != "agent" %}
+            <span class="px-2 py-0.5 rounded bg-green-500/20 text-green-400 text-[10px] font-bold tracking-wider uppercase">APPROVED BY REVIEWER</span>
+          {% else %}
+            <span class="px-2 py-0.5 rounded bg-secondary/20 text-secondary text-[10px] font-bold tracking-wider uppercase">AUTO-APPROVED BY AI</span>
+          {% endif %}
+        {% elif claim and claim.status == "manually_approved" %}
+          <span class="px-2 py-0.5 rounded bg-green-500/20 text-green-400 text-[10px] font-bold tracking-wider uppercase">APPROVED BY REVIEWER</span>
+        {% endif %}
+        <span class="text-[10px] text-on-surface-variant font-medium tracking-wider uppercase">
+          {% if claim %}{{ claim.claimNumber }}{% else %}Claim #{{ claimId }}{% endif %}
+        </span>
+      </div>
+      <h2 class="text-3xl font-black tracking-tight text-on-surface font-headline">Claim Review</h2>
+      <p class="text-xs text-on-surface-variant">Inspect AI extraction results, compliance and fraud findings.</p>
+    </div>
+    <a href="/dashboard"
+       class="px-4 py-2 bg-surface-container-high text-on-surface hover:bg-surface-bright transition-colors rounded text-xs font-bold flex items-center gap-2 border border-outline-variant/20">
+      <span class="material-symbols-outlined text-sm">arrow_back</span>
+      Back to Dashboard
+    </a>
+  </header>
+
+  {% if not claim %}
+  <div class="flex-1 px-8 pb-8 flex items-center justify-center">
+    <div class="bg-surface-container-low rounded-2xl p-12 text-center text-on-surface-variant">
+      <span class="material-symbols-outlined text-5xl mb-4 block">search_off</span>
+      <p class="text-lg font-bold">Claim not found</p>
+      <p class="text-sm mt-1">The claim #{{ claimId }} does not exist or was not found.</p>
+    </div>
+  </div>
+  {% else %}
+
+  <!-- Content Grid -->
+  <main class="flex-1 overflow-y-auto px-8 pb-4" style="-webkit-overflow-scrolling: touch;">
+    <div class="grid grid-cols-12 gap-6">
+
+      <!-- Left: Analysis Grid (col-span-8) -->
+      <div class="col-span-8 space-y-6">
+
+        <!-- Row 1: Receipt + Intake Agent Findings -->
+        <div class="grid grid-cols-2 gap-6">
+
+          <!-- Receipt Viewer -->
+          <section class="agent-card overflow-hidden" x-data="{ scale: 1 }">
+            <div class="p-3 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container-low/50">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-on-surface-variant text-sm">image</span>
+                <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Original Receipt</span>
+              </div>
+              <div class="flex items-center gap-2 text-on-surface-variant">
+                <button @click="scale = Math.max(scale - 0.25, 0.5)" class="hover:text-primary transition-colors">
+                  <span class="material-symbols-outlined text-sm">zoom_out</span>
+                </button>
+                <button @click="scale = 1" class="text-[10px] font-mono hover:text-primary transition-colors">1x</button>
+                <button @click="scale = Math.min(scale + 0.25, 3)" class="hover:text-primary transition-colors">
+                  <span class="material-symbols-outlined text-sm">zoom_in</span>
+                </button>
+              </div>
+            </div>
+            <div class="bg-black/40 flex items-center justify-center p-4 h-[250px] overflow-auto">
+              {% if receipt and receipt.imagePath %}
+                <img src="/api/review/{{ claim.id }}/receipt-image"
+                     alt="Receipt"
+                     :style="'transform: scale(' + scale + '); transform-origin: top center; transition: transform 0.15s ease;'"
+                     class="max-h-full w-auto shadow-2xl rounded-sm" />
+              {% else %}
+                <div class="flex flex-col items-center justify-center gap-2 text-on-surface-variant/30">
+                  <span class="material-symbols-outlined text-4xl">receipt_long</span>
+                  <p class="text-xs">No receipt image available.</p>
+                </div>
+              {% endif %}
+            </div>
+          </section>
+
+          <!-- Intake Agent Findings -->
+          <section class="agent-card p-5">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-secondary text-sm">terminal</span>
+                <h3 class="text-[11px] font-black uppercase tracking-widest text-secondary">Intake Agent Findings</h3>
+              </div>
+            </div>
+            {% if intakeAgentFindings %}
+              <div class="space-y-4">
+                <div>
+                  <div class="flex justify-between text-[10px] font-bold text-on-surface-variant uppercase mb-1">
+                    <span>Avg Confidence</span>
+                    {% set avgPct = (intakeAgentFindings.avgConfidence * 100)|int %}
+                    <span class="{% if intakeAgentFindings.avgConfidence >= 0.85 %}text-secondary{% elif intakeAgentFindings.avgConfidence >= 0.7 %}text-yellow-400{% else %}text-error{% endif %}">{{ avgPct }}%</span>
+                  </div>
+                  <div class="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                    <div class="h-full {% if intakeAgentFindings.avgConfidence >= 0.85 %}bg-secondary{% elif intakeAgentFindings.avgConfidence >= 0.7 %}bg-yellow-400{% else %}bg-error{% endif %} shadow-[0_0_8px_rgba(98,250,227,0.4)]" style="width: {{ avgPct }}%"></div>
+                  </div>
+                </div>
+                <div class="bg-surface-container-lowest/50 p-3 rounded border border-outline-variant/10">
+                  <div class="flex justify-between items-center text-[10px]">
+                    <span class="font-bold text-on-surface-variant uppercase">Lowest Confidence</span>
+                    <span class="text-on-surface uppercase">{{ intakeAgentFindings.lowestField }}</span>
+                    {% set lowPct = (intakeAgentFindings.lowestScore * 100)|int %}
+                    <span class="font-bold text-on-surface">{{ lowPct }}%</span>
+                  </div>
+                  {% if intakeAgentFindings.lowestFieldValue %}
+                    <p class="text-[10px] text-on-surface-variant mt-1">Value: <span class="font-bold text-on-surface">{{ intakeAgentFindings.lowestFieldValue }}</span></p>
+                  {% endif %}
+                </div>
+                {% if intakeAgentFindings.scores %}
+                  <div class="mt-4 space-y-2">
+                    <h4 class="text-[9px] font-bold uppercase tracking-widest text-on-surface-variant">Field Breakdown</h4>
+                    {% for field, score in intakeAgentFindings.scores.items() %}
+                      {% set pct = (score * 100)|int %}
+                      <div>
+                        <div class="flex justify-between text-[10px] mb-0.5">
+                          <span class="text-on-surface-variant">{{ field }}</span>
+                          <span class="font-bold {% if score >= 0.9 %}text-secondary{% elif score >= 0.75 %}text-yellow-400{% else %}text-error{% endif %}">{{ pct }}%</span>
+                        </div>
+                        <div class="h-1 bg-surface-container-highest rounded-full overflow-hidden">
+                          <div class="h-full {% if score >= 0.9 %}bg-secondary{% elif score >= 0.75 %}bg-yellow-400{% else %}bg-error{% endif %}" style="width: {{ pct }}%"></div>
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            {% else %}
+              <div class="bg-surface-container-lowest/50 p-6 rounded border border-outline-variant/10 flex items-center justify-center h-[100px]">
+                <p class="text-[10px] text-on-surface-variant italic font-medium">Extraction confidence data not available.</p>
+              </div>
+            {% endif %}
+          </section>
+        </div>
+
+        <!-- Row 2: Compliance + Conversational Audit -->
+        <div class="grid grid-cols-2 gap-6">
+
+          <!-- Compliance Agent -->
+          <section class="agent-card p-5">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                {% if complianceFindings %}
+                  {% set cverd = complianceFindings.verdict | default("") %}
+                  {% set cFail = cverd == 'fail' %}
+                  <span class="material-symbols-outlined {% if cFail %}text-red-400{% else %}text-secondary{% endif %} text-sm">{% if cFail %}gpp_bad{% else %}verified_user{% endif %}</span>
+                  <h3 class="text-[11px] font-black uppercase tracking-widest {% if cFail %}text-red-400{% else %}text-secondary{% endif %}">Compliance Agent</h3>
+                {% else %}
+                  <span class="material-symbols-outlined text-on-surface-variant text-sm">hourglass_empty</span>
+                  <h3 class="text-[11px] font-black uppercase tracking-widest text-on-surface-variant">Compliance Agent</h3>
+                {% endif %}
+              </div>
+            </div>
+            {% if complianceFindings %}
+              <div class="space-y-3">
+                <div class="bg-surface-container-lowest/50 p-3 rounded border border-outline-variant/20 text-[11px]">
+                  {% set violations = complianceFindings.violations | default([]) %}
+                  {% if violations %}
+                    {% for v in violations[:3] %}
+                      <p class="text-on-surface-variant mb-1 font-mono">{{ v.field | default("Field") }} --- {{ v.value if v.value else "" }}{% if v.limit %} / limit {{ v.limit }}{% endif %}{% if v.severity %} ({{ v.severity | upper }}){% endif %}</p>
+                    {% endfor %}
+                    {% set clauses = complianceFindings.citedClauses | default([]) %}
+                    {% if clauses %}
+                      <div class="space-y-1 text-on-surface leading-relaxed mt-2">
+                        {% for clause in clauses[:2] %}
+                          <p>{{ clause }}</p>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  {% endif %}
+                  {% if complianceFindings.summary %}
+                    <p class="{% if cFail %}text-error{% else %}text-on-surface{% endif %} font-medium mt-2">{{ complianceFindings.summary }}</p>
+                  {% elif not violations %}
+                    <p class="text-on-surface">No compliance violations found.</p>
+                  {% endif %}
+                </div>
+              </div>
+            {% else %}
+              <div class="bg-surface-container-lowest/50 p-6 rounded border border-outline-variant/10 flex items-center justify-center h-[100px]">
+                <p class="text-[10px] text-on-surface-variant italic font-medium">Pending review.</p>
+              </div>
+            {% endif %}
+          </section>
+
+          <!-- Conversational Audit -->
+          <section class="agent-card p-5">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-sm">forum</span>
+                <h3 class="text-[11px] font-black uppercase tracking-widest text-primary">Conversational Audit</h3>
+              </div>
+            </div>
+            {% if conversationalAudit %}
+              <div class="bg-surface-container-lowest/50 p-3 rounded border border-outline-variant/10 space-y-2">
+                {% for entry in conversationalAudit %}
+                  <div class="flex items-start gap-2 text-[11px]">
+                    {% if entry.type == "violation" %}
+                      <span class="material-symbols-outlined text-yellow-400 text-sm flex-shrink-0 mt-0.5" style="font-variation-settings: 'FILL' 1;">warning</span>
+                    {% elif entry.type == "remark" %}
+                      <span class="material-symbols-outlined text-primary text-sm flex-shrink-0 mt-0.5" style="font-variation-settings: 'FILL' 1;">info</span>
+                    {% else %}
+                      <span class="material-symbols-outlined text-on-surface-variant text-sm flex-shrink-0 mt-0.5">chat_bubble</span>
+                    {% endif %}
+                    <div class="flex-1">
+                      <p class="text-on-surface leading-relaxed">{{ entry.text }}</p>
+                      {% for child in entry.children %}
+                        <p class="text-[10px] text-on-surface-variant/80 italic mt-1 ml-2">&#x2514; {{ child.text }}</p>
+                      {% endfor %}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="bg-surface-container-lowest/50 p-6 rounded border border-outline-variant/10 flex items-center justify-center h-[100px]">
+                <p class="text-[10px] text-on-surface-variant italic font-medium">No policy observations during intake.</p>
+              </div>
+            {% endif %}
+          </section>
+        </div>
+
+        <!-- Row 3: Fraud + Advisory -->
+        <div class="grid grid-cols-2 gap-6">
+
+          <!-- Fraud Analysis -->
+          <section class="agent-card p-5">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                {% if fraudFindings %}
+                  {% set fverd = fraudFindings.verdict | default("") %}
+                  {% set fFail = fverd in ['duplicate', 'suspicious'] %}
+                  {% set fLegit = fverd == 'legit' %}
+                  <span class="material-symbols-outlined {% if fFail %}text-error{% elif fLegit %}text-secondary{% else %}text-on-surface-variant{% endif %} text-sm">{% if fLegit %}security{% elif fFail %}warning{% else %}shield{% endif %}</span>
+                  <h3 class="text-[11px] font-black uppercase tracking-widest {% if fFail %}text-error{% elif fLegit %}text-secondary{% else %}text-on-surface-variant{% endif %}">Fraud Analysis</h3>
+                {% else %}
+                  <span class="material-symbols-outlined text-on-surface-variant text-sm">hourglass_empty</span>
+                  <h3 class="text-[11px] font-black uppercase tracking-widest text-on-surface-variant">Fraud Analysis</h3>
+                {% endif %}
+              </div>
+              {% if fraudFindings and fLegit %}
+                <span class="px-2 py-0.5 rounded-full bg-secondary/10 border border-secondary/40 text-[9px] font-black text-secondary tracking-widest">LEGIT</span>
+              {% endif %}
+            </div>
+            {% if fraudFindings %}
+              <div class="p-4 rounded border {% if fLegit %}bg-green-500/5 border-green-500/20{% else %}bg-surface-container-lowest/50 border-outline-variant/20{% endif %}">
+                {% set flags = fraudFindings.flags | default([]) %}
+                {% if flags %}
+                  <div class="space-y-2 mb-2">
+                    {% for flag in flags[:3] %}
+                      <p class="text-[11px] text-error font-medium">{{ flag.type | default("Flag") | replace("_", " ") | title }}{% if flag.description %} --- {{ flag.description }}{% endif %}</p>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+                {% set dupes = fraudFindings.duplicateClaims | default([]) %}
+                {% if dupes %}
+                  <p class="text-[10px] text-error mb-2">Duplicate matches: {{ dupes | join(", ") }}</p>
+                {% endif %}
+                {% if fraudFindings.summary %}
+                  <p class="text-[11px] text-on-surface leading-relaxed">{{ fraudFindings.summary }}</p>
+                {% elif not flags %}
+                  <p class="text-[11px] text-on-surface leading-relaxed">No fraud indicators detected.</p>
+                {% endif %}
+              </div>
+            {% else %}
+              <div class="bg-surface-container-lowest/50 p-6 rounded border border-outline-variant/10 flex items-center justify-center h-[100px]">
+                <p class="text-[10px] text-on-surface-variant italic font-medium">Pending review.</p>
+              </div>
+            {% endif %}
+          </section>
+
+          <!-- Advisory Agent -->
+          <section class="agent-card p-5">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                {% if advisorDecision %}
+                  {% set aApprove = advisorDecision == 'auto_approve' %}
+                  <span class="material-symbols-outlined {% if aApprove %}text-secondary{% else %}text-tertiary{% endif %} text-sm">tips_and_updates</span>
+                  <h3 class="text-[11px] font-black uppercase tracking-widest {% if aApprove %}text-secondary{% else %}text-tertiary{% endif %}">Advisory Agent</h3>
+                {% else %}
+                  <span class="material-symbols-outlined text-on-surface-variant text-sm">hourglass_empty</span>
+                  <h3 class="text-[11px] font-black uppercase tracking-widest text-on-surface-variant">Advisory Agent</h3>
+                {% endif %}
+              </div>
+            </div>
+            {% if advisorDecision or advisorFindings %}
+              {% set aApprove = advisorDecision == 'auto_approve' %}
+              <div class="bg-surface-container-lowest/50 p-4 rounded border border-outline-variant/20 space-y-3">
+                {% if advisorDecision %}
+                  <h4 class="text-[10px] font-black {% if aApprove %}text-secondary{% else %}text-error{% endif %} uppercase">Advisor: {{ advisorDecision.replace("_", " ") }}</h4>
+                {% endif %}
+                {% if advisorFindings and advisorFindings.reasoning %}
+                  <div class="max-h-[200px] overflow-y-auto text-[11px] text-on-surface leading-relaxed whitespace-pre-wrap">{{ advisorFindings.reasoning }}</div>
+                {% elif advisorFindings and advisorFindings.complianceSummary %}
+                  <div class="text-[11px]">
+                    <span class="font-bold text-on-surface-variant uppercase text-[9px]">Compliance:</span>
+                    <p class="text-on-surface leading-relaxed mt-0.5">{{ advisorFindings.complianceSummary }}</p>
+                  </div>
+                  {% if advisorFindings.fraudSummary %}
+                    <div class="text-[11px]">
+                      <span class="font-bold text-on-surface-variant uppercase text-[9px]">Fraud:</span>
+                      <p class="text-on-surface leading-relaxed mt-0.5">{{ advisorFindings.fraudSummary }}</p>
+                    </div>
+                  {% endif %}
+                {% else %}
+                  <p class="text-[10px] text-on-surface-variant italic">Awaiting advisor analysis.</p>
+                {% endif %}
+                {% if submissionHistory %}
+                  <p class="text-[11px] text-on-surface-variant border-t border-outline-variant/10 pt-2">
+                    <span class="font-bold text-on-surface">{{ submissionHistory.employeeName }}</span> has {{ submissionHistory.submissionCount }} previous submission{{ "s" if submissionHistory.submissionCount != 1 else "" }} with a <span class="text-secondary font-bold">{{ submissionHistory.approvalRate }}%</span> approval rate.
+                  </p>
+                {% endif %}
+              </div>
+            {% else %}
+              <div class="bg-surface-container-lowest/50 p-6 rounded border border-outline-variant/10 flex items-center justify-center h-[100px]">
+                <p class="text-[10px] text-on-surface-variant italic font-medium">Awaiting advisor analysis.</p>
+              </div>
+            {% endif %}
+          </section>
+        </div>
+
+      </div>
+
+      <!-- Right Sidebar: Extracted Claim Information (col-span-4) -->
+      <div class="col-span-4">
+        <section class="agent-card p-5">
+          <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-on-surface-variant text-sm">database</span>
+              <h3 class="text-[11px] font-black uppercase tracking-widest text-on-surface-variant">Extracted Claim Information</h3>
+            </div>
+            <div class="w-2 h-2 rounded-full bg-secondary animate-pulse"></div>
+          </div>
+          <div class="space-y-4">
+            <!-- Vendor Name -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                <span class="material-symbols-outlined text-[12px]">store</span> Vendor Name
+              </label>
+              <div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 text-xs text-on-surface font-bold">
+                {{ receipt.merchant if receipt else "---" }}
+              </div>
+            </div>
+            <!-- Date -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                <span class="material-symbols-outlined text-[12px]">calendar_today</span> Date of Transaction
+              </label>
+              <div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 text-xs text-on-surface">
+                {{ receipt.date if receipt and receipt.date else "---" }}
+              </div>
+            </div>
+            <!-- Amount -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                <span class="material-symbols-outlined text-[12px]">payments</span> Amount
+              </label>
+              <div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 text-sm text-on-surface font-black">
+                {% if receipt %}
+                  {{ receipt.currency }} {{ "%.2f"|format(receipt.totalAmount) }}
+                  {% if receipt.originalCurrency and receipt.originalCurrency != receipt.currency %}
+                    <span class="text-[10px] text-on-surface-variant font-normal ml-1">({{ receipt.originalCurrency }} {{ "%.2f"|format(receipt.originalAmount) }})</span>
+                  {% endif %}
+                {% else %}
+                  ---
+                {% endif %}
+              </div>
+            </div>
+            <!-- Category -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                <span class="material-symbols-outlined text-[12px]">category</span> Category
+              </label>
+              <div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 flex items-center gap-2 text-xs text-on-surface">
+                <span class="material-symbols-outlined text-primary text-sm">restaurant</span> {{ receipt.category if receipt else "General" }}
+              </div>
+            </div>
+            <!-- Submitter -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                <span class="material-symbols-outlined text-[12px]">person</span> Submitter
+              </label>
+              <div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 flex items-center gap-2 text-xs text-on-surface">
+                <div class="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-[12px] text-primary">person</span>
+                </div>
+                {{ claim.employeeName }}
+              </div>
+            </div>
+            <!-- Claim Number -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                <span class="material-symbols-outlined text-[12px]">tag</span> Claim Number
+              </label>
+              <div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 text-xs text-on-surface font-mono">
+                {{ claim.claimNumber if claim else "---" }}
+              </div>
+            </div>
+            <!-- Status -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                <span class="material-symbols-outlined text-[12px]">info</span> Status
+              </label>
+              <div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10">
+                {% if claim %}
+                  {% if claim.status == "escalated" %}
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-bold uppercase tracking-widest"><span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>Escalated</span>
+                  {% elif claim.status == "ai_approved" %}
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-secondary/10 text-secondary text-[10px] font-bold uppercase tracking-widest"><span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>AI Approved</span>
+                  {% elif claim.status == "manually_approved" %}
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-widest"><span class="material-symbols-outlined text-xs">verified_user</span>Approved</span>
+                  {% elif claim.status == "ai_rejected" %}
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-error/10 text-error text-[10px] font-bold uppercase tracking-widest"><span class="w-1.5 h-1.5 rounded-full bg-error"></span>AI Rejected</span>
+                  {% elif claim.status == "manually_rejected" %}
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-error/10 text-error text-[10px] font-bold uppercase tracking-widest"><span class="material-symbols-outlined text-xs">cancel</span>Rejected</span>
+                  {% elif claim.status == "pending" %}
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest"><span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>Pending</span>
+                  {% else %}
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-outline-variant/20 text-on-surface-variant text-[10px] font-bold uppercase tracking-widest"><span class="w-1.5 h-1.5 rounded-full bg-on-surface-variant"></span>{{ claim.status | title }}</span>
+                  {% endif %}
+                {% else %}
+                  ---
+                {% endif %}
+              </div>
+            </div>
+            <!-- Submission Date -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                <span class="material-symbols-outlined text-[12px]">schedule</span> Submission Date
+              </label>
+              <div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 text-xs text-on-surface">
+                {% if claim and claim.createdAt %}
+                  {{ claim.createdAt[:10] }}
+                {% else %}
+                  ---
+                {% endif %}
+              </div>
+            </div>
+            <!-- Receipt Number -->
+            {% if receipt and receipt.receiptNumber %}
+            <div>
+              <label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                <span class="material-symbols-outlined text-[12px]">receipt</span> Receipt Number
+              </label>
+              <div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 text-xs text-on-surface font-mono">
+                {{ receipt.receiptNumber }}
+              </div>
+            </div>
+            {% endif %}
+            <!-- Line Items -->
+            {% if receipt and receipt.lineItems %}
+            <div>
+              <label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                <span class="material-symbols-outlined text-[12px]">list</span> Line Items
+              </label>
+              <div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 text-xs text-on-surface">
+                {% if receipt.lineItems is iterable and receipt.lineItems is not string %}
+                  {{ receipt.lineItems | length }} item{{ "s" if receipt.lineItems | length != 1 else "" }}
+                {% else %}
+                  1 item
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
+            <!-- Exchange Rate -->
+            {% if receipt and receipt.originalCurrency and receipt.originalCurrency != receipt.currency %}
+            <div>
+              <label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                <span class="material-symbols-outlined text-[12px]">currency_exchange</span> Exchange Rate
+              </label>
+              <div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 text-xs text-on-surface">
+                1 {{ receipt.originalCurrency }} →
+                {% if receipt.originalAmount and receipt.originalAmount > 0 and receipt.convertedAmountSgd %}
+                  {{ "%.4f"|format(receipt.convertedAmountSgd / receipt.originalAmount) }} {{ receipt.currency }}
+                {% else %}
+                  N/A
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </section>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Reviewer Decision Footer -->
+  {% if showActions %}
+  <footer class="flex-shrink-0 px-8 py-5 flex items-center gap-4 bg-surface-container-low border-t border-outline-variant/20">
+    <div class="flex-1 relative">
+      <input type="text" id="reviewerNotes"
+             class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-lg px-5 py-3 text-sm focus:ring-1 focus:ring-primary text-on-background placeholder-on-surface-variant/40"
+             placeholder="Add a review note for the submitter..." />
+    </div>
+    <div class="flex gap-4">
+      <button type="button"
+              onclick="submitDecisionV2('reject')"
+              class="px-8 py-3 rounded-lg border border-error/40 text-error hover:bg-error/10 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-2 min-w-[160px] justify-center">
+        <span class="material-symbols-outlined text-lg" style="font-variation-settings: 'opsz' 20;">cancel</span>
+        Reject Claim
+      </button>
+      <button type="button"
+              onclick="submitDecisionV2('approve')"
+              class="px-8 py-3 rounded-lg bg-secondary text-on-primary-fixed font-black text-xs uppercase tracking-widest shadow-lg shadow-secondary/20 hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 min-w-[180px] justify-center">
+        <span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1, 'opsz' 20;">verified</span>
+        Approve Claim
+      </button>
+    </div>
+  </footer>
+  {% endif %}
+
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+  .agent-card {
+    background: rgba(25, 37, 64, 0.4);
+    border: 1px solid rgba(109, 117, 140, 0.1);
+    border-radius: 0.5rem;
+    height: 100%;
+  }
+</style>
+<script>
+async function submitDecisionV2(action) {
+  const notes = document.getElementById("reviewerNotes")?.value || "";
+  const formData = new FormData();
+  formData.set("action", action);
+  formData.set("reviewerNotes", notes);
+  if (action === "reject") {
+    formData.set("rejectionReason", "Policy violation");
+  }
+
+  try {
+    const resp = await fetch("/api/review/{{ claimId }}/decision", {
+      method: "POST",
+      body: formData,
+    });
+    if (resp.ok) {
+      const redirect = resp.headers.get("HX-Redirect");
+      window.location.href = redirect || "/dashboard";
+    } else {
+      const data = await resp.json().catch(() => ({}));
+      alert("Error: " + (data.error || "Failed to process decision"));
+    }
+  } catch (e) {
+    console.error("Decision submit failed", e);
+    alert("Network error. Please try again.");
+  }
+}
+</script>
+{% endblock %}

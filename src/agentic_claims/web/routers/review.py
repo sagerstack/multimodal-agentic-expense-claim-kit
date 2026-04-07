@@ -56,6 +56,7 @@ async def _fetchAgentFindingsFromAuditLog(claimId: int) -> dict:
             findings["fraud_findings"] = data
         elif action == "advisor_decision" and data:
             findings["advisor_decision"] = data.get("decision")
+            findings["advisor_findings"] = data
 
     return findings
 
@@ -75,8 +76,8 @@ async def _fetchClaimDetail(claimId: int) -> dict | None:
                     c.id, c.claim_number, c.employee_id, c.status,
                     c.total_amount, c.currency, c.created_at,
                     c.intake_findings, c.compliance_findings, c.fraud_findings,
-                    c.advisor_decision, c.approved_by,
-                    r.id AS receipt_id, r.merchant, r.date, r.total_amount AS receipt_amount,
+                    c.advisor_decision, c.advisor_findings, c.approved_by,
+                    r.id AS receipt_id, r.receipt_number, r.merchant, r.date, r.total_amount AS receipt_amount,
                     r.currency AS receipt_currency, r.image_path,
                     r.line_items, r.original_currency, r.original_amount, r.converted_amount_sgd,
                     u.display_name
@@ -98,7 +99,12 @@ async def _fetchClaimDetail(claimId: int) -> dict | None:
     rowDict = dict(row)
 
     # If the advisor never wrote findings to the claims table, reconstruct from audit_log
-    if rowDict.get("compliance_findings") is None or rowDict.get("fraud_findings") is None:
+    needsFallback = (
+        rowDict.get("compliance_findings") is None
+        or rowDict.get("fraud_findings") is None
+        or rowDict.get("advisor_findings") is None
+    )
+    if needsFallback:
         fallback = await _fetchAgentFindingsFromAuditLog(claimId)
         if fallback.get("compliance_findings") and rowDict.get("compliance_findings") is None:
             rowDict["compliance_findings"] = fallback["compliance_findings"]
@@ -106,12 +112,14 @@ async def _fetchClaimDetail(claimId: int) -> dict | None:
             rowDict["fraud_findings"] = fallback["fraud_findings"]
         if fallback.get("advisor_decision") and rowDict.get("advisor_decision") is None:
             rowDict["advisor_decision"] = fallback["advisor_decision"]
+        if fallback.get("advisor_findings") and rowDict.get("advisor_findings") is None:
+            rowDict["advisor_findings"] = fallback["advisor_findings"]
 
     return rowDict
 
 
-async def _fetchAiInsight(employeeId: str) -> dict | None:
-    """Query employee submission history for the AI Insight card."""
+async def _fetchSubmissionHistory(employeeId: str) -> dict | None:
+    """Query employee submission history for the Submission History card."""
     async with getAsyncSession() as session:
         result = await session.execute(
             select(
@@ -177,7 +185,7 @@ def _parseIntakeAgentFindings(intakeFindings: dict | None) -> dict | None:
     """Extract confidence scores from intake_findings and compute summary stats."""
     if not intakeFindings:
         return None
-    scores = intakeFindings.get("confidenceScores") or intakeFindings.get("confidence") or {}
+    scores = intakeFindings.get("confidenceScores") or intakeFindings.get("confidence") or intakeFindings.get("confidenceFlags") or {}
     if not scores or not isinstance(scores, dict):
         return None
     # Normalize: convert string labels ("High") to numeric (0.95)
@@ -276,6 +284,7 @@ def _buildClaimContext(row: dict) -> tuple[dict, dict | None]:
         "complianceFindings": _parseJsonField(row.get("compliance_findings")),
         "fraudFindings": _parseJsonField(row.get("fraud_findings")),
         "advisorDecision": row.get("advisor_decision"),
+        "advisorFindings": _parseJsonField(row.get("advisor_findings")),
         "approvedBy": row.get("approved_by"),
     }
     receipt = None
@@ -294,6 +303,7 @@ def _buildClaimContext(row: dict) -> tuple[dict, dict | None]:
             "imagePath": row.get("image_path"),
             "lineItems": lineItems,
             "category": category,
+            "receiptNumber": row.get("receipt_number"),
             "originalCurrency": row.get("original_currency"),
             "originalAmount": (
                 float(row["original_amount"]) if row.get("original_amount") else None
@@ -307,7 +317,7 @@ def _buildClaimContext(row: dict) -> tuple[dict, dict | None]:
 
 @router.get("/review/{claimId}")
 async def reviewPage(request: Request, claimId: int):
-    """Render the Claim Review page with server-side claim data. Reviewer-only."""
+    """Render the Claim Review page (v2 layout). Reviewer-only."""
     currentUser = getCurrentUser(request)
     if currentUser["role"] != "reviewer":
         return RedirectResponse("/", status_code=302)
@@ -318,7 +328,7 @@ async def reviewPage(request: Request, claimId: int):
     if row is None:
         return templates.TemplateResponse(
             request,
-            "review.html",
+            "review_v2.html",
             context={
                 "activePage": "review",
                 "claimId": claimId,
@@ -332,7 +342,7 @@ async def reviewPage(request: Request, claimId: int):
                 "flagReason": None,
                 "intakeAgentFindings": None,
                 "conversationalAudit": [],
-                "aiInsight": None,
+                "submissionHistory": None,
                 "showActions": False,
                 "complianceFindings": None,
                 "fraudFindings": None,
@@ -346,12 +356,12 @@ async def reviewPage(request: Request, claimId: int):
     flagReason = _parseFlagReason(intakeFindings)
     intakeAgentFindings = _parseIntakeAgentFindings(intakeFindings)
     conversationalAudit = _parseConversationalAudit(intakeFindings)
-    aiInsight = await _fetchAiInsight(row["employee_id"])
+    submissionHistory = await _fetchSubmissionHistory(row["employee_id"])
     showActions = claim["status"] == "escalated"
 
     return templates.TemplateResponse(
         request,
-        "review.html",
+        "review_v2.html",
         context={
             "activePage": "review",
             "claimId": claimId,
@@ -365,11 +375,12 @@ async def reviewPage(request: Request, claimId: int):
             "flagReason": flagReason,
             "intakeAgentFindings": intakeAgentFindings,
             "conversationalAudit": conversationalAudit,
-            "aiInsight": aiInsight,
+            "submissionHistory": submissionHistory,
             "showActions": showActions,
             "complianceFindings": claim["complianceFindings"],
             "fraudFindings": claim["fraudFindings"],
             "advisorDecision": claim["advisorDecision"],
+            "advisorFindings": claim["advisorFindings"],
         },
     )
 
@@ -390,7 +401,7 @@ async def reviewDetailApi(request: Request, claimId: int):
     flagReason = _parseFlagReason(intakeFindings)
     intakeAgentFindings = _parseIntakeAgentFindings(intakeFindings)
     conversationalAudit = _parseConversationalAudit(intakeFindings)
-    aiInsight = await _fetchAiInsight(row["employee_id"])
+    submissionHistory = await _fetchSubmissionHistory(row["employee_id"])
     showActions = claim["status"] == "escalated"
 
     return JSONResponse(
@@ -400,11 +411,12 @@ async def reviewDetailApi(request: Request, claimId: int):
             "flagReason": flagReason,
             "intakeAgentFindings": intakeAgentFindings,
             "conversationalAudit": conversationalAudit,
-            "aiInsight": aiInsight,
+            "submissionHistory": submissionHistory,
             "showActions": showActions,
             "complianceFindings": claim["complianceFindings"],
             "fraudFindings": claim["fraudFindings"],
             "advisorDecision": claim["advisorDecision"],
+            "advisorFindings": claim["advisorFindings"],
         }
     )
 

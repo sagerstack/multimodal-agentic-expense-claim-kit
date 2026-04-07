@@ -51,7 +51,9 @@ def client():
         "id": 1, "claim_number": "CLM-0001", "employee_id": "EMP001",
         "status": "pending", "total_amount": 45.0, "currency": "SGD",
         "created_at": None, "intake_findings": {},
-        "receipt_id": 1, "merchant": "Test", "date": "2026-04-01",
+        "compliance_findings": None, "fraud_findings": None,
+        "advisor_decision": None, "advisor_findings": None, "approved_by": None,
+        "receipt_id": 1, "receipt_number": None, "merchant": "Test", "date": "2026-04-01",
         "receipt_amount": 45.0, "receipt_currency": "SGD", "image_path": None,
         "line_items": {}, "original_currency": None, "original_amount": None,
         "converted_amount_sgd": None, "display_name": "Test User",
@@ -67,7 +69,7 @@ def client():
                                 with patch("agentic_claims.web.routers.dashboard._queryClaims", new=AsyncMock(return_value=[])):
                                     with patch("agentic_claims.web.routers.review.getCurrentUser", return_value=_FAKE_USER):
                                         with patch("agentic_claims.web.routers.review._fetchClaimDetail", new=AsyncMock(return_value=fakeClaimRow)):
-                                            with patch("agentic_claims.web.routers.review._fetchAiInsight", new=AsyncMock(return_value=None)):
+                                            with patch("agentic_claims.web.routers.review._fetchSubmissionHistory", new=AsyncMock(return_value=None)):
                                                 with patch("agentic_claims.web.routers.pages.getCurrentUser", return_value=_FAKE_USER):
                                                     with TestClient(testApp) as c:
                                                         yield c
