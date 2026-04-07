@@ -5,24 +5,25 @@
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Milestone v2.0 — Phase 8.1 in progress (bug fixes from Phase 8 QA)
+**Current focus:** Milestone v2.0 — Phase 8.2 in progress (advisor refactor + schema alignment)
 
 ## Current Position
 
-Phase: 8.1 — Bug Fixes + UX Polish (IN PROGRESS)
-Plan: TBD
-Status: 8/10 bugs resolved (BUG-016 through BUG-023), 2 open (BUG-024, BUG-025). Global error toast added. Intelligence cards restyled.
-Last activity: 2026-04-06 — Phase 8.1 created, bugs documented, resolved fixes committed
+Phase: 8.2 — Advisor Refactor + Schema Alignment (IN PROGRESS)
+Plan: 02 of TBD in phase
+Status: Plan 08.2-02 complete. category column wired end-to-end.
+Last activity: 2026-04-08 — Completed 08.2-02-PLAN.md (category column + intake inference pipeline)
 
 ```
-v2.0 Progress: [#######################] 23/25 plans
+v2.0 Progress: [#########################] 25/27 plans
 Phase 6:       [##########] 3/3 plans (complete)
 Phase 7:       [##########] 3/3 plans (complete)
 Phase 6.1:     [##########] complete
 Phase 6.2:     [##########] 4/4 plans (complete)
 Phase 6.3:     [##########] 6/6 plans (complete)
 Phase 8:       [##########] 5/5 plans (complete)
-Phase 8.1:     [####......] bug fixes in progress (8/10 resolved)
+Phase 8.1:     [##########] complete
+Phase 8.2:     [####......] 2/? plans (01 schema alignment, 02 category column complete)
 Phase 10:      [..........] 0/2 plans
 ```
 
@@ -111,8 +112,8 @@ From research (see .planning/research/PITFALLS.md):
 
 ## Session Continuity
 
-Last session: 2026-04-02
-Stopped at: Phase 7 execution complete
+Last session: 2026-04-08
+Stopped at: Completed 08.2-02-PLAN.md (category column migration, ORM, MCP DB, intake inference, submitClaim validation)
 Resume file: None
 
 ### Roadmap Evolution
