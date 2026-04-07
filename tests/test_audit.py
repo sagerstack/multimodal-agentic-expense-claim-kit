@@ -277,8 +277,8 @@ def testAuditPageReturns200(client):
     assert "Audit Log" in response.text
 
 
-def testAuditPageRedirectsNonReviewer():
-    """GET /audit/{claimId} redirects non-reviewer to /."""
+def testAuditPageAllowsNonReviewerOwnClaims():
+    """GET /audit/{claimId} allows non-reviewer to view their own claims."""
     from agentic_claims.web.routers.audit import router as auditRouter
 
     testApp = FastAPI()
@@ -289,11 +289,16 @@ def testAuditPageRedirectsNonReviewer():
     )
     testApp.include_router(auditRouter)
 
-    with patch("agentic_claims.web.routers.audit.getCurrentUser", return_value=_EMPLOYEE_USER):
-        with TestClient(testApp, follow_redirects=False) as c:
-            response = c.get("/audit/1")
-    assert response.status_code == 302
-    assert response.headers["location"] == "/"
+    _emptyInsights = {"anomalyCount": 0, "costBenchmark": None}
+    _p = "agentic_claims.web.routers.audit"
+    with patch(f"{_p}.getCurrentUser", return_value=_EMPLOYEE_USER):
+        with patch(f"{_p}._fetchAllClaims", new=AsyncMock(return_value=[])):
+            with patch(f"{_p}._fetchTimeline", new=AsyncMock(return_value=[])):
+                with patch(f"{_p}._fetchInsights", new=AsyncMock(return_value=_emptyInsights)):
+                    with patch(f"{_p}._fetchClaimSummary", new=AsyncMock(return_value=None)):
+                        with TestClient(testApp) as c:
+                            response = c.get("/audit/1")
+    assert response.status_code == 200
 
 
 def testAuditRouteNotInPagesRouter():

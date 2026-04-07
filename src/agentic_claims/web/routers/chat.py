@@ -189,7 +189,7 @@ async def fetchClaimsForTable(employeeId: str | None = None) -> list[dict]:
             "FROM claims c LEFT JOIN receipts r ON r.claim_id = c.id "
         )
         if employeeId:
-            query += f"WHERE c.employee_id = '{employeeId}' "
+            query += f"WHERE c.employee_id = $${employeeId}$$ "
         query += "ORDER BY c.created_at DESC LIMIT 50"
 
         result = await mcpCallTool(

@@ -18,7 +18,7 @@
         {% for claim in claims %}
         {% set isDraft = claim.status == 'draft' %}
         <tr class="bg-surface-container-highest/50 {{ 'opacity-50' if isDraft else 'hover:bg-surface-bright transition-colors cursor-pointer group' }}"
-            {% if not isDraft %}onclick="window.location.href='/audit?claim_id={{ claim.id }}'"{% endif %}>
+            {% if not isDraft %}onclick="window.location.href='/audit/{{ claim.id }}'"{% endif %}>
           <td class="px-4 py-3 rounded-l-xl border-l border-t border-b border-outline-variant/10 text-xs text-on-surface-variant font-mono">{{ claim.claim_number or '--' }}</td>
           <td class="px-4 py-3 text-sm text-on-surface-variant border-t border-b border-outline-variant/10">{{ claim.receipt_date or claim.created_at or '--' }}</td>
           <td class="px-4 py-3 border-t border-b border-outline-variant/10">

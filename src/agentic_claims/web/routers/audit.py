@@ -224,19 +224,20 @@ async def _fetchInsights(claimId: int) -> dict:
     }
 
 
-async def _fetchAllClaims() -> list[dict]:
-    """Fetch all claims for left panel list, DESC order."""
+async def _fetchAllClaims(employeeId: str | None = None) -> list[dict]:
+    """Fetch claims for left panel list, DESC order. Optionally filter by employee_id."""
     async with getAsyncSession() as session:
-        result = await session.execute(
-            select(
-                Claim.id,
-                Claim.claimNumber,
-                Claim.status,
-                Claim.totalAmount,
-                Claim.currency,
-                Claim.createdAt,
-            ).order_by(Claim.createdAt.desc())
+        query = select(
+            Claim.id,
+            Claim.claimNumber,
+            Claim.status,
+            Claim.totalAmount,
+            Claim.currency,
+            Claim.createdAt,
         )
+        if employeeId:
+            query = query.where(Claim.employeeId == employeeId)
+        result = await session.execute(query.order_by(Claim.createdAt.desc()))
         rows = result.all()
 
     return [
@@ -284,10 +285,8 @@ async def _fetchClaimSummary(claimId: int) -> dict | None:
 
 @router.get("/audit/{claimId}")
 async def auditPage(request: Request, claimId: str):
-    """Render the Audit & Transparency Log page. Reviewer-only."""
+    """Render the Audit & Transparency Log page. Reviewers see all claims; users see their own."""
     currentUser = getCurrentUser(request)
-    if currentUser["role"] != "reviewer":
-        return RedirectResponse("/", status_code=302)
 
     sessionIds = getSessionIds(request)
 
@@ -302,8 +301,10 @@ async def auditPage(request: Request, claimId: str):
     insights: dict = {"anomalyCount": 0, "costBenchmark": None}
     claim: dict | None = None
 
+    # Reviewers see all claims; users see only their own
+    employeeFilter = None if currentUser["role"] == "reviewer" else currentUser.get("employeeId")
     try:
-        allClaims = await _fetchAllClaims()
+        allClaims = await _fetchAllClaims(employeeId=employeeFilter)
     except Exception:
         logger.exception("Audit DB query failed fetching claims list")
         allClaims = []
