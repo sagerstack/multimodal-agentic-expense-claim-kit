@@ -198,7 +198,7 @@
                 {{ claim.createdAt[:10] if claim.createdAt else "—" }}
               </td>
               <td class="px-6 py-5" onclick="event.stopPropagation()">
-                <a href="/audit?claimId={{ claim.id }}"
+                <a href="/audit/{{ claim.id }}"
                    class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors text-xl"
                    title="View audit log">history</a>
               </td>
