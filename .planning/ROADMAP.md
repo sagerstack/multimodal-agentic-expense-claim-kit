@@ -299,16 +299,16 @@ Plans:
 **Success Criteria:**
 1. The Advisory Agent card on Review v2 displays the LLM's actual reasoning text, not a copy of compliance/fraud summaries
 2. `aiInsight` renamed to `submissionHistory` across all files
-3. `/review/{claimId}` serves the structured layout (formerly v2), `/review-archived/{claimId}` serves the old layout
+3. `/review/{claimId}` serves the structured layout (formerly v2), old template deleted (archived route not needed)
 4. `/manage` and `/analytics` pages render matching their Stitch designs
 5. All existing tests pass
 
 **Plans:** 3 plans
 
 Plans:
-- [ ] 08.2-01-PLAN.md -- Review page overhaul: advisor LLM reasoning capture, aiInsight->submissionHistory rename, promote v2 as default, per-field confidence bars, Extracted Claim Information card
-- [ ] 08.2-02-PLAN.md -- Category inference pipeline: migration 008, ORM update, system prompt category classification, submitClaim wiring, MCP DB server
-- [ ] 08.2-03-PLAN.md -- Manage + Analytics pages: new reviewer-only pages with filters/bulk actions/KPIs, sidebar nav update, category display fix
+- [x] 08.2-01-PLAN.md -- Review page overhaul: advisor LLM reasoning capture, aiInsight->submissionHistory rename, promote v2 as default, per-field confidence bars, Extracted Claim Information card
+- [x] 08.2-02-PLAN.md -- Category inference pipeline: migration 008, ORM update, system prompt category classification, submitClaim wiring, MCP DB server
+- [x] 08.2-03-PLAN.md -- Manage + Analytics pages: new reviewer-only pages with filters/bulk actions/KPIs, sidebar nav update, category display fix
 
 ---
 
@@ -338,7 +338,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 10
+v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
@@ -349,8 +349,9 @@ v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 10
 | 6.3. User Auth + Dual Roles + Reviewer Pages | 6/6 | Complete | 2026-04-05 |
 | 8. Compliance, Fraud + Advisor Agents | 5/5 | Complete | 2026-04-06 |
 | 8.1. Bug Fixes + UX Polish | 0/4 | In progress | -- |
+| 8.2. Advisor Refactor + Schema Alignment | 3/3 | Complete | 2026-04-08 |
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
 
-**v2.0 total:** 23/29 plans complete
+**v2.0 total:** 26/32 plans complete
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)

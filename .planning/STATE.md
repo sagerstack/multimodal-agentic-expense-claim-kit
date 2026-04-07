@@ -5,25 +5,25 @@
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Milestone v2.0 — Phase 8.2 in progress (advisor refactor + schema alignment)
+**Current focus:** Milestone v2.0 — Phase 8.2 complete, Phase 8.1 and 10 remain
 
 ## Current Position
 
-Phase: 8.2 — Advisor Refactor + Schema Alignment (IN PROGRESS)
-Plan: 01 + 02 + 03 complete
-Status: Plans 08.2-01, 08.2-02, 08.2-03 complete. Manage Claims + Analytics pages added; reviewer workflow complete.
-Last activity: 2026-04-08 — Completed 08.2-03-PLAN.md (Manage Claims page, Analytics page, sidebar nav, category fix)
+Phase: 8.2 — Advisor Refactor + Schema Alignment (COMPLETE)
+Plan: 3/3 plans complete
+Status: All plans executed and verified. Advisor LLM reasoning captured, review v2 promoted, category pipeline wired, Manage + Analytics pages added.
+Last activity: 2026-04-08 — Phase 8.2 verification passed
 
 ```
-v2.0 Progress: [#########################] 26/28 plans
+v2.0 Progress: [##########################] 26/32 plans
 Phase 6:       [##########] 3/3 plans (complete)
 Phase 7:       [##########] 3/3 plans (complete)
 Phase 6.1:     [##########] complete
 Phase 6.2:     [##########] 4/4 plans (complete)
 Phase 6.3:     [##########] 6/6 plans (complete)
 Phase 8:       [##########] 5/5 plans (complete)
-Phase 8.1:     [##########] complete
-Phase 8.2:     [############] 3/? plans complete (01 review overhaul, 02 category column, 03 manage+analytics pages)
+Phase 8.1:     [####......] 0/4 plans (in progress — bugs documented)
+Phase 8.2:     [##########] 3/3 plans (complete)
 Phase 10:      [..........] 0/2 plans
 ```
 
