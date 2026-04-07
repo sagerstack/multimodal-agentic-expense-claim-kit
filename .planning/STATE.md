@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 8.2 — Advisor Refactor + Schema Alignment (IN PROGRESS)
-Plan: 01 + 02 complete
-Status: Plans 08.2-01 and 08.2-02 complete. Advisor LLM reasoning captured, review page unified, category column wired.
-Last activity: 2026-04-08 — Completed 08.2-01-PLAN.md (advisor reasoning, submissionHistory rename, review_v2 promotion)
+Plan: 01 + 02 + 03 complete
+Status: Plans 08.2-01, 08.2-02, 08.2-03 complete. Manage Claims + Analytics pages added; reviewer workflow complete.
+Last activity: 2026-04-08 — Completed 08.2-03-PLAN.md (Manage Claims page, Analytics page, sidebar nav, category fix)
 
 ```
 v2.0 Progress: [#########################] 26/28 plans
@@ -23,7 +23,7 @@ Phase 6.2:     [##########] 4/4 plans (complete)
 Phase 6.3:     [##########] 6/6 plans (complete)
 Phase 8:       [##########] 5/5 plans (complete)
 Phase 8.1:     [##########] complete
-Phase 8.2:     [########..] 2/? plans complete (01 review overhaul, 02 category column)
+Phase 8.2:     [############] 3/? plans complete (01 review overhaul, 02 category column, 03 manage+analytics pages)
 Phase 10:      [..........] 0/2 plans
 ```
 
@@ -113,7 +113,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-08
-Stopped at: Completed 08.2-01-PLAN.md (advisor LLM reasoning capture, aiInsight→submissionHistory rename, review_v2 promotion, per-field confidence bars, Extracted Claim Information card)
+Stopped at: Completed 08.2-03-PLAN.md (Manage Claims page, Analytics page, sidebar Manage/Analytics links, category fix in review.py)
 Resume file: None
 
 ### Roadmap Evolution
