@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}Manage Claims{% endblock %}
+{% block content %}
+<div class="pt-8 pb-32 px-6 md:px-12 max-w-7xl mx-auto overflow-y-auto h-full"
+     x-data="{
+       selectedIds: [],
+       toggleAll(event) {
+         const checkboxes = document.querySelectorAll('.claim-checkbox');
+         if (event.target.checked) {
+           this.selectedIds = Array.from(checkboxes).map(cb => cb.value);
+           checkboxes.forEach(cb => cb.checked = true);
+         } else {
+           this.selectedIds = [];
+           checkboxes.forEach(cb => cb.checked = false);
+         }
+       },
+       toggleOne(id, checked) {
+         if (checked) {
+           if (!this.selectedIds.includes(id)) this.selectedIds.push(id);
+         } else {
+           this.selectedIds = this.selectedIds.filter(i => i !== id);
+         }
+       },
+       submitBulk(action) {
+         if (this.selectedIds.length === 0) return;
+         document.getElementById('bulkAction').value = action;
+         document.getElementById('bulkClaimIds').value = this.selectedIds.join(',');
+         document.getElementById('bulkForm').dispatchEvent(new Event('submit'));
+       }
+     }">
+
+  <!-- Header Section -->
+  <header class="mb-10">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div>
+        <h1 class="text-4xl md:text-5xl font-headline font-extrabold tracking-tight text-on-surface mb-2">Manage Claims</h1>
+        <p class="text-on-surface-variant font-body">Bulk review and manage expense claims.</p>
+      </div>
+      <a href="/dashboard"
+         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 text-on-surface-variant hover:text-on-surface hover:bg-surface-bright transition-all text-sm font-medium">
+        <span class="material-symbols-outlined text-base">arrow_back</span>
+        Back to Dashboard
+      </a>
+    </div>
+  </header>
+
+  <!-- Filter Bar -->
+  <section class="bg-surface-container-low rounded-3xl p-6 border-t border-outline-variant/15 mb-8">
+    <form method="GET" action="/manage" class="flex flex-wrap items-end gap-4">
+      <!-- Status Filter -->
+      <div class="flex flex-col gap-1.5 min-w-40">
+        <label class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Status</label>
+        <select name="status"
+                class="bg-surface-bright border border-outline-variant/20 rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary/50 transition-colors">
+          <option value="" {% if not filterStatus %}selected{% endif %}>All Statuses</option>
+          <option value="draft" {% if filterStatus == "draft" %}selected{% endif %}>Draft</option>
+          <option value="pending" {% if filterStatus == "pending" %}selected{% endif %}>Pending</option>
+          <option value="ai_reviewed" {% if filterStatus == "ai_reviewed" %}selected{% endif %}>AI Reviewed</option>
+          <option value="ai_approved" {% if filterStatus == "ai_approved" %}selected{% endif %}>AI Approved</option>
+          <option value="ai_rejected" {% if filterStatus == "ai_rejected" %}selected{% endif %}>AI Rejected</option>
+          <option value="escalated" {% if filterStatus == "escalated" %}selected{% endif %}>Escalated</option>
+          <option value="manually_approved" {% if filterStatus == "manually_approved" %}selected{% endif %}>Manually Approved</option>
+          <option value="manually_rejected" {% if filterStatus == "manually_rejected" %}selected{% endif %}>Manually Rejected</option>
+        </select>
+      </div>
+
+      <!-- Category Filter -->
+      <div class="flex flex-col gap-1.5 min-w-40">
+        <label class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Category</label>
+        <select name="category"
+                class="bg-surface-bright border border-outline-variant/20 rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary/50 transition-colors">
+          <option value="" {% if not filterCategory %}selected{% endif %}>All Categories</option>
+          <option value="Meals" {% if filterCategory == "Meals" %}selected{% endif %}>Meals</option>
+          <option value="Transport" {% if filterCategory == "Transport" %}selected{% endif %}>Transport</option>
+          <option value="Accommodation" {% if filterCategory == "Accommodation" %}selected{% endif %}>Accommodation</option>
+          <option value="Office Supplies" {% if filterCategory == "Office Supplies" %}selected{% endif %}>Office Supplies</option>
+          <option value="General" {% if filterCategory == "General" %}selected{% endif %}>General</option>
+        </select>
+      </div>
+
+      <!-- Date From -->
+      <div class="flex flex-col gap-1.5 min-w-36">
+        <label class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">From</label>
+        <input type="date" name="dateFrom" value="{{ filterDateFrom }}"
+               class="bg-surface-bright border border-outline-variant/20 rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary/50 transition-colors">
+      </div>
+
+      <!-- Date To -->
+      <div class="flex flex-col gap-1.5 min-w-36">
+        <label class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">To</label>
+        <input type="date" name="dateTo" value="{{ filterDateTo }}"
+               class="bg-surface-bright border border-outline-variant/20 rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary/50 transition-colors">
+      </div>
+
+      <!-- Apply Button -->
+      <button type="submit"
+              class="px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm hover:shadow-[0_0_20px_rgba(204,151,255,0.4)] transition-all active:scale-95">
+        Apply Filters
+      </button>
+
+      <!-- Clear Button (only shown when filters active) -->
+      {% if filterStatus or filterCategory or filterDateFrom or filterDateTo %}
+      <a href="/manage"
+         class="px-5 py-2.5 rounded-xl bg-surface-bright border border-outline-variant/20 text-on-surface-variant hover:text-on-surface transition-colors text-sm font-medium">
+        Clear
+      </a>
+      {% endif %}
+    </form>
+  </section>
+
+  <!-- Claims Table -->
+  <section class="bg-surface-container-low rounded-3xl overflow-hidden border-t border-outline-variant/15 mb-24">
+    <div class="p-8 flex justify-between items-center border-b border-outline-variant/10">
+      <h3 class="font-headline font-bold text-xl tracking-tight">
+        Claims
+        <span class="text-on-surface-variant font-normal text-base ml-2">({{ claims | length }})</span>
+      </h3>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left">
+        <thead class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+          <tr>
+            <th class="px-6 py-4">
+              <input type="checkbox" @change="toggleAll($event)"
+                     class="w-4 h-4 rounded border border-outline-variant/40 bg-surface-bright cursor-pointer accent-primary">
+            </th>
+            <th class="px-6 py-4">Claim #</th>
+            <th class="px-6 py-4">Employee</th>
+            <th class="px-6 py-4">Category</th>
+            <th class="px-6 py-4">Amount</th>
+            <th class="px-6 py-4">Status</th>
+            <th class="px-6 py-4">Submitted</th>
+            <th class="px-6 py-4">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-outline-variant/5">
+          {% if claims %}
+            {% for claim in claims %}
+            <tr class="hover:bg-surface-bright/50 transition-colors group">
+              <td class="px-6 py-5">
+                <input type="checkbox" class="claim-checkbox w-4 h-4 rounded border border-outline-variant/40 bg-surface-bright cursor-pointer accent-primary"
+                       value="{{ claim.id }}"
+                       @change="toggleOne('{{ claim.id }}', $event.target.checked)">
+              </td>
+              <td class="px-6 py-5">
+                <a href="/review/{{ claim.id }}"
+                   class="font-bold text-sm font-mono text-primary hover:underline">{{ claim.claimNumber or "—" }}</a>
+              </td>
+              <td class="px-6 py-5">
+                <p class="font-bold text-sm text-on-surface">{{ claim.employeeName }}</p>
+              </td>
+              <td class="px-6 py-5">
+                <span class="text-sm text-on-surface">{{ claim.category }}</span>
+              </td>
+              <td class="px-6 py-5 font-headline font-bold text-sm">
+                {{ claim.currency }} {{ "%.2f"|format(claim.totalAmount) }}
+              </td>
+              <td class="px-6 py-5">
+                {% if claim.status == "draft" %}
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-outline-variant/20 text-on-surface-variant text-[10px] font-bold uppercase tracking-widest">
+                    <span class="w-1.5 h-1.5 rounded-full bg-on-surface-variant"></span>Draft
+                  </span>
+                {% elif claim.status == "pending" %}
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest">
+                    <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>Pending
+                  </span>
+                {% elif claim.status == "ai_reviewed" %}
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest">
+                    <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>AI Reviewed
+                  </span>
+                {% elif claim.status == "ai_approved" %}
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary/10 text-secondary text-[10px] font-bold uppercase tracking-widest">
+                    <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>AI Approved
+                  </span>
+                {% elif claim.status == "manually_approved" %}
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-widest">
+                    <span class="material-symbols-outlined text-xs">verified_user</span>Approved
+                  </span>
+                {% elif claim.status == "escalated" %}
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-bold uppercase tracking-widest">
+                    <span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>Escalated
+                  </span>
+                {% elif claim.status == "ai_rejected" %}
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-error/10 text-error text-[10px] font-bold uppercase tracking-widest">
+                    <span class="w-1.5 h-1.5 rounded-full bg-error"></span>AI Rejected
+                  </span>
+                {% elif claim.status == "manually_rejected" %}
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-error/10 text-error text-[10px] font-bold uppercase tracking-widest">
+                    <span class="material-symbols-outlined text-xs">cancel</span>Rejected
+                  </span>
+                {% else %}
+                  <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-outline-variant/20 text-on-surface-variant text-[10px] font-bold uppercase tracking-widest">
+                    <span class="w-1.5 h-1.5 rounded-full bg-on-surface-variant"></span>{{ claim.status | title }}
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-5 text-sm text-on-surface-variant">
+                {{ claim.createdAt[:10] if claim.createdAt else "—" }}
+              </td>
+              <td class="px-6 py-5">
+                <a href="/review/{{ claim.id }}"
+                   class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors text-xl"
+                   title="Review claim">open_in_new</a>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="8" class="px-8 py-16 text-center text-on-surface-variant/50 text-sm">
+                No claims match the selected filters.
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Hidden bulk action form -->
+  <form id="bulkForm"
+        hx-post="/api/manage/bulk-action"
+        hx-swap="none"
+        class="hidden">
+    <input type="hidden" id="bulkAction" name="action" value="">
+    <input type="hidden" id="bulkClaimIds" name="claimIds" value="">
+  </form>
+
+  <!-- Bulk Action Bar (fixed at bottom, shown when items selected) -->
+  <div x-show="selectedIds.length > 0" x-cloak
+       class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-6 py-4 bg-[#0f1930] border border-outline-variant/20 rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.6)]">
+    <span class="text-sm text-on-surface font-medium">
+      <span class="font-bold text-primary" x-text="selectedIds.length"></span> claim<span x-show="selectedIds.length !== 1">s</span> selected
+    </span>
+    <div class="w-px h-5 bg-outline-variant/30"></div>
+    <button @click="submitBulk('approve')"
+            class="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-secondary/10 text-secondary border border-secondary/20 hover:bg-secondary/20 transition-all text-sm font-bold">
+      <span class="material-symbols-outlined text-sm">check_circle</span>
+      Approve Selected
+    </button>
+    <button @click="submitBulk('reject')"
+            class="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-all text-sm font-bold">
+      <span class="material-symbols-outlined text-sm">cancel</span>
+      Reject Selected
+    </button>
+    <button @click="selectedIds = []; document.querySelectorAll('.claim-checkbox, #selectAll').forEach(cb => cb.checked = false)"
+            class="text-on-surface-variant hover:text-on-surface transition-colors">
+      <span class="material-symbols-outlined text-base">close</span>
+    </button>
+  </div>
+
+</div>
+{% endblock %}
