@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 8.2 — Advisor Refactor + Schema Alignment (IN PROGRESS)
-Plan: 02 of TBD in phase
-Status: Plan 08.2-02 complete. category column wired end-to-end.
-Last activity: 2026-04-08 — Completed 08.2-02-PLAN.md (category column + intake inference pipeline)
+Plan: 01 + 02 complete
+Status: Plans 08.2-01 and 08.2-02 complete. Advisor LLM reasoning captured, review page unified, category column wired.
+Last activity: 2026-04-08 — Completed 08.2-01-PLAN.md (advisor reasoning, submissionHistory rename, review_v2 promotion)
 
 ```
-v2.0 Progress: [#########################] 25/27 plans
+v2.0 Progress: [#########################] 26/28 plans
 Phase 6:       [##########] 3/3 plans (complete)
 Phase 7:       [##########] 3/3 plans (complete)
 Phase 6.1:     [##########] complete
@@ -23,7 +23,7 @@ Phase 6.2:     [##########] 4/4 plans (complete)
 Phase 6.3:     [##########] 6/6 plans (complete)
 Phase 8:       [##########] 5/5 plans (complete)
 Phase 8.1:     [##########] complete
-Phase 8.2:     [####......] 2/? plans (01 schema alignment, 02 category column complete)
+Phase 8.2:     [########..] 2/? plans complete (01 review overhaul, 02 category column)
 Phase 10:      [..........] 0/2 plans
 ```
 
@@ -113,7 +113,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-08
-Stopped at: Completed 08.2-02-PLAN.md (category column migration, ORM, MCP DB, intake inference, submitClaim validation)
+Stopped at: Completed 08.2-01-PLAN.md (advisor LLM reasoning capture, aiInsight→submissionHistory rename, review_v2 promotion, per-field confidence bars, Extracted Claim Information card)
 Resume file: None
 
 ### Roadmap Evolution
