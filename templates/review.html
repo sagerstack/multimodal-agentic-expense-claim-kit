@@ -219,7 +219,7 @@
               </div>
             </div>
             <!-- Lowest Confidence Field -->
-            <div class="p-3 bg-surface-container-low rounded-lg border border-outline-variant/10 mb-4">
+            <div class="p-3 bg-surface-container-low rounded-lg border border-outline-variant/10">
               <p class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest mb-1">Lowest Confidence</p>
               <div class="flex items-center justify-between">
                 <span class="text-sm font-bold text-on-surface">{{ intakeAgentFindings.lowestField }}</span>
@@ -229,23 +229,9 @@
                   {% elif intakeAgentFindings.lowestScore >= 0.7 %}text-yellow-400
                   {% else %}text-error{% endif %}">{{ lowPct }}%</span>
               </div>
-            </div>
-            <!-- Per-field Scores -->
-            <div class="space-y-2">
-              <p class="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest">Field Scores</p>
-              {% for field, score in intakeAgentFindings.scores.items() %}
-                {% set fieldPct = (score * 100)|int %}
-                <div class="flex items-center gap-3">
-                  <span class="text-xs text-on-surface-variant w-24 truncate" title="{{ field }}">{{ field }}</span>
-                  <div class="flex-1 h-1.5 bg-surface-container-low rounded-full overflow-hidden">
-                    <div class="h-full rounded-full
-                      {% if score >= 0.85 %}bg-green-400
-                      {% elif score >= 0.7 %}bg-yellow-400
-                      {% else %}bg-error{% endif %}" style="width: {{ fieldPct }}%"></div>
-                  </div>
-                  <span class="text-xs font-bold text-on-surface-variant w-10 text-right">{{ fieldPct }}%</span>
-                </div>
-              {% endfor %}
+              {% if intakeAgentFindings.lowestFieldValue %}
+                <p class="text-xs text-on-surface-variant mt-1">Extracted value: <span class="font-bold text-on-surface">{{ intakeAgentFindings.lowestFieldValue }}</span></p>
+              {% endif %}
             </div>
           </div>
         {% else %}
@@ -301,26 +287,26 @@
       </div>
     </div>
 
-    <!-- Row 2, Col 1: Compliance Check -->
+    <!-- Row 2, Col 1: Compliance Agent -->
     {% if complianceFindings %}
       {% set cverd = complianceFindings.verdict | default("") %}
       {% set cFail = cverd == 'fail' %}
-      <div class="bg-surface-container-highest rounded-2xl p-6 border-t {% if cFail %}border-error/30{% else %}border-secondary/30{% endif %} relative overflow-hidden shadow-2xl">
+      <div class="bg-surface-container-highest rounded-2xl p-6 border-t {% if cFail %}border-red-400/30{% else %}border-secondary/30{% endif %} relative overflow-hidden shadow-2xl">
         <div class="absolute top-0 right-0 p-4">
-          <span class="material-symbols-outlined {% if cFail %}text-error/20{% else %}text-secondary/20{% endif %} text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">policy</span>
+          <span class="material-symbols-outlined {% if cFail %}text-red-400/20{% else %}text-secondary/20{% endif %} text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">policy</span>
         </div>
         <div class="relative z-10">
-          <h4 class="{% if cFail %}text-error{% else %}text-secondary{% endif %} font-headline font-bold text-lg mb-4 flex items-center gap-2">
+          <h4 class="{% if cFail %}text-red-400{% else %}text-secondary{% endif %} font-headline font-bold text-lg mb-4 flex items-center gap-2">
             <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">{% if cFail %}gpp_bad{% else %}verified_user{% endif %}</span>
-            Compliance Check
+            Compliance Agent
           </h4>
-          <div class="p-4 {% if cFail %}bg-error-container/10 rounded-xl border border-error/20{% else %}bg-secondary-container/10 rounded-xl border border-secondary/20{% endif %}">
+          <div class="p-4 {% if cFail %}bg-red-400/5 rounded-xl border border-red-400/20{% else %}bg-secondary-container/10 rounded-xl border border-secondary/20{% endif %}">
             {% set violations = complianceFindings.violations | default([]) %}
             {% if violations %}
               <div class="space-y-2 mb-3">
                 {% for v in violations[:3] %}
-                  <div class="p-2 {% if cFail %}bg-error/5 rounded-lg border border-error/10{% else %}bg-secondary/5 rounded-lg border border-secondary/10{% endif %} text-xs">
-                    <span class="font-bold {% if cFail %}text-error{% else %}text-secondary{% endif %}">{{ v.field | default("Field") }}</span>
+                  <div class="p-2 {% if cFail %}bg-red-400/5 rounded-lg border border-red-400/10{% else %}bg-secondary/5 rounded-lg border border-secondary/10{% endif %} text-xs">
+                    <span class="font-bold {% if cFail %}text-red-400{% else %}text-secondary{% endif %}">{{ v.field | default("Field") }}</span>
                     {% if v.value and v.limit %}
                       <span class="text-on-surface-variant"> --- {{ v.value }} / limit {{ v.limit }}</span>
                     {% endif %}
@@ -346,7 +332,7 @@
               <p class="text-xs text-on-surface-variant mb-2">Approval required: {{ thresholds | join(", ") }}</p>
             {% endif %}
             {% if complianceFindings.summary %}
-              <p class="text-sm font-medium leading-relaxed {% if cFail %}text-error/80{% else %}text-secondary/80{% endif %} italic">{{ complianceFindings.summary }}</p>
+              <p class="text-sm font-medium leading-relaxed {% if cFail %}text-red-400/80{% else %}text-secondary/80{% endif %} italic">{{ complianceFindings.summary }}</p>
             {% elif not violations %}
               <p class="text-on-surface text-sm font-medium leading-relaxed">No compliance violations found.</p>
             {% endif %}
@@ -358,7 +344,7 @@
       <div class="bg-surface-container-highest rounded-2xl p-6 border-t border-outline-variant/20 shadow-2xl">
         <h4 class="text-on-surface-variant font-headline font-bold text-lg mb-4 flex items-center gap-2">
           <span class="material-symbols-outlined">hourglass_empty</span>
-          Compliance Check
+          Compliance Agent
         </h4>
         <div class="p-4 bg-surface-container-low rounded-xl text-center">
           <span class="text-xs font-bold text-on-surface-variant/60 uppercase tracking-widest">Pending Review</span>
@@ -429,23 +415,23 @@
       </div>
     {% endif %}
 
-    <!-- Row 3: AI Insight (full width) -->
+    <!-- Row 3: Advisory Agent (full width) -->
     {% if advisorDecision or aiInsight %}
       {% set aApprove = advisorDecision == 'auto_approve' %}
       {% set aEscalate = advisorDecision == 'escalate_to_reviewer' %}
       {% set aReject = advisorDecision and not aApprove and not aEscalate %}
-      <div class="md:col-span-2 bg-surface-container-highest rounded-2xl p-6 border-t {% if aApprove %}border-secondary/30{% elif aEscalate %}border-tertiary/30{% else %}border-error/30{% endif %} relative overflow-hidden shadow-2xl">
+      <div class="md:col-span-2 bg-surface-container-highest rounded-2xl p-6 border-t {% if aApprove %}border-secondary/30{% else %}border-red-400/30{% endif %} relative overflow-hidden shadow-2xl">
         <div class="absolute top-0 right-0 p-4">
-          <span class="material-symbols-outlined {% if aApprove %}text-secondary/20{% elif aEscalate %}text-tertiary/20{% else %}text-error/20{% endif %} text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">psychology</span>
+          <span class="material-symbols-outlined {% if aApprove %}text-secondary/20{% else %}text-red-400/20{% endif %} text-6xl rotate-12" style="font-variation-settings: 'FILL' 1;">gavel</span>
         </div>
         <div class="relative z-10">
-          <h4 class="{% if aApprove %}text-secondary{% elif aEscalate %}text-tertiary{% else %}text-error{% endif %} font-headline font-bold text-lg mb-4 flex items-center gap-2">
-            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">psychology</span>
-            AI Insight
+          <h4 class="{% if aApprove %}text-secondary{% else %}text-red-400{% endif %} font-headline font-bold text-lg mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">gavel</span>
+            Advisory Agent
           </h4>
-          <div class="p-4 {% if aApprove %}bg-secondary-container/10 rounded-xl border border-secondary/20{% elif aEscalate %}bg-tertiary-container/10 rounded-xl border border-tertiary/20{% else %}bg-error-container/10 rounded-xl border border-error/20{% endif %}">
+          <div class="p-4 {% if aApprove %}bg-secondary-container/10 rounded-xl border border-secondary/20{% else %}bg-red-400/5 rounded-xl border border-red-400/20{% endif %}">
             {% if advisorDecision %}
-              <p class="text-sm font-bold uppercase tracking-widest {% if aApprove %}text-secondary{% elif aEscalate %}text-tertiary{% else %}text-error{% endif %} mb-3">
+              <p class="text-sm font-bold uppercase tracking-widest {% if aApprove %}text-secondary{% else %}text-red-400{% endif %} mb-3">
                 Advisor: {{ advisorDecision.replace("_", " ") }}
               </p>
             {% endif %}
@@ -463,11 +449,11 @@
         </div>
       </div>
     {% else %}
-      <!-- AI Insight: Pending Review -->
+      <!-- Advisory Agent: Pending Review -->
       <div class="md:col-span-2 bg-surface-container-highest rounded-2xl p-6 border-t border-outline-variant/20 shadow-2xl">
         <h4 class="text-on-surface-variant font-headline font-bold text-lg mb-4 flex items-center gap-2">
           <span class="material-symbols-outlined">hourglass_empty</span>
-          AI Insight
+          Advisory Agent
         </h4>
         <div class="p-4 bg-surface-container-low rounded-xl text-center">
           <span class="text-xs font-bold text-on-surface-variant/60 uppercase tracking-widest">Pending Review</span>

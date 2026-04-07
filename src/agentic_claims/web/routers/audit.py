@@ -24,23 +24,30 @@ _ACTION_TO_STEP = {
     "ai_extraction": "AI Extraction",
     "policy_check": "Policy Check",
     "claim_submitted": "Claim Submitted",
-    "compliance_check": "Compliance Check",
-    "fraud_check": "Fraud Check",
-    "advisor_decision": "Advisor Decision",
-    # Backwards compat: old claims that have these actions map to Final Decision
-    "claim_approved": "Final Decision",
-    "claim_rejected": "Final Decision",
-    "status_change": "Final Decision",
+    "compliance_check": "Compliance Agent",
+    "fraud_check": "Fraud Checking Agent",
+    "advisor_decision": "Advisory Agent",
+    # Start entries — agent has begun processing
+    "compliance_check_start": "Compliance Agent",
+    "fraud_check_start": "Fraud Checking Agent",
+    "advisor_decision_start": "Advisory Agent",
+    # Human reviewer actions
+    "claim_approved": "Reviewer Decision",
+    "claim_rejected": "Reviewer Decision",
 }
+
+# Actions that represent an agent starting (not completing)
+_START_ACTIONS = {"compliance_check_start", "fraud_check_start", "advisor_decision_start"}
 
 _TIMELINE_ORDER = [
     "Receipt Uploaded",
     "AI Extraction",
     "Policy Check",
     "Claim Submitted",
-    "Compliance Check",
-    "Fraud Check",
-    "Advisor Decision",
+    "Compliance Agent",
+    "Fraud Checking Agent",
+    "Advisory Agent",
+    "Reviewer Decision",
 ]
 
 _STEP_ICONS = {
@@ -48,10 +55,10 @@ _STEP_ICONS = {
     "AI Extraction": "troubleshoot",
     "Policy Check": "rule",
     "Claim Submitted": "send",
-    "Compliance Check": "policy",
-    "Fraud Check": "shield",
-    "Advisor Decision": "gavel",
-    "Final Decision": "verified",
+    "Compliance Agent": "policy",
+    "Fraud Checking Agent": "shield",
+    "Advisory Agent": "gavel",
+    "Reviewer Decision": "person_check",
 }
 
 # Agent-specific colors per step (Tailwind color name used in template)
@@ -60,18 +67,19 @@ _STEP_COLORS = {
     "AI Extraction": "blue",
     "Policy Check": "blue",
     "Claim Submitted": "blue",
-    "Compliance Check": "green",  # overridden to red in _buildTimelineSteps when verdict=fail
-    "Fraud Check": "orange",
-    "Advisor Decision": "purple",
-    "Final Decision": "blue",
+    "Compliance Agent": "green",  # overridden to red in _buildTimelineSteps when verdict=fail
+    "Fraud Checking Agent": "green",  # overridden by verdict in _buildTimelineSteps
+    "Advisory Agent": "green",  # overridden to red in _buildTimelineSteps for non-approve
+    "Reviewer Decision": "green",  # overridden by action in _buildTimelineSteps
 }
-
-# Steps that run in parallel (same superstep)
-_PARALLEL_STEPS = {"Compliance Check", "Fraud Check"}
 
 
 def _buildTimelineSteps(auditRows: list) -> list[dict]:
-    """Map audit_log rows to 7 ordered timeline steps with agent-specific colors."""
+    """Map audit_log rows to 8 ordered timeline steps with agent-specific colors.
+
+    Supports three statuses: completed, processing (start entry only), pending (no entry).
+    A completion entry always overrides a start entry for the same step.
+    """
     stepMap: dict[str, dict] = {}
     # Track the action for each step (needed for Final Decision outcome label)
     stepAction: dict[str, str] = {}
@@ -81,8 +89,15 @@ def _buildTimelineSteps(auditRows: list) -> list[dict]:
         stepName = _ACTION_TO_STEP.get(action)
         if stepName is None:
             continue
-        if stepName in stepMap:
-            continue  # keep first occurrence
+
+        isStartAction = action in _START_ACTIONS
+
+        # If step already has a completed entry, skip start entries
+        if stepName in stepMap and stepMap[stepName]["status"] == "completed":
+            continue
+        # If step has a start entry and this is also a start entry, skip
+        if stepName in stepMap and isStartAction:
+            continue
 
         details = {}
         try:
@@ -91,15 +106,16 @@ def _buildTimelineSteps(auditRows: list) -> list[dict]:
             pass
 
         color = _STEP_COLORS.get(stepName, "blue")
+        status = "processing" if isStartAction else "completed"
 
         stepData: dict = {
             "name": stepName,
             "icon": _STEP_ICONS.get(stepName, "circle"),
-            "status": "completed",
+            "status": status,
             "timestamp": row.timestamp.isoformat() if row.timestamp else None,
             "details": details,
             "color": color,
-            "parallel": stepName in _PARALLEL_STEPS,
+            "parallel": False,
         }
 
         if stepName == "AI Extraction":
@@ -121,12 +137,19 @@ def _buildTimelineSteps(auditRows: list) -> list[dict]:
             violations = details.get("violations") or []
             stepData["violations"] = violations
 
-        elif stepName == "Final Decision":
-            stepData["outcome"] = action.replace("claim_", "").replace("_", " ").title()
+        elif stepName == "Reviewer Decision":
+            outcome = action.replace("claim_", "").replace("_", " ").title()
+            stepData["outcome"] = outcome
+            stepData["reviewerAction"] = details.get("action", "")
             stepData["rejectionReason"] = details.get("rejectionReason")
             stepData["reviewerNotes"] = details.get("reviewerNotes")
+            # Color: green for approved, red for rejected
+            if "approved" in action:
+                stepData["color"] = "green"
+            elif "rejected" in action:
+                stepData["color"] = "red"
 
-        elif stepName == "Compliance Check":
+        elif stepName == "Compliance Agent":
             verdict = details.get("verdict", "")
             # Override color: red for fail, green for pass
             stepData["color"] = "red" if verdict == "fail" else "green"
@@ -136,15 +159,27 @@ def _buildTimelineSteps(auditRows: list) -> list[dict]:
             stepData["citedClauses"] = details.get("citedClauses") or []
             stepData["complianceSummary"] = details.get("summary") or ""
 
-        elif stepName == "Fraud Check":
-            stepData["fraudVerdict"] = details.get("verdict", "")
+        elif stepName == "Fraud Checking Agent":
+            verdict = details.get("verdict", "")
+            stepData["fraudVerdict"] = verdict
+            # Color: red for duplicate/suspicious, green for legit
+            if verdict in ("duplicate", "suspicious"):
+                stepData["color"] = "red"
+            else:
+                stepData["color"] = "green"
             flags = details.get("flags") or []
             stepData["flagCount"] = len(flags)
             stepData["duplicateClaims"] = details.get("duplicateClaims") or []
             stepData["fraudSummary"] = details.get("summary") or ""
 
-        elif stepName == "Advisor Decision":
-            stepData["advisorDecision"] = details.get("decision") or details.get("verdict") or ""
+        elif stepName == "Advisory Agent":
+            decision = details.get("decision") or details.get("verdict") or ""
+            stepData["advisorDecision"] = decision
+            # Color: green for approve, red for reject, pink for escalate
+            if decision == "auto_approve":
+                stepData["color"] = "green"
+            else:
+                stepData["color"] = "red"
             stepData["advisorReasoning"] = details.get("reasoning") or ""
             stepData["complianceSummary"] = details.get("complianceSummary") or ""
             stepData["fraudSummary"] = details.get("fraudSummary") or ""
@@ -166,14 +201,14 @@ def _buildTimelineSteps(auditRows: list) -> list[dict]:
                     "timestamp": None,
                     "details": {},
                     "color": _STEP_COLORS.get(name, "blue"),
-                    "parallel": name in _PARALLEL_STEPS,
+                    "parallel": False,
                 }
             )
     return steps
 
 
 async def _fetchTimeline(claimId: int) -> list[dict]:
-    """Fetch audit_log entries and build 7-step timeline."""
+    """Fetch audit_log entries and build 8-step timeline."""
     async with getAsyncSession() as session:
         result = await session.execute(
             select(AuditLog).where(AuditLog.claimId == claimId).order_by(AuditLog.timestamp.asc())
@@ -339,7 +374,7 @@ async def auditPage(request: Request, claimId: str):
 
 @router.get("/api/audit/{claimId}/timeline")
 async def auditTimelineApi(request: Request, claimId: int):
-    """Return 7-step timeline HTML partial for a claim's audit_log entries."""
+    """Return 8-step timeline HTML partial for a claim's audit_log entries."""
     currentUser = getCurrentUser(request)
     if currentUser["role"] != "reviewer":
         return JSONResponse({"error": "Forbidden"}, status_code=403)

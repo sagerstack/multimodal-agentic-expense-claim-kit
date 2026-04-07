@@ -155,24 +155,52 @@ def _parseFlagReason(intakeFindings: dict | None) -> dict | None:
     }
 
 
+_CONFIDENCE_STRING_MAP = {
+    "high": 0.95,
+    "medium": 0.75,
+    "low": 0.50,
+    "very high": 0.99,
+    "very low": 0.25,
+}
+
+
+def _normalizeConfidenceValue(v) -> float | None:
+    """Convert a confidence value to a float. Handles numeric and string labels."""
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        return _CONFIDENCE_STRING_MAP.get(v.strip().lower())
+    return None
+
+
 def _parseIntakeAgentFindings(intakeFindings: dict | None) -> dict | None:
     """Extract confidence scores from intake_findings and compute summary stats."""
     if not intakeFindings:
         return None
-    scores = intakeFindings.get("confidenceScores", {})
+    scores = intakeFindings.get("confidenceScores") or intakeFindings.get("confidence") or {}
     if not scores or not isinstance(scores, dict):
         return None
-    values = [v for v in scores.values() if isinstance(v, (int, float))]
-    if not values:
+    # Normalize: convert string labels ("High") to numeric (0.95)
+    numericScores = {}
+    for k, v in scores.items():
+        nv = _normalizeConfidenceValue(v)
+        if nv is not None:
+            numericScores[k] = nv
+    if not numericScores:
         return None
+    values = list(numericScores.values())
     avgConfidence = sum(values) / len(values)
-    lowestField = min(scores, key=lambda k: scores[k] if isinstance(scores[k], (int, float)) else float("inf"))
-    lowestScore = scores[lowestField]
+    lowestField = min(numericScores, key=lambda k: numericScores[k])
+    lowestScore = numericScores[lowestField]
+    # Get the extracted value for the lowest confidence field
+    extractedFields = intakeFindings.get("extractedFields") or {}
+    lowestFieldValue = extractedFields.get(lowestField)
     return {
         "avgConfidence": round(avgConfidence, 3),
         "lowestField": lowestField,
         "lowestScore": round(float(lowestScore), 3),
-        "scores": scores,
+        "lowestFieldValue": str(lowestFieldValue) if lowestFieldValue is not None else None,
+        "scores": numericScores,
     }
 
 
@@ -200,11 +228,14 @@ def _parseConversationalAudit(intakeFindings: dict | None) -> list[dict]:
         if justification:
             entries.append({"type": "justification", "icon": "edit", "text": str(justification), "children": []})
 
-    # Remarks / soft cap breaches
+    # Remarks / soft cap breaches (filter out generic placeholder remarks)
     remarks = intakeFindings.get("remarks")
     if remarks:
         remarkTexts = [remarks] if isinstance(remarks, str) else remarks
         for rText in remarkTexts:
+            rStr = str(rText).strip().lower()
+            if rStr in ("no expense description provided", "no description provided", "n/a", "none"):
+                continue
             entries.append({"type": "remark", "icon": "info", "text": str(rText), "children": []})
 
     # Field corrections

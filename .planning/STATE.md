@@ -5,23 +5,24 @@
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Milestone v2.0 — Phase 6.3 complete, Phase 8 next
+**Current focus:** Milestone v2.0 — Phase 8.1 in progress (bug fixes from Phase 8 QA)
 
 ## Current Position
 
-Phase: 6.3 — User Authentication + Dual Roles (COMPLETE)
-Plan: All 6/6 plans complete
-Status: Phase 6.3 complete — auth, login, sidebar, dashboard, audit log, claim review all implemented and QA validated
-Last activity: 2026-04-05 — Phase 6.3 auto-delivered (6 plans, 2 waves, all QA passed)
+Phase: 8.1 — Bug Fixes + UX Polish (IN PROGRESS)
+Plan: TBD
+Status: 8/10 bugs resolved (BUG-016 through BUG-023), 2 open (BUG-024, BUG-025). Global error toast added. Intelligence cards restyled.
+Last activity: 2026-04-06 — Phase 8.1 created, bugs documented, resolved fixes committed
 
 ```
-v2.0 Progress: [##################] 18/20 plans
+v2.0 Progress: [#######################] 23/25 plans
 Phase 6:       [##########] 3/3 plans (complete)
 Phase 7:       [##########] 3/3 plans (complete)
 Phase 6.1:     [##########] complete
 Phase 6.2:     [##########] 4/4 plans (complete)
 Phase 6.3:     [##########] 6/6 plans (complete)
-Phase 8:       [..........] 0/TBD plans
+Phase 8:       [##########] 5/5 plans (complete)
+Phase 8.1:     [####......] bug fixes in progress (8/10 resolved)
 Phase 10:      [..........] 0/2 plans
 ```
 

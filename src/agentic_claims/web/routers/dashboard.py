@@ -17,10 +17,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_PENDING_STATUSES = {"submitted", "pending"}
-_APPROVED_STATUSES = {"approved"}
-_ESCALATED_STATUSES = {"escalated", "flagged"}
-_REJECTED_STATUSES = {"rejected"}
+_DRAFT_STATUSES = {"draft"}
+_PENDING_STATUSES = {"pending"}
+_AI_REVIEWED_STATUSES = {"ai_reviewed"}
+_APPROVED_STATUSES = {"ai_approved", "manually_approved"}
+_ESCALATED_STATUSES = {"escalated"}
+_REJECTED_STATUSES = {"ai_rejected", "manually_rejected"}
 
 
 async def _queryKpis() -> dict:
@@ -31,13 +33,19 @@ async def _queryKpis() -> dict:
         )
         rows = result.all()
 
+    draft = 0
     pending = 0
+    aiReviewed = 0
     autoApproved = 0
     escalated = 0
     rejected = 0
     for status, cnt in rows:
-        if status in _PENDING_STATUSES:
+        if status in _DRAFT_STATUSES:
+            draft += cnt
+        elif status in _PENDING_STATUSES:
             pending += cnt
+        elif status in _AI_REVIEWED_STATUSES:
+            aiReviewed += cnt
         elif status in _APPROVED_STATUSES:
             autoApproved += cnt
         elif status in _ESCALATED_STATUSES:
@@ -46,7 +54,9 @@ async def _queryKpis() -> dict:
             rejected += cnt
 
     return {
+        "draft": draft,
         "pending": pending,
+        "aiReviewed": aiReviewed,
         "autoApproved": autoApproved,
         "escalated": escalated,
         "rejected": rejected,
@@ -111,7 +121,7 @@ async def _queryEfficiency() -> dict:
                 SELECT
                     EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') AS hour,
                     COUNT(*) AS total,
-                    COUNT(*) FILTER (WHERE status = 'approved') AS approved
+                    COUNT(*) FILTER (WHERE status IN ('ai_approved', 'manually_approved')) AS approved
                 FROM claims
                 WHERE created_at >= NOW() - INTERVAL '24 hours'
                 GROUP BY hour
@@ -144,7 +154,7 @@ async def dashboardPage(request: Request):
         claims = await _queryClaims()
     except Exception:
         logger.exception("Dashboard DB query failed — rendering with empty data")
-        kpis = {"pending": 0, "autoApproved": 0, "escalated": 0, "rejected": 0}
+        kpis = {"draft": 0, "pending": 0, "aiReviewed": 0, "autoApproved": 0, "escalated": 0, "rejected": 0}
         claims = []
 
     return templates.TemplateResponse(

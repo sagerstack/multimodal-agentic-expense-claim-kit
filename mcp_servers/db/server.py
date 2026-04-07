@@ -226,14 +226,19 @@ def insertClaim(
                 claimRecord = serializeRow(dict(zip(claimColumns, claimRow)))
             else:
                 # Non-idempotent path (backwards compatibility or testing)
+                # Generate a fallback idempotency_key to satisfy NOT NULL constraint
+                import uuid as _uuid
+                fallbackKey = f"auto_{_uuid.uuid4().hex[:16]}"
+
                 if claimNumber:
                     claimSql = """
                         INSERT INTO claims (
                             claim_number, employee_id, status,
                             total_amount, currency, intake_findings,
-                            original_amount, original_currency, converted_amount_sgd
+                            original_amount, original_currency, converted_amount_sgd,
+                            idempotency_key
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id, claim_number, employee_id, status,
                                   total_amount, currency, intake_findings,
                                   original_amount, original_currency,
@@ -249,6 +254,7 @@ def insertClaim(
                         originalAmount,
                         originalCurrency,
                         convertedAmount,
+                        fallbackKey,
                     )
                 else:
                     # DB generates claim_number via DEFAULT
@@ -256,9 +262,10 @@ def insertClaim(
                         INSERT INTO claims (
                             employee_id, status, total_amount, currency,
                             intake_findings, original_amount,
-                            original_currency, converted_amount_sgd
+                            original_currency, converted_amount_sgd,
+                            idempotency_key
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id, claim_number, employee_id, status,
                                   total_amount, currency, intake_findings,
                                   original_amount, original_currency,
@@ -273,6 +280,7 @@ def insertClaim(
                         originalAmount,
                         originalCurrency,
                         convertedAmount,
+                        fallbackKey,
                     )
 
                 cur.execute(claimSql, claimParams)

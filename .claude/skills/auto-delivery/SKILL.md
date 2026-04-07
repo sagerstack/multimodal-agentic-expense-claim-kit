@@ -119,6 +119,7 @@ Read .planning/ROADMAP.md
 |-------|-------|
 | `--milestone 2.0` | All phases in v2.0 that are not complete |
 | `--phase 6` | Phase 6 only |
+| `--skip-research` | Skip research step during `/gsd:plan-phase` (pass `--skip-research` flag) |
 | _(empty)_ | All remaining phases in active milestone from STATE.md |
 
 **Step 3: Resolve plan execution queue**
@@ -165,7 +166,7 @@ If `<uat>` EXISTS — skip to 4c.
 
 **4c. Plan phase (if no PLAN.md)**
 For each phase with CONTEXT.md (including `<uat>`) but no PLAN.md files:
-1. Run `/gsd:plan-phase {N}` — this reads CONTEXT.md (including `<uat>` scenarios) and produces PLAN.md files.
+1. Run `/gsd:plan-phase {N}` (or `/gsd:plan-phase {N} --skip-research` if `--skip-research` flag was passed to auto-deliver) — this reads CONTEXT.md (including `<uat>` scenarios) and produces PLAN.md files.
 2. Re-discover PLAN.md files for the phase and add to execution queue.
 
 **Step 5: Log scope and begin**
@@ -191,8 +192,14 @@ Proceed directly to team setup.
 
 Create the team and spawn teammates.
 
+Derive team name from the repository name and phase number:
+```python
+repo_name = os.path.basename(os.getcwd())  # e.g., "agentic-expense-claims"
+team_name = f"maverick-{repo_name}_{phase_number}"  # e.g., "maverick-agentic-expense-claims_8.1"
 ```
-TeamCreate(team_name="maverick", description="Auto-delivery for milestone v{milestone}")
+
+```
+TeamCreate(team_name="maverick-{repo_name}_{phase_number}", description="Auto-delivery for phase {phase_number}")
 ```
 
 **Spawn Developer:**
@@ -230,7 +237,12 @@ Agent(
   - docs/ux/ (Stitch HTML designs — the UI spec)
 
   Your sagerstack code-qa skill is preloaded.
-  You validate with 9-check pipeline + Playwright browser UAT.
+  You validate with 9-check pipeline + browser UAT.
+
+  BROWSER UAT IS MANDATORY for all web-facing plans.
+  Use Playwright MCP tools (mcp__playwright__*) as the primary browser automation.
+  If Playwright MCP is unavailable, fall back to Claude in Chrome MCP tools (mcp__claude-in-chrome__*).
+  Use ToolSearch to discover available browser tools before starting UAT.
 
   Await QA assignments from Team Lead."
 )
@@ -319,7 +331,7 @@ SendMessage(
   4. Run Playwright MCP browser visual UAT (Layer 4):
      - Navigate to each affected page
      - Validate against Stitch designs
-     - Take screenshots (save to qa/screenshots/ with naming: {phase}-{plan}-c{cycle}-{timestamp}-{description}.png)
+     - Take screenshots (save to .qa/screenshots/ with naming: {phase-no}-{page-name}-{iteration-no}-{desc}.png)
   5. Report structured QA results (PASS/FAIL per criterion and per scenario)
 
   Report back with full QA report."

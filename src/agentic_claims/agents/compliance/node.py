@@ -16,6 +16,7 @@ MCP servers used:
 
 import json
 import logging
+import time
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
@@ -93,7 +94,25 @@ async def complianceNode(state: ClaimState) -> dict:
     """
     settings = getSettings()
     claimId = state.get("claimId", "unknown")
+    dbClaimId = state.get("dbClaimId")
     logger.info("complianceNode started", extra={"claimId": claimId})
+
+    # Write start audit entry so the timeline shows "Processing"
+    if dbClaimId is not None:
+        try:
+            await mcpCallTool(
+                serverUrl=settings.db_mcp_url,
+                toolName="insertAuditLog",
+                arguments={
+                    "claimId": dbClaimId,
+                    "action": "compliance_check_start",
+                    "newValue": json.dumps({"status": "processing"}),
+                    "actor": "compliance_agent",
+                    "oldValue": "",
+                },
+            )
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # 1. Read claim context from state
@@ -102,7 +121,6 @@ async def complianceNode(state: ClaimState) -> dict:
     intakeFindings = state.get("intakeFindings") or {}
     intakeViolations = state.get("violations") or []
     currencyConversion = state.get("currencyConversion")
-    dbClaimId = state.get("dbClaimId")
 
     receiptFields = extractedReceipt.get("fields", {})
     category = receiptFields.get("category", "general")
@@ -159,35 +177,106 @@ async def complianceNode(state: ClaimState) -> dict:
         "## Retrieved Policy Rules\n\n"
         f"```json\n{json.dumps(policyResults, indent=2, default=str)}\n```\n\n"
         "Evaluate the claim against the policy rules above.\n"
-        "Return ONLY the JSON verdict object — no preamble, no markdown fences."
+        "Return ONLY the JSON verdict object — no preamble, no markdown fences.\n"
+        "/no_think"
     )
 
     # ------------------------------------------------------------------
     # 4. Call LLM with 402 fallback
     # ------------------------------------------------------------------
+    modelName = settings.openrouter_model_llm
     llm = buildAgentLlm(settings, temperature=0.1)
+    llmMessages = [
+        SystemMessage(content=COMPLIANCE_SYSTEM_PROMPT),
+        HumanMessage(content=evaluationPrompt),
+    ]
+
+    # Log the exact SDK params to debug why OpenRouter takes 500s vs 0.1s direct
+    sdkParams = llm._default_params
+    logger.info(
+        "complianceNode LLM request",
+        extra={
+            "claimId": claimId,
+            "model": modelName,
+            "systemPrompt": COMPLIANCE_SYSTEM_PROMPT,
+            "userPrompt": evaluationPrompt,
+            "sdkParams": {k: str(v)[:200] for k, v in sdkParams.items()},
+        },
+    )
+    llmStartTime = time.time()
+
     try:
-        response = await llm.ainvoke([
-            SystemMessage(content=COMPLIANCE_SYSTEM_PROMPT),
-            HumanMessage(content=evaluationPrompt),
-        ])
+        response = await llm.ainvoke(llmMessages)
         rawContent = response.content
+        llmElapsed = round(time.time() - llmStartTime, 2)
+
+        logger.info(
+            "complianceNode LLM response",
+            extra={
+                "claimId": claimId,
+                "model": modelName,
+                "elapsedSeconds": llmElapsed,
+                "responseLength": len(rawContent) if rawContent else 0,
+                "rawResponse": rawContent[:2000] if rawContent else None,
+            },
+        )
 
     except Exception as e:
+        llmElapsed = round(time.time() - llmStartTime, 2)
         errorStr = str(e)
         if "402" in errorStr or "credits" in errorStr.lower() or "quota" in errorStr.lower():
             logger.warning(
                 "Primary LLM returned 402 in complianceNode — falling back",
-                extra={"primary": settings.openrouter_model_llm, "error": errorStr},
+                extra={"primary": settings.openrouter_model_llm, "error": errorStr, "elapsedSeconds": llmElapsed},
             )
             llm = buildAgentLlm(settings, temperature=0.1, useFallback=True)
-            response = await llm.ainvoke([
-                SystemMessage(content=COMPLIANCE_SYSTEM_PROMPT),
-                HumanMessage(content=evaluationPrompt),
-            ])
-            rawContent = response.content
+            try:
+                response = await llm.ainvoke(llmMessages)
+                rawContent = response.content
+            except Exception as fallbackErr:
+                logger.error("Fallback LLM also failed in complianceNode", extra={"error": str(fallbackErr)}, exc_info=True)
+                rawContent = None
         else:
-            raise
+            logger.error("LLM call failed in complianceNode", extra={"error": errorStr, "elapsedSeconds": llmElapsed}, exc_info=True)
+            rawContent = None
+
+    # Handle LLM failure: return a conservative requiresReview verdict so the
+    # graph can continue to fraud + advisor instead of crashing.
+    if rawContent is None:
+        complianceFindings = {
+            "verdict": "error",
+            "violations": [],
+            "citedClauses": [],
+            "requiresReview": True,
+            "summary": "Compliance check could not be completed (LLM unavailable). Manual review required.",
+        }
+        logger.warning("complianceNode returning error fallback verdict", extra={"claimId": claimId})
+
+        if dbClaimId is not None:
+            try:
+                auditValue = json.dumps({
+                    "verdict": "error",
+                    "violations": [],
+                    "summary": complianceFindings["summary"],
+                })
+                await mcpCallTool(
+                    serverUrl=settings.db_mcp_url,
+                    toolName="insertAuditLog",
+                    arguments={
+                        "claimId": dbClaimId,
+                        "action": "compliance_check",
+                        "newValue": auditValue,
+                        "actor": "compliance_agent",
+                        "oldValue": "",
+                    },
+                )
+            except Exception:
+                pass
+
+        return {
+            "messages": [AIMessage(content="**Compliance Check**: ERROR — LLM unavailable. Manual review required.")],
+            "complianceFindings": complianceFindings,
+        }
 
     # ------------------------------------------------------------------
     # 5. Parse response into structured findings

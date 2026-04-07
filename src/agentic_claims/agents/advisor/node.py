@@ -20,6 +20,7 @@ MCP servers used:
 
 import json
 import logging
+import time
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.prebuilt import create_react_agent
@@ -39,8 +40,8 @@ logger = logging.getLogger(__name__)
 VALID_DECISIONS = {"auto_approve", "return_to_claimant", "escalate_to_reviewer"}
 
 DECISION_TO_STATUS = {
-    "auto_approve": "approved",
-    "return_to_claimant": "rejected",
+    "auto_approve": "ai_approved",
+    "return_to_claimant": "ai_rejected",
     "escalate_to_reviewer": "escalated",
 }
 
@@ -226,7 +227,7 @@ async def advisorNode(state: ClaimState) -> dict:
         Partial state update:
           - messages: [AIMessage] with human-readable decision summary only
           - advisorDecision: one of "auto_approve" | "return_to_claimant" | "escalate_to_reviewer"
-          - status: DB-aligned status string ("approved" | "rejected" | "escalated")
+          - status: DB-aligned status string ("ai_approved" | "ai_rejected" | "escalated")
     """
     settings = getSettings()
     claimId = state.get("claimId", "unknown")
@@ -242,6 +243,24 @@ async def advisorNode(state: ClaimState) -> dict:
     receiptFields = extractedReceipt.get("fields", {})
 
     # Read dbClaimId directly from state (written by intakeNode after submitClaim)
+    dbClaimIdEarly = state.get("dbClaimId")
+
+    # Write start audit entry so the timeline shows "Processing"
+    if dbClaimIdEarly is not None:
+        try:
+            await mcpCallTool(
+                serverUrl=settings.db_mcp_url,
+                toolName="insertAuditLog",
+                arguments={
+                    "claimId": dbClaimIdEarly,
+                    "action": "advisor_decision_start",
+                    "newValue": json.dumps({"status": "processing"}),
+                    "actor": "advisor_agent",
+                    "oldValue": "",
+                },
+            )
+        except Exception:
+            pass
     dbClaimId = state.get("dbClaimId")
     claimNumber = _extractClaimNumber(state)
 
@@ -294,23 +313,52 @@ async def advisorNode(state: ClaimState) -> dict:
         "Apply the decision rules from your system prompt.\n"
         "Follow the mandatory workflow: decide → updateClaimStatus → sendNotification (claimant) "
         "→ sendNotification (reviewer, if escalating).\n"
-        "End with the final JSON summary."
+        "End with the final JSON summary.\n"
+        "/no_think"
     )
 
     # ------------------------------------------------------------------
     # 3. Invoke ReAct agent with 402 fallback
     # ------------------------------------------------------------------
+    modelName = settings.openrouter_model_llm
     agent = _getAdvisorAgent()
     agentInput = {"messages": [HumanMessage(content=contextMessage)]}
 
+    logger.info(
+        "advisorNode LLM request",
+        extra={
+            "claimId": claimId,
+            "model": modelName,
+            "userPrompt": contextMessage[:2000],
+        },
+    )
+    llmStartTime = time.time()
+
     try:
         result = await agent.ainvoke(agentInput)
+        llmElapsed = round(time.time() - llmStartTime, 2)
+
+        # Log all agent output messages for debugging
+        agentMessages = result.get("messages", [])
+        lastContent = agentMessages[-1].content if agentMessages else ""
+        logger.info(
+            "advisorNode LLM response",
+            extra={
+                "claimId": claimId,
+                "model": modelName,
+                "elapsedSeconds": llmElapsed,
+                "messageCount": len(agentMessages),
+                "lastMessageContent": lastContent[:2000] if isinstance(lastContent, str) else str(lastContent)[:2000],
+            },
+        )
+
     except Exception as e:
+        llmElapsed = round(time.time() - llmStartTime, 2)
         errorStr = str(e)
         if "402" in errorStr or "credits" in errorStr.lower() or "quota" in errorStr.lower():
             logger.warning(
                 "Primary LLM returned 402 in advisorNode — falling back",
-                extra={"error": errorStr},
+                extra={"error": errorStr, "elapsedSeconds": llmElapsed},
             )
             try:
                 fallbackAgent = _getAdvisorAgent(useFallback=True)
@@ -325,8 +373,7 @@ async def advisorNode(state: ClaimState) -> dict:
                     fraudFindings=fraudFindings,
                 )
         else:
-            # BUG-019: any unexpected exception (network timeout, JSON parse failure, etc.)
-            # must not leave the claim stuck in "pending". Escalate with reason "advisor_error".
+            # BUG-019: any unexpected exception must not leave the claim stuck in "pending".
             return await _advisorErrorFallback(
                 claimId=claimId,
                 dbClaimId=dbClaimId,

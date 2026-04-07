@@ -143,9 +143,56 @@ Bugs discovered during Phase 2.3 UAT testing. Resolved bugs documented for refer
 - **Verified**: QA Scenario 3 (Phase 6.1 UAT) confirmed all fields correct after submission
 - **Residual**: Category still shows "--" (tracked as BUG-014)
 
-### BUG-010: Post-submission agents produce no visible output
+### BUG-010: Post-submission agents produce no visible output — **RESOLVED Phase 8**
 - **Found**: Phase 2.3 UAT (analysis)
 - **Symptom**: After submitClaim, compliance/fraud/advisor nodes run but their messages are not rendered in Chainlit
 - **Root cause**: Post-submission nodes are plain function nodes (not LLM calls); they append AIMessages to state but don't emit `on_chat_model_stream` events that app.py listens for
-- **Severity**: Low — expected for Phase 1 (stubs with "Hello world" placeholder text)
-- **Suggested fix**: When real agents are implemented, either make them LLM-based (will emit stream events) or add explicit rendering in app.py for post-submission messages
+- **Fix**: Phase 8 replaced stubs with LLM-powered agents that emit stream events
+
+### BUG-020: Receipt image NULL in database — image_path not persisted — **RESOLVED Phase 8 QA**
+- **Found**: Phase 8 UAT (Claim Review page — no receipt image shown)
+- **Root cause**: `submitClaim` tool expected the LLM to pass `imagePath` in claimData, but the LLM never reliably provides it. The receipt image was stored in-memory (imageStore) but its disk path was not injected into the tool.
+- **Fix**: Created `imagePathContext.py` with a ContextVar. Chat router sets it from `getImagePath(sessionIds["claimId"])` before graph execution. `submitClaim` reads it and merges into claimData.
+- **Regression**: Initial fix by maverick-dev used undefined `claimId` variable instead of `sessionIds["claimId"]`, causing `NameError` that crashed the SSE stream silently. Fixed manually.
+- **Files**: `src/agentic_claims/web/imagePathContext.py` (new), `src/agentic_claims/web/routers/chat.py`, `src/agentic_claims/agents/intake/tools/submitClaim.py`
+
+### BUG-021: Claim Review intelligence cards invisible on dark theme — **RESOLVED Phase 8 QA**
+- **Found**: Phase 8 UAT (Claim Review page — Fraud Check card completely white)
+- **Root cause**: Used `bg-green-500/5` and `text-green-300` which rendered as invisible white on the dark theme. Similarly, Compliance and AI Insight cards had styling that didn't match the established Flag Reason card pattern.
+- **Fix**: Rewrote all 3 intelligence cards (Compliance, Fraud, AI Insight) to use `bg-surface-container-highest` + `bg-{color}-container/10` pattern matching the Flag Reason card. Each card uses error (red) or secondary (green) colors depending on pass/fail outcome.
+- **Files**: `templates/review.html`
+
+### BUG-022: Approval badge shows "AUTO-APPROVED BY AI" for reviewer-approved claims
+- **Found**: Phase 8 UAT (Claim Review page)
+- **Root cause**: Template only checked `claim.status == "approved"` without distinguishing agent vs reviewer approval.
+- **Fix**: Template now checks `claim.approvedBy` — "agent" shows "AUTO-APPROVED BY AI", any other value shows "APPROVED BY REVIEWER".
+- **Files**: `templates/review.html`
+
+### BUG-023: Claim Review shows "auto-approved" for escalated claims
+- **Found**: Phase 8 UAT (Claim Review page)
+- **Root cause**: Same template logic as BUG-022 — status check without approvedBy distinction.
+- **Fix**: Combined with BUG-022 fix.
+- **Files**: `templates/review.html`
+
+### BUG-024: Decision Pathway shows premature COMPLETED status
+- **Found**: Phase 8.1 UAT (browser)
+- **Symptom**: Chat shows "Analyzing..." (LLM still processing first tool call) but Decision Pathway already shows AI Extraction COMPLETED (0% confidence, Merchant: Unknown) and Policy Check COMPLETED
+- **Root cause**: `runGraph` in sseHelpers.py (lines 548-576) reconstructs pathway state from `graph.aget_state()` before the current agent run starts. If the checkpointed state has any prior data (e.g., from a previous turn or stale state), the pathway marks steps as completed immediately on the initial render.
+- **Severity**: Medium — misleading UX, user sees completed steps that haven't actually run yet
+- **Files**: `src/agentic_claims/web/sseHelpers.py`
+
+### BUG-026: Post-submission agents block SSE stream — should run in background
+- **Found**: Phase 8.1 UAT (browser, multiple occurrences)
+- **Symptom**: After claim submission, the thinking panel shows "Preparing response..." for 60-90s while compliance, fraud, and advisor agents run. Timer restarts from 1s at ~50-59s. User thinks the app is frozen.
+- **Root cause**: The SSE stream waits for the ENTIRE graph (`intake → compliance || fraud → advisor → END`) to complete before emitting the "done" event. The chat should return immediately after intake submits the claim to DB. Post-submission agents should not block the user's chat.
+- **Severity**: High — 60-90s unnecessary wait, users think app is broken
+- **Fix**: Decouple post-submission agents from the SSE stream. After intake submits the claim, fire the "done" event immediately. Run compliance, fraud, and advisor agents as a background task (`asyncio.create_task` or similar). Claim Review page shows results when the background pipeline completes.
+- **Files**: `src/agentic_claims/web/sseHelpers.py`, `src/agentic_claims/core/graph.py`
+
+### BUG-025: Chat stuck at "Analyzing..." with no error toast on LLM timeout
+- **Found**: Phase 8.1 UAT (browser, multiple occurrences)
+- **Symptom**: Receipt uploaded, "Analyzing..." spinner shown, but chat never progresses. No error toast appears. Logs show `on_chat_model_start - ChatOpenRouter` with no subsequent events.
+- **Root cause**: OpenRouter LLM call hangs indefinitely (no timeout configured). The SSE stream stays open waiting for `astream_events` to yield, but no events come. The global error toast system catches JS errors, HTMX errors, and SSE errors, but a hanging LLM call produces none of these — it's a silent infinite wait.
+- **Severity**: High — blocks entire claim flow with no user feedback
+- **Suggested fix**: Add timeout to OpenRouter client calls. Emit SSE error event if no `astream_events` output within N seconds.
+- **Files**: `src/agentic_claims/infrastructure/openrouter/client.py`, `src/agentic_claims/web/sseHelpers.py`

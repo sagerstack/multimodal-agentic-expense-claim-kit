@@ -215,17 +215,22 @@ async def testAdvisorReadsDbClaimIdFromState():
 
         await advisorNode(state)
 
-    # Both insertAuditLog and updateClaimStatus are called with claimId=99 from state
-    assert mockMcp.call_count == 2
-    # First call is insertAuditLog
-    firstCall = mockMcp.call_args_list[0].kwargs
-    assert firstCall["arguments"]["claimId"] == 99
-    assert firstCall["toolName"] == "insertAuditLog"
-    # Second call is updateClaimStatus with approvedBy="agent"
+    # Three MCP calls: start audit entry + insertAuditLog + updateClaimStatus
+    assert mockMcp.call_count == 3
+    # First call is advisor_decision_start audit entry
+    startCall = mockMcp.call_args_list[0].kwargs
+    assert startCall["arguments"]["claimId"] == 99
+    assert startCall["toolName"] == "insertAuditLog"
+    assert startCall["arguments"]["action"] == "advisor_decision_start"
+    # Second call is insertAuditLog (advisor_decision)
     secondCall = mockMcp.call_args_list[1].kwargs
     assert secondCall["arguments"]["claimId"] == 99
-    assert secondCall["toolName"] == "updateClaimStatus"
-    assert secondCall["arguments"]["approvedBy"] == "agent"
+    assert secondCall["toolName"] == "insertAuditLog"
+    # Third call is updateClaimStatus with approvedBy="agent"
+    thirdCall = mockMcp.call_args_list[2].kwargs
+    assert thirdCall["arguments"]["claimId"] == 99
+    assert thirdCall["toolName"] == "updateClaimStatus"
+    assert thirdCall["arguments"]["approvedBy"] == "agent"
 
 
 @pytest.mark.asyncio
@@ -325,9 +330,13 @@ async def testAdvisorNodeErrorWritesAuditLog():
 
     mcpCalls = mockMcp.call_args_list
     toolNames = [c.kwargs["toolName"] for c in mcpCalls]
-    # insertAuditLog must be called with advisor_decision action
+    # insertAuditLog must be called with advisor_decision action (not just the _start entry)
     assert "insertAuditLog" in toolNames
-    auditCall = next(c for c in mcpCalls if c.kwargs["toolName"] == "insertAuditLog")
+    auditCall = next(
+        c for c in mcpCalls
+        if c.kwargs["toolName"] == "insertAuditLog"
+        and c.kwargs["arguments"].get("action") == "advisor_decision"
+    )
     assert auditCall.kwargs["arguments"]["action"] == "advisor_decision"
     auditPayload = json.loads(auditCall.kwargs["arguments"]["newValue"])
     assert auditPayload.get("decision") == "escalate_to_reviewer"

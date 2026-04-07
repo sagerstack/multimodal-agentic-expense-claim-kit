@@ -188,17 +188,18 @@ async def testComplianceAuditLogWritten():
         return_value=mockLlm,
     ):
         mockMcp.side_effect = [
+            {"ok": True},  # compliance_check_start audit entry
             [{"text": "Policy rules here", "score": 0.9}],
-            {"ok": True},
+            {"ok": True},  # compliance_check audit entry
         ]
 
         from agentic_claims.agents.compliance.node import complianceNode
 
         await complianceNode(state)
 
-    # Second MCP call should be insertAuditLog
-    assert mockMcp.call_count == 2
-    auditCall = mockMcp.call_args_list[1]
+    # Three MCP calls: start audit + RAG query + completion audit
+    assert mockMcp.call_count == 3
+    auditCall = mockMcp.call_args_list[2]
     callKwargs = auditCall.kwargs if auditCall.kwargs else auditCall[1]
     callArgs = auditCall.args if auditCall.args else auditCall[0]
 

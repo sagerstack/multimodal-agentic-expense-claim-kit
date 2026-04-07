@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 from langchain_openrouter import ChatOpenRouter
 
+from agentic_claims.agents.intake.extractionContext import extractedReceiptVar
 from agentic_claims.agents.intake.prompts.vlmExtractionPrompt import VLM_EXTRACTION_PROMPT
 from agentic_claims.agents.intake.utils.imageQuality import checkImageQuality
 from agentic_claims.core.config import getSettings
@@ -152,6 +153,13 @@ async def extractReceiptFields(claimId: str) -> dict:
                 imagePath = getImagePath(claimId)
                 if imagePath:
                     result["imagePath"] = imagePath
+
+            # BUG-028: set ContextVar so submitClaim can inject numeric
+            # confidenceScores into intakeFindings before DB write.
+            # Must be set HERE (inside the tool) not in intakeNode
+            # post-processing, because submitClaim runs before intakeNode
+            # post-processing and ContextVars don't propagate child→parent.
+            extractedReceiptVar.set(result)
 
             return result
         except json.JSONDecodeError as e:

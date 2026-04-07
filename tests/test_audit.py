@@ -152,11 +152,11 @@ def testTimelineEndpointReturnsSteps(client):
 
 
 def testTimelineEndpointHandlesMissingSteps(client):
-    """No audit entries returns all 7 steps as pending."""
+    """No audit entries returns all 8 steps as pending."""
     from agentic_claims.web.routers.audit import _buildTimelineSteps
 
     steps = _buildTimelineSteps([])
-    assert len(steps) == 7
+    assert len(steps) == 8
     for step in steps:
         assert step["status"] == "pending"
     names = [s["name"] for s in steps]
@@ -165,9 +165,10 @@ def testTimelineEndpointHandlesMissingSteps(client):
         "AI Extraction",
         "Policy Check",
         "Claim Submitted",
-        "Compliance Check",
-        "Fraud Check",
-        "Advisor Decision",
+        "Compliance Agent",
+        "Fraud Checking Agent",
+        "Advisory Agent",
+        "Reviewer Decision",
     ]
 
 
@@ -336,7 +337,7 @@ def testBuildTimelineStepsPolicyCompliant():
 
 
 def testBuildTimelineAllSevenSteps():
-    """_buildTimelineSteps produces 7 ordered steps when all audit_log actions present."""
+    """_buildTimelineSteps produces 8 ordered steps when all audit_log actions present."""
     from agentic_claims.web.routers.audit import _buildTimelineSteps
 
     rows = [
@@ -358,19 +359,22 @@ def testBuildTimelineAllSevenSteps():
         ),
     ]
     steps = _buildTimelineSteps(rows)
-    assert len(steps) == 7
+    assert len(steps) == 8
     names = [s["name"] for s in steps]
     assert names == [
         "Receipt Uploaded",
         "AI Extraction",
         "Policy Check",
         "Claim Submitted",
-        "Compliance Check",
-        "Fraud Check",
-        "Advisor Decision",
+        "Compliance Agent",
+        "Fraud Checking Agent",
+        "Advisory Agent",
+        "Reviewer Decision",
     ]
-    for step in steps:
+    # All steps except Reviewer Decision should be completed (no reviewer audit row provided)
+    for step in steps[:-1]:
         assert step["status"] == "completed"
+    assert steps[-1]["status"] == "pending"
 
 
 def testBuildTimelineComplianceCheckColorAndDetails():
@@ -385,7 +389,7 @@ def testBuildTimelineComplianceCheckColorAndDetails():
         ),
     ]
     stepsFail = _buildTimelineSteps(rowsFail)
-    compStep = next(s for s in stepsFail if s["name"] == "Compliance Check")
+    compStep = next(s for s in stepsFail if s["name"] == "Compliance Agent")
     assert compStep["color"] == "red"
     assert compStep["complianceVerdict"] == "fail"
     assert compStep["violationCount"] == 1
@@ -400,12 +404,41 @@ def testBuildTimelineComplianceCheckColorAndDetails():
         ),
     ]
     stepsPass = _buildTimelineSteps(rowsPass)
-    compStepPass = next(s for s in stepsPass if s["name"] == "Compliance Check")
+    compStepPass = next(s for s in stepsPass if s["name"] == "Compliance Agent")
     assert compStepPass["color"] == "green"
 
 
-def testBuildTimelineParallelStepsHaveParallelFlag():
-    """_buildTimelineSteps sets parallel=True for Compliance Check and Fraud Check steps."""
+def testBuildTimelineAdvisorEscalatedUsesRed():
+    """Advisory Agent escalate_to_reviewer uses red color, not pink."""
+    from agentic_claims.web.routers.audit import _buildTimelineSteps
+
+    rows = [
+        _makeAuditRow(
+            "advisor_decision",
+            '{"decision": "escalate_to_reviewer", "reasoning": "Needs review"}',
+        ),
+    ]
+    steps = _buildTimelineSteps(rows)
+    advisorStep = next(s for s in steps if s["name"] == "Advisory Agent")
+    assert advisorStep["color"] == "red"
+    assert advisorStep["advisorDecision"] == "escalate_to_reviewer"
+
+
+def testBuildTimelineStatusChangeIgnored():
+    """status_change action is not mapped to any timeline step."""
+    from agentic_claims.web.routers.audit import _buildTimelineSteps
+
+    rows = [
+        _makeAuditRow("status_change", "escalated"),
+    ]
+    steps = _buildTimelineSteps(rows)
+    # All steps should remain pending — status_change is not mapped
+    for step in steps:
+        assert step["status"] == "pending", f"{step['name']} should be pending"
+
+
+def testBuildTimelineParallelFlagAlwaysFalse():
+    """_buildTimelineSteps sets parallel=False for all steps (parallel badge removed)."""
     from agentic_claims.web.routers.audit import _buildTimelineSteps
 
     rows = [
@@ -413,13 +446,8 @@ def testBuildTimelineParallelStepsHaveParallelFlag():
         _makeAuditRow("fraud_check", '{"verdict": "legit", "flags": [], "summary": ""}'),
     ]
     steps = _buildTimelineSteps(rows)
-    compStep = next(s for s in steps if s["name"] == "Compliance Check")
-    fraudStep = next(s for s in steps if s["name"] == "Fraud Check")
-    assert compStep["parallel"] is True
-    assert fraudStep["parallel"] is True
-    # Other steps should not have parallel=True
-    receiptStep = next(s for s in steps if s["name"] == "Receipt Uploaded")
-    assert receiptStep["parallel"] is False
+    for step in steps:
+        assert step["parallel"] is False, f"{step['name']} should have parallel=False"
 
 
 # ── BUG-017 tests ──

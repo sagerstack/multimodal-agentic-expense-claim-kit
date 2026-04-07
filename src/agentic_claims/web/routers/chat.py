@@ -61,6 +61,7 @@ async def postMessage(
                     "status": "draft",
                     "totalAmount": 0,
                     "currency": "SGD",
+                    "idempotencyKey": f"draft_{claimId}",
                 },
             )
             if isinstance(draftResult, dict) and "id" in draftResult:

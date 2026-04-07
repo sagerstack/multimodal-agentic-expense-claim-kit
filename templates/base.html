@@ -79,6 +79,76 @@
   {% block content %}{% endblock %}
 </main>
 
+<!-- Global Error Toast -->
+<div id="errorToastContainer" class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none" style="max-width: 28rem;"></div>
+
+<script>
+(function() {
+  function showErrorToast(message) {
+    var container = document.getElementById('errorToastContainer');
+    if (!container) return;
+    var toast = document.createElement('div');
+    toast.className = 'pointer-events-auto flex items-start gap-3 p-4 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-error/30 bg-[#1a0a0e] text-error animate-[slideUp_0.3s_ease-out]';
+    toast.innerHTML =
+      '<span class="material-symbols-outlined text-lg flex-shrink-0 mt-0.5" style="font-variation-settings: \'FILL\' 1;">error</span>' +
+      '<div class="flex-1 min-w-0">' +
+        '<p class="text-xs font-bold uppercase tracking-widest text-error/80 mb-1">Error</p>' +
+        '<p class="text-sm text-on-surface leading-relaxed break-words">' + message + '</p>' +
+      '</div>' +
+      '<button onclick="this.parentElement.remove()" class="text-error/50 hover:text-error flex-shrink-0">' +
+        '<span class="material-symbols-outlined text-base">close</span>' +
+      '</button>';
+    container.appendChild(toast);
+    setTimeout(function() {
+      if (toast.parentElement) {
+        toast.style.transition = 'opacity 0.3s ease-out';
+        toast.style.opacity = '0';
+        setTimeout(function() { toast.remove(); }, 300);
+      }
+    }, 10000);
+  }
+
+  window.showErrorToast = showErrorToast;
+
+  // Catch SSE error events
+  document.body.addEventListener('sse:error', function(e) {
+    showErrorToast(e.detail || 'Stream connection error');
+  });
+
+  // Catch HTMX request errors
+  document.body.addEventListener('htmx:responseError', function(e) {
+    var status = e.detail.xhr ? e.detail.xhr.status : 'unknown';
+    var url = e.detail.pathInfo ? e.detail.pathInfo.requestPath : '';
+    showErrorToast('Request failed (' + status + '): ' + url);
+  });
+
+  document.body.addEventListener('htmx:sendError', function(e) {
+    var url = e.detail.pathInfo ? e.detail.pathInfo.requestPath : '';
+    showErrorToast('Network error — could not reach server: ' + url);
+  });
+
+  // Catch unhandled JS errors
+  window.addEventListener('error', function(e) {
+    if (e.message && !e.message.includes('ResizeObserver')) {
+      showErrorToast(e.message);
+    }
+  });
+
+  // Catch unhandled promise rejections
+  window.addEventListener('unhandledrejection', function(e) {
+    var msg = e.reason ? (e.reason.message || String(e.reason)) : 'Unhandled promise rejection';
+    showErrorToast(msg);
+  });
+})();
+</script>
+
+<style>
+@keyframes slideUp {
+  from { transform: translateY(1rem); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+</style>
+
 {% block scripts %}{% endblock %}
 </body>
 </html>

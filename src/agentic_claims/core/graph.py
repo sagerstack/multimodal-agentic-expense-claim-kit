@@ -8,6 +8,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from agentic_claims.agents.advisor.node import advisorNode
 from agentic_claims.agents.compliance.node import complianceNode
+from agentic_claims.agents.debug_llm_node import debugLlmNode
 from agentic_claims.agents.fraud.node import fraudNode
 from agentic_claims.agents.intake.node import intakeNode
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
@@ -81,6 +82,7 @@ def buildGraph() -> StateGraph:
     builder.add_node("intake", intakeNode)
     builder.add_node("compliance", complianceNode)
     builder.add_node("fraud", fraudNode)
+    builder.add_node("debugLlm", debugLlmNode)
     builder.add_node("markAiReviewed", markAiReviewedNode)
     builder.add_node("advisor", advisorNode)
 
@@ -95,13 +97,15 @@ def buildGraph() -> StateGraph:
         "intake", evaluatorGate, {"submitted": "postSubmission", "pending": END}
     )
 
-    # Fan-out from postSubmission to compliance and fraud (parallel)
+    # Fan-out from postSubmission to compliance, fraud, and debug (parallel)
     builder.add_edge("postSubmission", "compliance")
     builder.add_edge("postSubmission", "fraud")
+    builder.add_edge("postSubmission", "debugLlm")
 
     # Fan-in to markAiReviewed, then advisor
     builder.add_edge("compliance", "markAiReviewed")
     builder.add_edge("fraud", "markAiReviewed")
+    builder.add_edge("debugLlm", "markAiReviewed")
     builder.add_edge("markAiReviewed", "advisor")
     builder.add_edge("advisor", END)
 

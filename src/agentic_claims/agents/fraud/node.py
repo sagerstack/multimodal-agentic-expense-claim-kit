@@ -17,6 +17,7 @@ MCP servers used:
 import json
 import logging
 import statistics
+import time
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
@@ -140,6 +141,23 @@ async def fraudNode(state: ClaimState) -> dict:
     dbClaimId = state.get("dbClaimId")
     logger.info("fraudNode started", extra={"claimId": claimId})
 
+    # Write start audit entry so the timeline shows "Processing"
+    if dbClaimId is not None:
+        try:
+            await mcpCallTool(
+                serverUrl=settings.db_mcp_url,
+                toolName="insertAuditLog",
+                arguments={
+                    "claimId": dbClaimId,
+                    "action": "fraud_check_start",
+                    "newValue": json.dumps({"status": "processing"}),
+                    "actor": "fraud_agent",
+                    "oldValue": "",
+                },
+            )
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # 1. Read claim context from state
     # ------------------------------------------------------------------
@@ -224,35 +242,82 @@ async def fraudNode(state: ClaimState) -> dict:
         "## Current Claim Under Review\n\n"
         f"```json\n{json.dumps(llmContext, indent=2, default=str)}\n```\n\n"
         "Assess whether this claim is legitimate, suspicious, or a duplicate.\n"
-        "Return ONLY the JSON verdict object — no preamble, no markdown fences."
+        "Return ONLY the JSON verdict object — no preamble, no markdown fences.\n"
+        "/no_think"
     )
 
     # ------------------------------------------------------------------
     # 5. Call LLM with 402 fallback
     # ------------------------------------------------------------------
+    modelName = settings.openrouter_model_llm
     llm = buildAgentLlm(settings, temperature=0.1)
+    llmMessages = [
+        SystemMessage(content=FRAUD_SYSTEM_PROMPT),
+        HumanMessage(content=fraudPrompt),
+    ]
+
+    logger.info(
+        "fraudNode LLM request",
+        extra={
+            "claimId": claimId,
+            "model": modelName,
+            "systemPrompt": FRAUD_SYSTEM_PROMPT,
+            "userPrompt": fraudPrompt,
+        },
+    )
+    llmStartTime = time.time()
+
     try:
-        response = await llm.ainvoke([
-            SystemMessage(content=FRAUD_SYSTEM_PROMPT),
-            HumanMessage(content=fraudPrompt),
-        ])
+        response = await llm.ainvoke(llmMessages)
         rawContent = response.content
+        llmElapsed = round(time.time() - llmStartTime, 2)
+
+        logger.info(
+            "fraudNode LLM response",
+            extra={
+                "claimId": claimId,
+                "model": modelName,
+                "elapsedSeconds": llmElapsed,
+                "responseLength": len(rawContent) if rawContent else 0,
+                "rawResponse": rawContent[:2000] if rawContent else None,
+            },
+        )
 
     except Exception as e:
+        llmElapsed = round(time.time() - llmStartTime, 2)
         errorStr = str(e)
         if "402" in errorStr or "credits" in errorStr.lower() or "quota" in errorStr.lower():
             logger.warning(
                 "Primary LLM returned 402 in fraudNode — falling back",
-                extra={"error": errorStr},
+                extra={"error": errorStr, "elapsedSeconds": llmElapsed},
             )
             llm = buildAgentLlm(settings, temperature=0.1, useFallback=True)
-            response = await llm.ainvoke([
-                SystemMessage(content=FRAUD_SYSTEM_PROMPT),
-                HumanMessage(content=fraudPrompt),
-            ])
-            rawContent = response.content
+            try:
+                response = await llm.ainvoke(llmMessages)
+                rawContent = response.content
+            except Exception as fallbackErr:
+                logger.error("Fallback LLM also failed in fraudNode", extra={"error": str(fallbackErr)}, exc_info=True)
+                rawContent = None
         else:
-            raise
+            logger.error("LLM call failed in fraudNode", extra={"error": errorStr, "elapsedSeconds": llmElapsed}, exc_info=True)
+            rawContent = None
+
+    # Handle LLM failure: return a conservative requiresReview verdict so the
+    # graph can continue to advisor instead of crashing.
+    if rawContent is None:
+        fraudFindings = {
+            "verdict": "suspicious",
+            "flags": [],
+            "duplicateClaims": [],
+            "summary": "Fraud check could not be completed (LLM unavailable). Manual review required.",
+            "rawLlmResponse": None,
+        }
+        logger.warning("fraudNode returning error fallback verdict", extra={"claimId": claimId})
+        await _writeAuditLog(settings, dbClaimId, claimId, fraudFindings)
+        return {
+            "messages": [AIMessage(content="**Fraud Check**: SUSPICIOUS — LLM unavailable. Manual review required.")],
+            "fraudFindings": fraudFindings,
+        }
 
     # ------------------------------------------------------------------
     # 6. Parse response

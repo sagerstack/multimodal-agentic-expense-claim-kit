@@ -135,6 +135,36 @@ sleep 3
 kill $APP_PID
 ```
 
+### 4b. Browser UAT (MANDATORY for web applications)
+
+Browser UAT is **MANDATORY** for all web-facing plans. Use browser automation tools to navigate pages, interact with UI elements, verify visual output, and take screenshots.
+
+**Tool priority (use first available):**
+1. **Playwright MCP** (primary) — `mcp__playwright__*` tools: `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_fill_form`, `browser_take_screenshot`, `browser_evaluate`, `browser_press_key`, `browser_wait_for`, `browser_console_messages`
+2. **Claude in Chrome MCP** (fallback) — `mcp__claude-in-chrome__*` tools: `navigate`, `read_page`, `computer`, `find`, `form_input`, `javascript_tool`, `tabs_create_mcp`, `tabs_context_mcp`, `gif_creator`
+
+**Tool discovery:** Use `ToolSearch` before starting UAT:
+```
+ToolSearch(query="mcp__playwright__browser_navigate")  # Check Playwright
+ToolSearch(query="mcp__claude-in-chrome__navigate")     # Fallback check
+```
+
+**Screenshots:** Save all screenshots to `.qa/screenshots/` with naming:
+```
+{phase-no}-{page-name}-{iteration-no}-{desc}.png
+```
+Examples: `8.1-claims-1-draft-status.png`, `8.1-review-2-compliance-card.png`
+
+**Browser UAT process:**
+1. Launch/navigate to the application URL
+2. For each UAT scenario:
+   - Navigate to the relevant page
+   - Perform user actions (click, type, upload, etc.)
+   - Take screenshots for visual verification
+   - Verify expected outcomes (element presence, text content, visual state)
+   - Check console for errors
+3. Record PASS/FAIL per scenario with screenshot evidence
+
 ### 5. Project Memory Integration
 
 Read project memory BEFORE validation. Write findings AFTER validation.

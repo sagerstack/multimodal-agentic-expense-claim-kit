@@ -199,10 +199,14 @@ async def testFraudAuditLogWritten():
 
         await fraudNode(state)
 
-    mockAuditMcp.assert_called_once()
-    callKwargs = mockAuditMcp.call_args.kwargs
-    assert callKwargs["toolName"] == "insertAuditLog"
-    arguments = callKwargs["arguments"]
+    # Two calls: fraud_check_start + fraud_check completion audit
+    assert mockAuditMcp.call_count == 2
+    # Find the completion audit call (not the start entry)
+    completionCall = next(
+        c for c in mockAuditMcp.call_args_list
+        if c.kwargs["arguments"].get("action") == "fraud_check"
+    )
+    arguments = completionCall.kwargs["arguments"]
     assert arguments["action"] == "fraud_check"
     assert arguments["claimId"] == 12
     assert arguments["actor"] == "fraud_agent"

@@ -6,6 +6,7 @@ import time
 from langchain_core.tools import tool
 
 from agentic_claims.agents.intake.auditLogger import bufferStep
+from agentic_claims.agents.intake.extractionContext import sessionClaimIdVar
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
 
@@ -44,15 +45,16 @@ async def searchPolicies(query: str, limit: int = 5, claimId: str | None = None)
         },
     )
 
-    # Buffer policy check audit step if a session claimId was provided
-    if claimId and isinstance(result, list):
+    # Buffer policy check audit step using session claimId from ContextVar fallback
+    effectiveClaimId = claimId or sessionClaimIdVar.get(None)
+    if effectiveClaimId and isinstance(result, list):
         policyRefs = [
             {"section": r.get("section"), "category": r.get("category"), "score": r.get("score")}
             for r in result
             if isinstance(r, dict)
         ]
         bufferStep(
-            sessionClaimId=claimId,
+            sessionClaimId=effectiveClaimId,
             action="policy_check",
             details={
                 "violations": [],

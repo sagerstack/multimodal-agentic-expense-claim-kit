@@ -18,6 +18,7 @@ from langgraph.types import Command
 from starlette.requests import Request
 from starlette.templating import Jinja2Templates
 
+from agentic_claims.agents.intake.auditLogger import flushSteps, logIntakeStep
 from agentic_claims.agents.intake.extractionContext import sessionClaimIdVar
 from agentic_claims.core.config import getSettings
 from agentic_claims.web.employeeIdContext import employeeIdVar
@@ -174,7 +175,7 @@ def _buildPathwaySteps(
         {"name": "Receipt Uploaded", "icon": "cloud_upload", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": ""},
         {"name": "AI Extraction", "icon": "troubleshoot", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": PATHWAY_WAITING_TEXT[1]},
         {"name": "Policy Check", "icon": "rule", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": PATHWAY_WAITING_TEXT[2]},
-        {"name": "Final Decision", "icon": "verified", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": PATHWAY_WAITING_TEXT[3]},
+        {"name": "Claim Submission", "icon": "send", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": PATHWAY_WAITING_TEXT[3]},
     ]
 
     # Step 0: Receipt Uploaded
@@ -851,19 +852,63 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
         except Exception as e:
             logger.error(f"Error rendering summary panel: {e}", exc_info=True)
 
-    # BUG-026: if we terminated early for background processing, store the
-    # background task info on request.state so chat.py can launch it after
-    # the SSE generator completes. Skip the final table refresh and interrupt
-    # check since advisor hasn't run yet.
+    # BUG-026/027/028/029: the astream_events generator exhausts after the inner
+    # ReAct agent finishes but BEFORE intakeNode post-processing runs. The
+    # intakeNode never gets to set claimSubmitted=True, call flushSteps, or
+    # inject confidenceScores. We do all of that here instead.
     if shouldTerminateEarly:
+        sessionClaimId = graphInput.get("claimId", "")
+
+        # Extract dbClaimId from the submitClaim tool output captured during streaming
+        dbClaimId = None
+        claimNumber = None
+        for entry in thinkingEntries:
+            if entry.get("name") == "submitClaim" and entry.get("type") == "tool":
+                output = entry.get("output", "")
+                try:
+                    parsed = json.loads(output) if isinstance(output, str) else output
+                    if isinstance(parsed, dict):
+                        claim = parsed.get("claim", {})
+                        dbClaimId = claim.get("id")
+                        claimNumber = claim.get("claim_number")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        # BUG-029: Force-update graph checkpoint with claimSubmitted=True so
+        # runPostSubmissionAgents checkpoint guard passes
+        if dbClaimId is not None:
+            try:
+                updateValues = {"claimSubmitted": True, "dbClaimId": int(dbClaimId)}
+                if claimNumber:
+                    updateValues["claimNumber"] = claimNumber
+                await graph.aupdate_state(config=config, values=updateValues)
+                logger.info("Force-updated graph state: claimSubmitted=True, dbClaimId=%s", dbClaimId)
+            except Exception as e:
+                logger.error(f"Failed to force-update graph state: {e}", exc_info=True)
+
+        # BUG-027: Flush buffered audit steps and write claim_submitted entry
+        if dbClaimId and sessionClaimId:
+            try:
+                parsedDbClaimId = int(dbClaimId)
+                await flushSteps(sessionClaimId=sessionClaimId, dbClaimId=parsedDbClaimId)
+                await logIntakeStep(
+                    claimId=parsedDbClaimId,
+                    action="claim_submitted",
+                    details={"claimNumber": claimNumber or "", "status": "pending"},
+                )
+                logger.info("Flushed audit steps for claim %s (db=%s)", sessionClaimId, dbClaimId)
+            except Exception as e:
+                logger.error(f"Failed to flush audit steps: {e}", exc_info=True)
+
+            # Queue background task for post-submission agents
         if not hasattr(request.state, "backgroundTask"):
             request.state.backgroundTask = None
         request.state.backgroundTask = {
             "graph": graph,
             "threadId": threadId,
-            "claimId": graphInput.get("claimId", ""),
+            "claimId": sessionClaimId,
         }
-        logger.info("Background task queued for post-submission agents (claim %s)", graphInput.get("claimId", ""))
+        logger.info("Background task queued for post-submission agents (claim %s)", sessionClaimId)
     else:
         # BUG-016: after the graph completes, refresh the submission table from DB.
         # The advisor node may have updated the claim status (e.g. submitted ->

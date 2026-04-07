@@ -54,8 +54,8 @@ async def chatPage(request: Request):
         },
         {
             **_pending,
-            "name": "Final Decision",
-            "icon": "verified",
+            "name": "Claim Submission",
+            "icon": "send",
             "waitingText": "Awaiting policy check...",
         },
     ]
