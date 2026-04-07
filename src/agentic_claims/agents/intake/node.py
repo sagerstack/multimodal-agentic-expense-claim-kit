@@ -10,6 +10,7 @@ from langchain_openrouter import ChatOpenRouter
 from langgraph.prebuilt import create_react_agent
 
 from agentic_claims.agents.intake.auditLogger import bufferStep, flushSteps, logIntakeStep
+from agentic_claims.agents.intake.extractionContext import extractedReceiptVar
 from agentic_claims.agents.intake.prompts.agentSystemPrompt_v2 import INTAKE_AGENT_SYSTEM_PROMPT
 from agentic_claims.agents.intake.tools.convertCurrency import convertCurrency
 from agentic_claims.agents.intake.tools.extractReceiptFields import extractReceiptFields
@@ -164,6 +165,8 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
                         pass
             elif msg.name == "extractReceiptFields":
                 stateUpdate["extractedReceipt"] = content
+                # BUG-028: set ContextVar so submitClaim can inject confidenceScores
+                extractedReceiptVar.set(content)
                 # Buffer receipt_uploaded and ai_extraction audit steps directly in
                 # intakeNode using the session claimId from state — this is the
                 # authoritative buffer call (immune to LLM passing wrong claimId)

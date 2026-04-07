@@ -7,6 +7,7 @@ from datetime import datetime
 from langchain_core.tools import tool
 
 from agentic_claims.agents.intake.auditLogger import flushSteps
+from agentic_claims.agents.intake.extractionContext import extractedReceiptVar, sessionClaimIdVar
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
 from agentic_claims.web.employeeIdContext import employeeIdVar
@@ -108,6 +109,16 @@ async def submitClaim(
     # Handle required fields with pass-through + fallback
     mergedArgs["status"] = claimData.get("status", "pending")
     mergedArgs["intakeFindings"] = intakeFindings or {}
+
+    # BUG-028: inject confidenceScores from VLM extraction context if LLM omitted them
+    extractedReceipt = extractedReceiptVar.get(None)
+    if extractedReceipt:
+        findings = mergedArgs["intakeFindings"]
+        if not findings.get("confidenceScores"):
+            confidence = extractedReceipt.get("confidence") or extractedReceipt.get("confidenceScores")
+            if confidence and isinstance(confidence, dict):
+                findings["confidenceScores"] = confidence
+                mergedArgs["intakeFindings"] = findings
 
     # Idempotency key from natural key (employeeId + merchant + receiptDate + totalAmount)
     idempParts = [
@@ -250,11 +261,13 @@ async def submitClaim(
                 "hasReceiptData": "receipt" in result,
             },
         )
-        # Flush buffered audit steps now that the DB claim ID is known
-        if sessionClaimId and "claim" in result and isinstance(result["claim"], dict):
+        # BUG-027: flush buffered audit steps now that the DB claim ID is known.
+        # Use sessionClaimIdVar as fallback when LLM doesn't pass sessionClaimId.
+        effectiveSessionClaimId = sessionClaimId or sessionClaimIdVar.get(None)
+        if effectiveSessionClaimId and "claim" in result and isinstance(result["claim"], dict):
             dbClaimId = result["claim"].get("id")
             if dbClaimId:
-                await flushSteps(sessionClaimId=sessionClaimId, dbClaimId=dbClaimId)
+                await flushSteps(sessionClaimId=effectiveSessionClaimId, dbClaimId=dbClaimId)
     else:
         logger.warning(
             "submitClaim tool returned unexpected type", extra={"resultType": type(result).__name__}

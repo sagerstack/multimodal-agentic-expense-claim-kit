@@ -379,3 +379,90 @@ async def testRunGraphFinalTableUpdateEmittedAfterAdvisorStatusChange():
     # At least one TABLE_UPDATE must have the final advisor status (CSS uppercase renders it;
     # HTML source uses title case "Escalated" from the 8-state badge template)
     assert any("Escalated" in e.raw_data or "escalated" in e.raw_data for e in tableEvents)
+
+
+# ── BUG-026/027/029 early termination tests ──
+
+
+@pytest.mark.asyncio
+async def testRunGraphSetsBackgroundTaskWhenClaimSubmitted():
+    """BUG-026/029: after submitClaim, backgroundTask must be set on request.state."""
+    from unittest.mock import patch
+
+    submitOutput = json.dumps({"claim": {"id": 55, "claim_number": "CLM-055"}, "receipt": {}})
+
+    events = [
+        {"event": "on_tool_start", "name": "submitClaim", "data": {}},
+        {"event": "on_tool_end", "name": "submitClaim", "data": {"output": submitOutput}},
+        {"event": "on_chat_model_stream", "data": {"chunk": _makeChunk("Claim CLM-055 submitted.")}},
+        {"event": "on_chat_model_end", "data": {"output": MagicMock(tool_calls=None)}},
+        # Simulate intakeNode completing and evaluatorGate routing to postSubmission
+        {"event": "on_chain_start", "name": "postSubmission", "data": {}},
+    ]
+
+    stateValues = {"messages": [], "claimSubmitted": True}
+    graph = _makeMockGraph(events)
+    graph.aget_state.return_value.values = stateValues
+
+    dbClaims = [
+        {
+            "merchant": "Test",
+            "receipt_date": "2026-04-07",
+            "total_amount": "55.00",
+            "currency": "SGD",
+            "status": "pending",
+            "created_at": "2026-04-07 10:00",
+            "claim_number": "CLM-055",
+        }
+    ]
+
+    request = _makeMockRequest()
+    with patch(
+        "agentic_claims.web.sseHelpers.fetchClaimsForTable",
+        new=AsyncMock(return_value=dbClaims),
+    ):
+        collected = await _collectEvents(graph, _baseGraphInput(), request)
+
+    # Background task must be set on request.state
+    assert hasattr(request.state, "backgroundTask")
+    bgTask = request.state.backgroundTask
+    assert bgTask is not None
+    assert bgTask["threadId"] == "test-thread"
+    assert bgTask["claimId"] == "test-claim"
+
+
+@pytest.mark.asyncio
+async def testRunGraphSuppressesTokensAfterClaimSubmitted():
+    """BUG-027/029: tokens after submitClaim completes must not be emitted as SSE TOKEN events."""
+    from unittest.mock import patch
+
+    submitOutput = json.dumps({"claim": {"id": 56, "claim_number": "CLM-056"}, "receipt": {}})
+
+    events = [
+        {"event": "on_tool_start", "name": "submitClaim", "data": {}},
+        {"event": "on_tool_end", "name": "submitClaim", "data": {"output": submitOutput}},
+        {"event": "on_chat_model_stream", "data": {"chunk": _makeChunk("Submitted.")}},
+        {"event": "on_chat_model_end", "data": {"output": MagicMock(tool_calls=None)}},
+        # Post-submission intakeNode cleanup would generate more tokens — must be suppressed
+        {"event": "on_chat_model_stream", "data": {"chunk": _makeChunk("extra post-submission token")}},
+        {"event": "on_chain_start", "name": "postSubmission", "data": {}},
+    ]
+
+    stateValues = {"messages": [], "claimSubmitted": True}
+    graph = _makeMockGraph(events)
+    graph.aget_state.return_value.values = stateValues
+
+    request = _makeMockRequest()
+    with patch(
+        "agentic_claims.web.sseHelpers.fetchClaimsForTable",
+        new=AsyncMock(return_value=[]),
+    ):
+        from agentic_claims.core.config import getSettings
+        realSettings = getSettings()
+        realSettings.enable_response_streaming = True
+        with patch("agentic_claims.web.sseHelpers.getSettings", lambda: realSettings):
+            collected = await _collectEvents(graph, _baseGraphInput(), request)
+
+    tokenEvents = [e for e in collected if e.event == SseEvent.TOKEN]
+    # "extra post-submission token" must not appear
+    assert not any("extra post-submission" in e.raw_data for e in tokenEvents)

@@ -1,4 +1,5 @@
 """Tests for the Claim Review router — page handler and API endpoints."""
+# BUG-028 tests for _parseIntakeAgentFindings are at the bottom of this file.
 
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -490,3 +491,51 @@ def testApproveClaimSetsApprovedBy(client):
     assert response.status_code == 204
     # Verify commit was called (approved_by written in same transaction)
     assert mockSession.commit.called
+
+
+# ── _parseIntakeAgentFindings tests (BUG-028) ──
+
+
+def testParseIntakeAgentFindingsWithConfidenceScores():
+    """BUG-028: _parseIntakeAgentFindings must extract confidence scores from intakeFindings."""
+    from agentic_claims.web.routers.review import _parseIntakeAgentFindings
+
+    intakeFindings = {
+        "confidenceScores": {
+            "merchant": 0.95,
+            "totalAmount": 0.88,
+            "date": 0.92,
+        },
+        "notes": "Claim looks valid",
+    }
+    result = _parseIntakeAgentFindings(intakeFindings)
+
+    assert result is not None
+    assert result["avgConfidence"] == round((0.95 + 0.88 + 0.92) / 3, 3)
+    assert result["lowestField"] == "totalAmount"
+    assert result["lowestScore"] == 0.88
+    assert result["scores"] == intakeFindings["confidenceScores"]
+
+
+def testParseIntakeAgentFindingsReturnsNoneWhenNoConfidenceScores():
+    """BUG-028: _parseIntakeAgentFindings must return None when confidenceScores absent."""
+    from agentic_claims.web.routers.review import _parseIntakeAgentFindings
+
+    intakeFindings = {"notes": "some notes", "violations": []}
+    result = _parseIntakeAgentFindings(intakeFindings)
+    assert result is None
+
+
+def testParseIntakeAgentFindingsReturnsNoneForNone():
+    """_parseIntakeAgentFindings must return None when intakeFindings is None."""
+    from agentic_claims.web.routers.review import _parseIntakeAgentFindings
+
+    assert _parseIntakeAgentFindings(None) is None
+
+
+def testParseIntakeAgentFindingsHandlesEmptyConfidenceScores():
+    """_parseIntakeAgentFindings must return None when confidenceScores dict is empty."""
+    from agentic_claims.web.routers.review import _parseIntakeAgentFindings
+
+    result = _parseIntakeAgentFindings({"confidenceScores": {}})
+    assert result is None

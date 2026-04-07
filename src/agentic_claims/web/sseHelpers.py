@@ -18,6 +18,7 @@ from langgraph.types import Command
 from starlette.requests import Request
 from starlette.templating import Jinja2Templates
 
+from agentic_claims.agents.intake.extractionContext import sessionClaimIdVar
 from agentic_claims.core.config import getSettings
 from agentic_claims.web.employeeIdContext import employeeIdVar
 from agentic_claims.web.sseEvents import SseEvent
@@ -604,6 +605,10 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     else:
         invokeInput = _buildGraphInput(graphInput)
 
+    # BUG-027: set sessionClaimIdVar so submitClaim can flush audit steps even
+    # when the LLM doesn't pass sessionClaimId as a tool argument
+    sessionClaimIdVar.set(graphInput.get("claimId", None))
+
     try:
         async for event in graph.astream_events(invokeInput, config=config, version="v2"):
             if await request.is_disconnected():
@@ -612,8 +617,14 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             eventKind = event.get("event")
             logger.info("astream_events event: %s - %s", eventKind, event.get("name", ""))
 
+            if eventKind == "on_chain_start" and shouldTerminateEarly:
+                # BUG-027/029: intakeNode has checkpointed — break before post-submission nodes
+                nodeName = event.get("name", "")
+                if nodeName in ("postSubmission", "compliance", "fraud", "advisor", "markAiReviewed"):
+                    break
+
             if eventKind == "on_chat_model_stream":
-                if pendingToolCalls > 0:
+                if pendingToolCalls > 0 or shouldTerminateEarly:
                     continue
 
                 chunk = event.get("data", {}).get("chunk")
@@ -707,12 +718,13 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     tokenBuffer = ""
                     reasoningBuffer = ""
 
-                    # BUG-026: if submitClaim already completed, we have the final
-                    # response — break out of astream_events to return early. The
-                    # post-submission agents will run as a background task.
+                    # BUG-026/027/029: if submitClaim already completed, we have the
+                    # final response. Set shouldTerminateEarly but do NOT break yet —
+                    # let the graph exhaust the intakeNode so it can checkpoint
+                    # claimSubmitted=True and call flushSteps. We break when we see
+                    # the first post-submission on_chain_start event above.
                     if claimSubmittedFlag:
                         shouldTerminateEarly = True
-                        break
 
             elif eventKind == "on_tool_start":
                 toolName = event.get("name", "unknown")
