@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+<div class="pt-8 pb-32 px-6 md:px-12 max-w-7xl mx-auto overflow-y-auto h-full">
+
+  <!-- Header Section -->
+  <header class="mb-10">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div>
+        <h1 class="text-4xl md:text-5xl font-headline font-extrabold tracking-tight text-on-surface mb-2">Analytics</h1>
+        <p class="text-on-surface-variant font-body">Claims performance and trend analysis.</p>
+      </div>
+      <a href="/dashboard"
+         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20 text-on-surface-variant hover:text-on-surface hover:bg-surface-bright transition-all text-sm font-medium">
+        <span class="material-symbols-outlined text-base">arrow_back</span>
+        Back to Dashboard
+      </a>
+    </div>
+  </header>
+
+  <!-- KPI Cards Row -->
+  <section class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
+    <!-- Total Claims -->
+    <div class="bg-surface-container-low p-8 rounded-3xl border-t border-outline-variant/15 flex flex-col justify-between h-48 hover:bg-surface-bright transition-all duration-300">
+      <div class="flex justify-between items-start">
+        <span class="material-symbols-outlined text-primary text-3xl">receipt_long</span>
+      </div>
+      <div>
+        <h4 class="text-4xl font-headline font-extrabold tracking-tight">{{ totalClaims }}</h4>
+        <p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Total Claims</p>
+      </div>
+    </div>
+
+    <!-- Total Amount -->
+    <div class="bg-surface-container-low p-8 rounded-3xl border-t border-outline-variant/15 flex flex-col justify-between h-48 hover:bg-surface-bright transition-all duration-300">
+      <div class="flex justify-between items-start">
+        <span class="material-symbols-outlined text-secondary text-3xl">payments</span>
+      </div>
+      <div>
+        <h4 class="text-2xl font-headline font-extrabold tracking-tight">SGD {{ "%.0f"|format(totalAmount) }}</h4>
+        <p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Total Amount</p>
+      </div>
+    </div>
+
+    <!-- Avg Processing Time -->
+    <div class="bg-surface-container-low p-8 rounded-3xl border-t border-outline-variant/15 flex flex-col justify-between h-48 hover:bg-surface-bright transition-all duration-300">
+      <div class="flex justify-between items-start">
+        <span class="material-symbols-outlined text-tertiary text-3xl">schedule</span>
+      </div>
+      <div>
+        <h4 class="text-4xl font-headline font-extrabold tracking-tight">{{ avgProcessingTime }}</h4>
+        <p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-1">Avg Processing</p>
+      </div>
+    </div>
+
+    <!-- Approval Rate -->
+    <div class="bg-surface-container-low p-8 rounded-3xl border-t border-outline-variant/15 flex flex-col justify-between h-48 hover:bg-surface-bright transition-all duration-300">
+      <div class="flex justify-between items-start">
+        <span class="material-symbols-outlined text-secondary text-3xl">verified</span>
+      </div>
+      <div>
+        <div class="flex items-baseline gap-2 mb-2">
+          <h4 class="text-4xl font-headline font-extrabold tracking-tight">{{ approvalRate }}%</h4>
+        </div>
+        <div class="w-full h-1.5 bg-surface-bright rounded-full overflow-hidden">
+          <div class="h-full bg-secondary rounded-full" style="width: {{ approvalRate }}%;"></div>
+        </div>
+        <p class="text-on-surface-variant uppercase text-[10px] font-bold tracking-widest mt-2">Approval Rate</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Charts Section: Status + Category -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+
+    <!-- Claims by Status -->
+    <div class="bg-surface-container-low rounded-3xl p-8 border-t border-outline-variant/15">
+      <h3 class="font-headline font-bold text-xl tracking-tight mb-6">Claims by Status</h3>
+      <div class="flex flex-col gap-3">
+        {% set statusColors = {
+          "draft": "bg-on-surface-variant/40",
+          "pending": "bg-primary/60",
+          "ai_reviewed": "bg-primary",
+          "ai_approved": "bg-secondary",
+          "manually_approved": "bg-green-400",
+          "escalated": "bg-tertiary",
+          "ai_rejected": "bg-error/60",
+          "manually_rejected": "bg-error"
+        } %}
+        {% if statusBreakdown %}
+          {% set maxStatusCount = statusBreakdown[0].count if statusBreakdown else 1 %}
+          {% for item in statusBreakdown %}
+          <div class="flex items-center gap-3">
+            <div class="w-28 text-right text-[10px] font-bold uppercase tracking-widest text-on-surface-variant shrink-0 truncate">
+              {{ item.status | replace("_", " ") | title }}
+            </div>
+            <div class="flex-1 h-6 bg-surface-bright rounded-lg overflow-hidden">
+              <div class="{{ statusColors.get(item.status, 'bg-primary/40') }} h-full rounded-lg transition-all duration-500"
+                   style="width: {{ [((item.count / maxStatusCount) * 100) | int, 2] | max }}%;"></div>
+            </div>
+            <div class="w-8 text-right text-sm font-bold text-on-surface shrink-0">{{ item.count }}</div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-on-surface-variant/50 text-sm text-center py-6">No data yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Claims by Category -->
+    <div class="bg-surface-container-low rounded-3xl p-8 border-t border-outline-variant/15">
+      <h3 class="font-headline font-bold text-xl tracking-tight mb-6">Claims by Category</h3>
+      <div class="flex flex-col gap-3">
+        {% set categoryColors = [
+          "bg-primary",
+          "bg-secondary",
+          "bg-tertiary",
+          "bg-primary/50",
+          "bg-secondary/50"
+        ] %}
+        {% if categoryBreakdown %}
+          {% set maxCategoryCount = categoryBreakdown[0].count if categoryBreakdown else 1 %}
+          {% for item in categoryBreakdown %}
+          <div class="flex items-center gap-3">
+            <div class="w-28 text-right text-[10px] font-bold uppercase tracking-widest text-on-surface-variant shrink-0 truncate">
+              {{ item.category }}
+            </div>
+            <div class="flex-1 h-6 bg-surface-bright rounded-lg overflow-hidden">
+              <div class="{{ categoryColors[loop.index0 % categoryColors | length] }} h-full rounded-lg transition-all duration-500"
+                   style="width: {{ [((item.count / maxCategoryCount) * 100) | int, 2] | max }}%;"></div>
+            </div>
+            <div class="w-8 text-right text-sm font-bold text-on-surface shrink-0">{{ item.count }}</div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-on-surface-variant/50 text-sm text-center py-6">No data yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Monthly Trend + Top Employees -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+    <!-- Monthly Trend -->
+    <div class="lg:col-span-5 bg-surface-container-low rounded-3xl p-8 border-t border-outline-variant/15">
+      <h3 class="font-headline font-bold text-xl tracking-tight mb-6">Monthly Trend</h3>
+      {% if monthlyTrend %}
+      <div class="flex items-end justify-between gap-3 h-32 px-2">
+        {% for month in monthlyTrend %}
+        <div class="flex flex-col items-center gap-1 flex-1">
+          <span class="text-[10px] text-on-surface-variant font-bold">{{ month.count }}</span>
+          <div class="w-full rounded-t-lg bg-primary/60 hover:bg-primary transition-colors duration-200 relative group"
+               style="height: {{ [((month.count / maxMonthlyCount) * 100) | int, 4] | max }}%;">
+            <div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-[#1f2b49] text-[#dee5ff] text-[10px] font-bold py-0.5 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+              {{ month.count }}
+            </div>
+          </div>
+          <span class="text-[9px] text-on-surface-variant/70 uppercase tracking-widest text-center">{{ month.label[:3] }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="text-xs text-on-surface-variant mt-4">Claims submitted per month (last 6 months)</p>
+      {% else %}
+        <p class="text-on-surface-variant/50 text-sm text-center py-10">No trend data available yet.</p>
+      {% endif %}
+    </div>
+
+    <!-- Top Employees -->
+    <div class="lg:col-span-7 bg-surface-container-low rounded-3xl p-8 border-t border-outline-variant/15">
+      <h3 class="font-headline font-bold text-xl tracking-tight mb-6">Top Employees by Claims</h3>
+      {% if topEmployees %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+              <th class="pb-3 pr-4">#</th>
+              <th class="pb-3 pr-4">Employee</th>
+              <th class="pb-3 pr-4 text-right">Claims</th>
+              <th class="pb-3 pr-4 text-right">Total (SGD)</th>
+              <th class="pb-3 text-right">Approval</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-outline-variant/5">
+            {% for emp in topEmployees %}
+            <tr class="hover:bg-surface-bright/30 transition-colors">
+              <td class="py-3 pr-4 text-on-surface-variant text-sm">{{ loop.index }}</td>
+              <td class="py-3 pr-4">
+                <p class="font-bold text-sm text-on-surface">{{ emp.displayName }}</p>
+                <p class="text-[10px] text-on-surface-variant font-mono">{{ emp.employeeId }}</p>
+              </td>
+              <td class="py-3 pr-4 text-right font-bold text-sm">{{ emp.totalClaims }}</td>
+              <td class="py-3 pr-4 text-right font-headline font-bold text-sm">{{ "%.0f"|format(emp.totalAmount) }}</td>
+              <td class="py-3 text-right">
+                <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[10px] font-bold
+                  {% if emp.approvalRate >= 80 %}bg-secondary/10 text-secondary{% elif emp.approvalRate >= 50 %}bg-primary/10 text-primary{% else %}bg-error/10 text-error{% endif %}">
+                  {{ emp.approvalRate }}%
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p class="text-on-surface-variant/50 text-sm text-center py-10">No employee data available yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

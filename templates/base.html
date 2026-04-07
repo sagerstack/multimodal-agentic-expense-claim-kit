@@ -70,6 +70,16 @@
       <span class="material-symbols-outlined">fact_check</span>
       Review
     </a>
+    <a href="/manage"
+       class="flex items-center gap-3 {% if activePage == 'manage' %}bg-[#1f2b49] text-[#62fae3] shadow-[0_0_15px_rgba(98,250,227,0.2)]{% else %}text-[#dee5ff] opacity-70 hover:opacity-100 hover:bg-surface-bright{% endif %} rounded-r-full py-3 px-6 transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide">
+      <span class="material-symbols-outlined">checklist</span>
+      Manage
+    </a>
+    <a href="/analytics"
+       class="flex items-center gap-3 {% if activePage == 'analytics' %}bg-[#1f2b49] text-[#62fae3] shadow-[0_0_15px_rgba(98,250,227,0.2)]{% else %}text-[#dee5ff] opacity-70 hover:opacity-100 hover:bg-surface-bright{% endif %} rounded-r-full py-3 px-6 transition-all duration-200 ease-in-out font-inter text-sm font-medium tracking-wide">
+      <span class="material-symbols-outlined">monitoring</span>
+      Analytics
+    </a>
     {% endif %}
   </nav>
 </aside>

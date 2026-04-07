@@ -35,6 +35,7 @@ _FAKE_CLAIM_ROW = {
     "status": "pending",
     "total_amount": Decimal("120.00"),
     "currency": "SGD",
+    "category": "Meals",
     "created_at": None,
     "intake_findings": {
         "violations": [{"description": "Amount exceeds policy limit", "score": 0.92}]

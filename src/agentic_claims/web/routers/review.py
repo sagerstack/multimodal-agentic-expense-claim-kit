@@ -74,7 +74,7 @@ async def _fetchClaimDetail(claimId: int) -> dict | None:
                 """
                 SELECT
                     c.id, c.claim_number, c.employee_id, c.status,
-                    c.total_amount, c.currency, c.created_at,
+                    c.total_amount, c.currency, c.created_at, c.category,
                     c.intake_findings, c.compliance_findings, c.fraud_findings,
                     c.advisor_decision, c.advisor_findings, c.approved_by,
                     r.id AS receipt_id, r.receipt_number, r.merchant, r.date, r.total_amount AS receipt_amount,
@@ -290,11 +290,6 @@ def _buildClaimContext(row: dict) -> tuple[dict, dict | None]:
     receipt = None
     if row.get("receipt_id"):
         lineItems = row.get("line_items") or {}
-        category = "General"
-        if isinstance(lineItems, dict):
-            category = lineItems.get("category") or "General"
-        elif isinstance(lineItems, list) and lineItems:
-            category = lineItems[0].get("category") or "General"
         receipt = {
             "merchant": row.get("merchant") or "Unknown",
             "date": str(row.get("date", "")) if row.get("date") else None,
@@ -302,7 +297,7 @@ def _buildClaimContext(row: dict) -> tuple[dict, dict | None]:
             "currency": row.get("receipt_currency") or "SGD",
             "imagePath": row.get("image_path"),
             "lineItems": lineItems,
-            "category": category,
+            "category": row.get("category") or "General",
             "receiptNumber": row.get("receipt_number"),
             "originalCurrency": row.get("original_currency"),
             "originalAmount": (
