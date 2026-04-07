@@ -43,6 +43,9 @@ class Claim(Base):
     currency: Mapped[str] = mapped_column(
         String(3), nullable=False, server_default="SGD"
     )
+    category: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, name="category"
+    )
     # Dual currency support (original currency + converted SGD)
     originalCurrency: Mapped[Optional[str]] = mapped_column(
         String(3), nullable=True, name="original_currency"
@@ -62,6 +65,9 @@ class Claim(Base):
     )
     advisorDecision: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True, name="advisor_decision"
+    )
+    advisorFindings: Mapped[Optional[dict]] = mapped_column(
+        JSONB, nullable=True, name="advisor_findings"
     )
     approvedBy: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True, name="approved_by"

@@ -77,6 +77,7 @@ def insertClaim(
     status: str,
     totalAmount: float,
     currency: str = "SGD",
+    category: str | None = None,
     intakeFindings: dict | None = None,
     claimNumber: str | None = None,
     idempotencyKey: str | None = None,
@@ -104,6 +105,7 @@ def insertClaim(
         status: Claim status (draft, pending, approved, rejected, paid)
         totalAmount: Total claim amount
         currency: Currency code (default SGD)
+        category: Expense category (meals, transport, accommodation, office_supplies, general)
         intakeFindings: Agent observations (mismatches, overrides, red flags)
         claimNumber: Unique claim identifier (optional, DB generates via sequence if omitted)
         idempotencyKey: Natural key for deduplication (optional, enables ON CONFLICT)
@@ -138,14 +140,14 @@ def insertClaim(
                     claimSql = """
                         INSERT INTO claims (
                             claim_number, employee_id, status,
-                            total_amount, currency, intake_findings,
+                            total_amount, currency, category, intake_findings,
                             original_amount, original_currency,
                             converted_amount_sgd, idempotency_key
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (idempotency_key) DO NOTHING
                         RETURNING id, claim_number, employee_id, status,
-                                  total_amount, currency, intake_findings,
+                                  total_amount, currency, category, intake_findings,
                                   original_amount, original_currency,
                                   converted_amount_sgd, created_at, updated_at
                     """
@@ -155,6 +157,7 @@ def insertClaim(
                         status,
                         totalAmount,
                         currency,
+                        category,
                         Json(intakeFindings or {}),
                         originalAmount,
                         originalCurrency,
@@ -166,13 +169,13 @@ def insertClaim(
                     claimSql = """
                         INSERT INTO claims (
                             employee_id, status, total_amount, currency,
-                            intake_findings, original_amount, original_currency,
+                            category, intake_findings, original_amount, original_currency,
                             converted_amount_sgd, idempotency_key
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (idempotency_key) DO NOTHING
                         RETURNING id, claim_number, employee_id, status,
-                                  total_amount, currency, intake_findings,
+                                  total_amount, currency, category, intake_findings,
                                   original_amount, original_currency,
                                   converted_amount_sgd, created_at, updated_at
                     """
@@ -181,6 +184,7 @@ def insertClaim(
                         status,
                         totalAmount,
                         currency,
+                        category,
                         Json(intakeFindings or {}),
                         originalAmount,
                         originalCurrency,
@@ -234,13 +238,13 @@ def insertClaim(
                     claimSql = """
                         INSERT INTO claims (
                             claim_number, employee_id, status,
-                            total_amount, currency, intake_findings,
+                            total_amount, currency, category, intake_findings,
                             original_amount, original_currency, converted_amount_sgd,
                             idempotency_key
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id, claim_number, employee_id, status,
-                                  total_amount, currency, intake_findings,
+                                  total_amount, currency, category, intake_findings,
                                   original_amount, original_currency,
                                   converted_amount_sgd, created_at, updated_at
                     """
@@ -250,6 +254,7 @@ def insertClaim(
                         status,
                         totalAmount,
                         currency,
+                        category,
                         Json(intakeFindings or {}),
                         originalAmount,
                         originalCurrency,
@@ -261,13 +266,13 @@ def insertClaim(
                     claimSql = """
                         INSERT INTO claims (
                             employee_id, status, total_amount, currency,
-                            intake_findings, original_amount,
+                            category, intake_findings, original_amount,
                             original_currency, converted_amount_sgd,
                             idempotency_key
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id, claim_number, employee_id, status,
-                                  total_amount, currency, intake_findings,
+                                  total_amount, currency, category, intake_findings,
                                   original_amount, original_currency,
                                   converted_amount_sgd, created_at, updated_at
                     """
@@ -276,6 +281,7 @@ def insertClaim(
                         status,
                         totalAmount,
                         currency,
+                        category,
                         Json(intakeFindings or {}),
                         originalAmount,
                         originalCurrency,
@@ -383,13 +389,15 @@ def updateClaimStatus(
     complianceFindings: dict | None = None,
     fraudFindings: dict | None = None,
     advisorDecision: str | None = None,
+    advisorFindings: dict | None = None,
     approvedBy: str | None = None,
+    category: str | None = None,
 ) -> dict[str, Any]:
     """
     Update claim status and insert audit log entry.
 
     Optionally persists agent output columns (compliance_findings,
-    fraud_findings, advisor_decision, approved_by) when provided.
+    fraud_findings, advisor_decision, advisor_findings, approved_by) when provided.
 
     Args:
         claimId: Claim ID to update
@@ -398,7 +406,9 @@ def updateClaimStatus(
         complianceFindings: Structured compliance verdict dict (optional)
         fraudFindings: Structured fraud verdict dict (optional)
         advisorDecision: Advisor routing decision string (optional)
+        advisorFindings: Structured advisor reasoning dict (optional)
         approvedBy: Actor who approved (e.g. "agent" for auto-approve) (optional)
+        category: Expense category to update (optional)
 
     Returns:
         Updated claim record
@@ -427,9 +437,15 @@ def updateClaimStatus(
             if advisorDecision is not None:
                 setClauses.append("advisor_decision = %s")
                 params.append(advisorDecision)
+            if advisorFindings is not None:
+                setClauses.append("advisor_findings = %s")
+                params.append(Json(advisorFindings))
             if approvedBy is not None:
                 setClauses.append("approved_by = %s")
                 params.append(approvedBy)
+            if category is not None:
+                setClauses.append("category = %s")
+                params.append(category)
 
             params.append(claimId)
 
