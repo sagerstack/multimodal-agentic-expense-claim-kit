@@ -265,6 +265,53 @@ Plans:
 
 ---
 
+### Phase 8.2: Advisor Agent Refactor + Schema Alignment
+
+**Goal:** The Advisor agent captures its actual LLM reasoning in `advisor_findings`, and the Review v2 page displays the real reasoning. Optionally, the Advisor is refactored from ReAct to a deterministic routing function.
+
+**Depends on:** Phase 8.1
+
+**Already done (this session):**
+- `advisor_findings` JSONB column added (migration 007), ORM model updated, MCP DB server updated
+- Fixed intakeFindings schema defined in v2 system prompt (confidenceScores, policyViolation, justification, remarks, conversion)
+- Review v2 template created with Advisory Agent card showing advisor findings
+- Review page parser updated to read `confidenceFlags` fallback for old claims
+- Existing claims backfilled from audit_log
+
+**Remaining items:**
+
+1. **Capture LLM reasoning in advisor_findings** — The current `advisorFindings` dict is manually constructed from compliance/fraud summaries (not the LLM's actual response). Change to capture the LLM's reasoning text from `result["messages"]` and store it in the `advisor_findings` JSONB column.
+
+2. **Rename `aiInsight` to `submissionHistory`** — The variable name suggests AI involvement but it's a plain SQL COUNT query. Rename across router and templates.
+
+3. **Promote Review v2 as default** — Rename current `/review/{claimId}` route to `/review-archived/{claimId}` (template `review_archived.html`). Rename `/review-v2/{claimId}` to `/review/{claimId}` (template `review.html`). Update dashboard link in `claims_table_rows.html`.
+
+4. **Intake Agent Findings — show per-field confidence scores** — The card currently shows only avg confidence and lowest field. Add a breakdown of all field confidence scores (merchant, date, totalAmount, currency, etc.) below the avg bar. Data is already in `intakeAgentFindings.scores` dict — just needs template rendering.
+
+5. **Rename "Extracted Entity Data" to "Extracted Claim Information"** — Update card title in review_v2.html. Show additional DB fields: line_items, original_currency, original_amount, converted_amount_sgd, receipt_number, exchange rate, submission date.
+
+6. **Fix category always showing "General"** — Category is extracted from `line_items` JSON (looks for a `category` key), but line_items contains actual receipt items (`[{description, amount}]`), not a category field. No `category` column exists on claims or receipts. Fix: add `category` to the mandatory intakeFindings schema, add a `category` column to claims table (migration), add system prompt instruction for the intake agent to infer category from receipt content (must be one of: meals, transport, accommodation, office_supplies, general — matching policy document categories), have submitClaim write it to the column.
+
+7. **New "Manage" page** — Implement a new page at `/manage` for claim management. Pull UI design from Stitch MCP screen "Manage Claims". Wire route, template, and sidebar nav link.
+
+8. **New "Analytics" page** — Implement a new page at `/analytics` for approver analytics/dashboard. Pull UI design from Stitch MCP screen "Enhanced Approver Dashboard". Wire route, template, and sidebar nav link.
+
+**Success Criteria:**
+1. The Advisory Agent card on Review v2 displays the LLM's actual reasoning text, not a copy of compliance/fraud summaries
+2. `aiInsight` renamed to `submissionHistory` across all files
+3. `/review/{claimId}` serves the structured layout (formerly v2), `/review-archived/{claimId}` serves the old layout
+4. `/manage` and `/analytics` pages render matching their Stitch designs
+5. All existing tests pass
+
+**Plans:** 3 plans
+
+Plans:
+- [ ] 08.2-01-PLAN.md -- Review page overhaul: advisor LLM reasoning capture, aiInsight->submissionHistory rename, promote v2 as default, per-field confidence bars, Extracted Claim Information card
+- [ ] 08.2-02-PLAN.md -- Category inference pipeline: migration 008, ORM update, system prompt category classification, submitClaim wiring, MCP DB server
+- [ ] 08.2-03-PLAN.md -- Manage + Analytics pages: new reviewer-only pages with filters/bulk actions/KPIs, sidebar nav update, category display fix
+
+---
+
 ### Phase 10: Browser E2E Tests
 
 **Goal:** A Playwright test suite covers the happy path through all 4 pages and one escalation path -- all tests use sentinel elements and `waitForSelector` (never `waitForTimeout`), run against a live uvicorn server in a background thread, and pass reliably in CI.
