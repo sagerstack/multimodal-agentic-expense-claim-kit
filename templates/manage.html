@@ -130,21 +130,21 @@
             <th class="px-6 py-4">Amount</th>
             <th class="px-6 py-4">Status</th>
             <th class="px-6 py-4">Submitted</th>
-            <th class="px-6 py-4">Actions</th>
+            <th class="px-6 py-4">Audit Log</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-outline-variant/5">
           {% if claims %}
             {% for claim in claims %}
-            <tr class="hover:bg-surface-bright/50 transition-colors group">
-              <td class="px-6 py-5">
+            <tr class="hover:bg-surface-bright/50 transition-colors group cursor-pointer"
+                onclick="window.location.href='/review/{{ claim.id }}'">
+              <td class="px-6 py-5" onclick="event.stopPropagation()">
                 <input type="checkbox" class="claim-checkbox w-4 h-4 rounded border border-outline-variant/40 bg-surface-bright cursor-pointer accent-primary"
                        value="{{ claim.id }}"
                        @change="toggleOne('{{ claim.id }}', $event.target.checked)">
               </td>
               <td class="px-6 py-5">
-                <a href="/review/{{ claim.id }}"
-                   class="font-bold text-sm font-mono text-primary hover:underline">{{ claim.claimNumber or "—" }}</a>
+                <span class="font-bold text-sm font-mono text-primary">{{ claim.claimNumber or "—" }}</span>
               </td>
               <td class="px-6 py-5">
                 <p class="font-bold text-sm text-on-surface">{{ claim.employeeName }}</p>
@@ -197,10 +197,10 @@
               <td class="px-6 py-5 text-sm text-on-surface-variant">
                 {{ claim.createdAt[:10] if claim.createdAt else "—" }}
               </td>
-              <td class="px-6 py-5">
-                <a href="/review/{{ claim.id }}"
+              <td class="px-6 py-5" onclick="event.stopPropagation()">
+                <a href="/audit?claimId={{ claim.id }}"
                    class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors text-xl"
-                   title="Review claim">open_in_new</a>
+                   title="View audit log">history</a>
               </td>
             </tr>
             {% endfor %}
