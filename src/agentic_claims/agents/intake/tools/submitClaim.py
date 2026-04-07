@@ -148,6 +148,7 @@ async def submitClaim(
             mergedArgs[mcpKey] = value
         elif agentKey in (
             "currency",
+            "category",
             "originalAmount",
             "originalCurrency",
             "convertedAmount",
@@ -155,13 +156,19 @@ async def submitClaim(
             "exchangeRate",
             "conversionDate",
         ):
-            # Pass through known MCP-accepted currency conversion fields
+            # Pass through known MCP-accepted fields (currency, category, conversion)
             mergedArgs[agentKey] = value
         else:
             unmappedClaimKeys.append(agentKey)
 
     if unmappedClaimKeys:
         logger.warning("Unmapped claim keys", extra={"unmappedKeys": unmappedClaimKeys})
+
+    # Validate and normalize category
+    VALID_CATEGORIES = {"meals", "transport", "accommodation", "office_supplies", "general"}
+    if "category" in mergedArgs and mergedArgs["category"] not in VALID_CATEGORIES:
+        logger.warning("Invalid category from LLM", extra={"category": mergedArgs["category"]})
+        mergedArgs["category"] = "general"
 
     # Map receipt fields through RECEIPT_FIELD_MAP
     unmappedReceiptKeys = []
