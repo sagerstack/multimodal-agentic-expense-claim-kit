@@ -11,7 +11,7 @@ router = APIRouter()
 
 _ROLE_DEFAULTS = {
     "user": "/",
-    "reviewer": "/dashboard",
+    "reviewer": "/manage",
 }
 
 

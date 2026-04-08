@@ -212,8 +212,8 @@ def testLoginPostValidCredentialsUserRedirectsToRoot(client):
     assert response.headers["location"] == "/"
 
 
-def testLoginPostValidCredentialsReviewerRedirectsToDashboard(client):
-    """POST /login with valid reviewer credentials redirects to /dashboard."""
+def testLoginPostValidCredentialsReviewerRedirectsToManage(client):
+    """POST /login with valid reviewer credentials redirects to /manage."""
     mockUser = _makeUser(
         username="james", role="reviewer", employeeId="909090", displayName="James"
     )
@@ -228,4 +228,4 @@ def testLoginPostValidCredentialsReviewerRedirectsToDashboard(client):
             follow_redirects=False,
         )
     assert response.status_code == 302
-    assert response.headers["location"] == "/dashboard"
+    assert response.headers["location"] == "/manage"
