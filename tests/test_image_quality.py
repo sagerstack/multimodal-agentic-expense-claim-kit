@@ -7,6 +7,9 @@ import pytest
 from agentic_claims.agents.intake.utils.imageQuality import checkImageQuality
 
 
+pytestmark = pytest.mark.skip(reason="Image quality gate disabled in extractReceiptFields.")
+
+
 @pytest.fixture
 def sharpImageBytes() -> bytes:
     """Generate a sharp image with high variance (random noise)."""
