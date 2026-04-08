@@ -77,7 +77,7 @@ def getCurrentUser(request: Request) -> dict:
 def requireRole(role: str):
     """Dependency factory that enforces a specific role.
 
-    Redirects user role to / and reviewer role to /dashboard on mismatch.
+    Redirects user role to / and reviewer role to /manage on mismatch.
     """
 
     def _checkRole(request: Request) -> Optional[RedirectResponse]:
@@ -86,7 +86,7 @@ def requireRole(role: str):
             return authRedirect
         sessionRole = request.session.get("role")
         if sessionRole != role:
-            target = "/dashboard" if sessionRole == "reviewer" else "/"
+            target = "/manage" if sessionRole == "reviewer" else "/"
             return RedirectResponse(target, status_code=302)
         return None
 

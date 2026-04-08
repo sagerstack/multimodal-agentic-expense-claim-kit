@@ -4,6 +4,7 @@ import logging
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
+from psycopg import AsyncConnection
 from psycopg_pool import AsyncConnectionPool
 
 from agentic_claims.agents.advisor.node import advisorNode
@@ -131,8 +132,15 @@ async def getCompiledGraph():
     )
     await pool.open()
 
+    # Setup checkpointer tables with autocommit so CREATE INDEX CONCURRENTLY
+    # (used by langgraph-checkpoint-postgres >=3.0.5) can run outside a transaction.
+    async with await AsyncConnection.connect(
+        settings.postgres_dsn, autocommit=True
+    ) as setupConn:
+        setupSaver = AsyncPostgresSaver(setupConn)
+        await setupSaver.setup()
+
     checkpointer = AsyncPostgresSaver(pool)
-    await checkpointer.setup()
 
     builder = buildGraph()
     graph = builder.compile(checkpointer=checkpointer)
