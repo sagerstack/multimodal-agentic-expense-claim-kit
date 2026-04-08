@@ -45,25 +45,26 @@ async def extractReceiptFields(claimId: str) -> dict:
         imageBytes = base64.b64decode(imageB64)
 
         # Step 1: Check image quality
-        qualityCheck = checkImageQuality(
-            imageBytes=imageBytes,
-            threshold=settings.image_quality_threshold,
-            minWidth=settings.image_min_width,
-            minHeight=settings.image_min_height,
-        )
-
-        if not qualityCheck["acceptable"]:
-            return {
-                "error": f"Image quality check failed: {qualityCheck['reason']}. Please upload a clearer, higher-resolution image."
-            }
-
-        logger.info(
-            "extractReceiptFields quality check passed",
-            extra={
-                "elapsed": f"{time.time() - toolStart:.2f}s",
-                "qualityScore": qualityCheck.get("score"),
-            },
-        )
+        # Disabled: always continue to VLM extraction even for low-resolution or blurry images.
+        # qualityCheck = checkImageQuality(
+        #     imageBytes=imageBytes,
+        #     threshold=settings.image_quality_threshold,
+        #     minWidth=settings.image_min_width,
+        #     minHeight=settings.image_min_height,
+        # )
+        #
+        # if not qualityCheck["acceptable"]:
+        #     return {
+        #         "error": f"Image quality check failed: {qualityCheck['reason']}. Please upload a clearer, higher-resolution image."
+        #     }
+        #
+        # logger.info(
+        #     "extractReceiptFields quality check passed",
+        #     extra={
+        #         "elapsed": f"{time.time() - toolStart:.2f}s",
+        #         "qualityScore": qualityCheck.get("score"),
+        #     },
+        # )
 
         # Step 3: Instantiate VLM using ChatOpenRouter
         vlm = ChatOpenRouter(
