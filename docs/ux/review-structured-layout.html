@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Claim Review | Expense AI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-headline { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #060e20; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #1f2b49; border-radius: 10px; }
+        
+        .agent-card {
+            background: rgba(25, 37, 64, 0.4);
+            border: 1px solid rgba(109, 117, 140, 0.1);
+            border-radius: 0.5rem;
+            height: 100%;
+        }
+        .footer-decision {
+            background: #091328;
+            border-top: 1px solid rgba(109, 117, 140, 0.2);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-primary": "#47007c",
+                        "surface-container-highest": "#192540",
+                        "secondary-fixed-dim": "#50ebd5",
+                        "secondary-fixed": "#62fae3",
+                        "tertiary-container": "#fd81a8",
+                        "on-tertiary-fixed-variant": "#701039",
+                        "primary-fixed": "#c284ff",
+                        "tertiary-dim": "#f0779d",
+                        "primary-container": "#c284ff",
+                        "secondary": "#62fae3",
+                        "secondary-container": "#006b5f",
+                        "secondary-dim": "#50ebd5",
+                        "surface-tint": "#cc97ff",
+                        "tertiary-fixed": "#ff8eb0",
+                        "on-error-container": "#ffb2b9",
+                        "surface-container-lowest": "#000000",
+                        "primary-fixed-dim": "#b971ff",
+                        "on-background": "#dee5ff",
+                        "primary-dim": "#9c48ea",
+                        "on-tertiary-container": "#59002a",
+                        "error-dim": "#d73357",
+                        "error": "#ff6e84",
+                        "inverse-on-surface": "#4d556b",
+                        "surface-container-low": "#091328",
+                        "on-secondary": "#005c52",
+                        "surface-container-high": "#141f38",
+                        "on-surface-variant": "#a3aac4",
+                        "surface-variant": "#192540",
+                        "on-secondary-fixed-variant": "#00675c",
+                        "surface": "#060e20",
+                        "on-primary-container": "#360061",
+                        "inverse-surface": "#faf8ff",
+                        "surface-container": "#0f1930",
+                        "on-tertiary": "#6a0934",
+                        "on-error": "#490013",
+                        "on-primary-fixed": "#000000",
+                        "surface-bright": "#1f2b49",
+                        "primary": "#cc97ff",
+                        "on-tertiary-fixed": "#380018",
+                        "on-secondary-fixed": "#004840",
+                        "outline": "#6d758c",
+                        "error-container": "#a70138",
+                        "tertiary-fixed-dim": "#f67ca3",
+                        "on-secondary-container": "#dcfff7",
+                        "inverse-primary": "#842cd3",
+                        "on-surface": "#dee5ff",
+                        "on-primary-fixed-variant": "#430076",
+                        "outline-variant": "#40485d",
+                        "surface-dim": "#060e20",
+                        "background": "#060e20",
+                        "tertiary": "#ff97b5"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-background min-h-screen flex overflow-hidden">
+<!-- Sidebar Navigation -->
+<aside class="w-16 flex flex-col items-center py-6 bg-[#091328] border-r border-outline-variant/10 z-50">
+<div class="mb-8">
+<div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-primary-dim flex items-center justify-center shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-on-primary-fixed text-xl" style="font-variation-settings: 'FILL' 1;">bolt</span>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-6">
+<a class="p-2 text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-2xl">home</span>
+</a>
+<a class="p-2 text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-2xl">description</span>
+</a>
+<a class="p-2 text-primary border-r-2 border-primary" href="#">
+<span class="material-symbols-outlined text-2xl" style="font-variation-settings: 'FILL' 1;">visibility</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col h-screen overflow-hidden">
+<!-- Header -->
+<header class="flex justify-between items-center px-8 py-4 h-24 bg-[#060e20]">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="px-2 py-0.5 rounded bg-error/20 text-error text-[10px] font-bold tracking-wider uppercase">Escalation</span>
+<span class="text-[10px] text-on-surface-variant font-medium tracking-wider uppercase">CLAIM-040</span>
+</div>
+<h2 class="text-3xl font-black tracking-tight text-on-surface font-headline">Claim Review</h2>
+<p class="text-xs text-on-surface-variant">Inspect AI extraction results, compliance and fraud findings.</p>
+</div>
+<div>
+<button class="px-4 py-2 bg-surface-container-high text-on-surface hover:bg-surface-bright transition-colors rounded text-xs font-bold flex items-center gap-2 border border-outline-variant/20">
+<span class="material-symbols-outlined text-sm">arrow_back</span>
+                    Back to Dashboard
+                </button>
+</div>
+</header>
+<!-- Content Grid -->
+<main class="flex-1 overflow-y-auto px-8 pb-4 custom-scrollbar">
+<div class="grid grid-cols-12 gap-6">
+<!-- Left/Middle: Analysis Grid -->
+<div class="col-span-8 space-y-6">
+<!-- Top Row: Receipt & Intake -->
+<div class="grid grid-cols-2 gap-6">
+<!-- Receipt Viewer -->
+<section class="agent-card overflow-hidden">
+<div class="p-3 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container-low/50">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-sm">image</span>
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Original Receipt</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm cursor-pointer hover:text-primary">zoom_in</span>
+<span class="text-[10px] font-mono">1x</span>
+<span class="material-symbols-outlined text-sm cursor-pointer hover:text-primary">zoom_out</span>
+</div>
+</div>
+<div class="bg-black/40 flex items-center justify-center p-4 h-[250px]">
+<img alt="Receipt" class="max-h-full w-auto shadow-2xl rounded-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCOHBGvHB9ydm0tC-XTxaeHM-IY129Uxt6QJJCm9naIjMzpyKtETDvG6mQEo0hp6EuH3_n2ViJUWuZkCD4erubKZsjWJGPJ9h7N85xkR4BLegtpV9UbBV_pVI74uqgP-KRGu2ojuu42lgqEhH5m7bP74KJTgR_LgAIT7O7ZsfriIvZCEKjUqme6oCF3R7OFDUcH1iprcGex2T_Rm9LMuJYKBWVHACvdFSQumbBPEeID7wrFXTZpEs5wD11XkVq_QuwdqATkeTIp7PLH"/>
+</div>
+</section>
+<!-- Intake Agent Findings -->
+<section class="agent-card p-5">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-sm">terminal</span>
+<h3 class="text-[11px] font-black uppercase tracking-widest text-secondary">Intake Agent Findings</h3>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-sm cursor-pointer">refresh</span>
+</div>
+<div class="space-y-4">
+<div>
+<div class="flex justify-between text-[10px] font-bold text-on-surface-variant uppercase mb-1">
+<span>Avg Confidence</span>
+<span class="text-secondary">97%</span>
+</div>
+<div class="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[97%] shadow-[0_0_8px_rgba(98,250,227,0.4)]"></div>
+</div>
+</div>
+<div class="bg-surface-container-lowest/50 p-3 rounded border border-outline-variant/10">
+<div class="flex justify-between items-center text-[10px]">
+<span class="font-bold text-on-surface-variant uppercase">Lowest Confidence</span>
+<span class="text-on-surface uppercase">merchant</span>
+<span class="font-bold text-on-surface">95%</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Middle Row: Compliance & Audit -->
+<div class="grid grid-cols-2 gap-6">
+<!-- Compliance Agent -->
+<section class="agent-card p-5">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-sm">verified_user</span>
+<h3 class="text-[11px] font-black uppercase tracking-widest text-secondary">Compliance Agent</h3>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-sm">help</span>
+</div>
+<div class="space-y-3">
+<div class="bg-surface-container-lowest/50 p-3 rounded border border-outline-variant/20 text-[11px]">
+<p class="text-on-surface-variant mb-2 font-mono">totalAmountSgd --- 167.32 / limit SGD 40.00 (MAJOR)</p>
+<div class="space-y-2 text-on-surface leading-relaxed">
+<p>Section 2.2: Taxi and Ride-Hail Cap: Maximum SGD 40.00</p>
+<p class="text-error font-medium">Claim fails due to transportation expense exceeding cap without required manager approval.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Conversational Audit -->
+<section class="agent-card p-5">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">forum</span>
+<h3 class="text-[11px] font-black uppercase tracking-widest text-primary">Conversational Audit</h3>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-sm">sticky_note_2</span>
+</div>
+<div class="bg-surface-container-lowest/50 p-6 rounded border border-outline-variant/10 flex items-center justify-center h-[100px]">
+<p class="text-[10px] text-on-surface-variant italic font-medium">No policy observations during intake.</p>
+</div>
+</section>
+</div>
+<!-- Bottom Row: Fraud & Advisory -->
+<div class="grid grid-cols-2 gap-6">
+<!-- Fraud Analysis -->
+<section class="agent-card p-5">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-sm">security</span>
+<h3 class="text-[11px] font-black uppercase tracking-widest text-secondary">Fraud Analysis</h3>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-secondary/10 border border-secondary/40 text-[9px] font-black text-secondary tracking-widest">LEGIT</span>
+</div>
+<div class="bg-surface-container-lowest/50 p-4 rounded border border-outline-variant/20">
+<p class="text-[11px] text-on-surface leading-relaxed">
+                                    No prior claims or duplicates found for this employee. No anomalies detected in transaction pattern.
+                                </p>
+</div>
+</section>
+<!-- Advisory Agent -->
+<section class="agent-card p-5">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-sm">tips_and_updates</span>
+<h3 class="text-[11px] font-black uppercase tracking-widest text-tertiary">Advisory Agent</h3>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-sm">visibility_off</span>
+</div>
+<div class="bg-surface-container-lowest/50 p-4 rounded border border-outline-variant/20">
+<h4 class="text-[10px] font-black text-error uppercase mb-2">Advisor: Escalate to Reviewer</h4>
+<p class="text-[11px] text-on-surface">
+<span class="font-bold">Sagar</span> has 2 previous submissions with a <span class="text-secondary font-bold">50.0%</span> approval rate.
+                                </p>
+</div>
+</section>
+</div>
+</div>
+<!-- Right Sidebar: Extracted Entity Data -->
+<div class="col-span-4">
+<section class="agent-card p-5">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-sm">database</span>
+<h3 class="text-[11px] font-black uppercase tracking-widest text-on-surface-variant">Extracted Entity Data</h3>
+</div>
+<div class="w-2 h-2 rounded-full bg-secondary animate-pulse"></div>
+</div>
+<div class="space-y-6">
+<div>
+<label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+<span class="material-symbols-outlined text-[12px]">store</span> Vendor Name
+                                </label>
+<div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 text-xs text-on-surface font-bold">
+                                    USOPEN SUV &amp; LIMO SERVICE
+                                </div>
+</div>
+<div>
+<label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+<span class="material-symbols-outlined text-[12px]">calendar_today</span> Date of Transaction
+                                </label>
+<div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 text-xs text-on-surface">
+                                    2024-06-11
+                                </div>
+</div>
+<div>
+<label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+<span class="material-symbols-outlined text-[12px]">payments</span> Amount
+                                </label>
+<div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 text-sm text-on-surface font-black">
+                                    USD 130.00
+                                </div>
+</div>
+<div>
+<label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+<span class="material-symbols-outlined text-[12px]">category</span> Category
+                                </label>
+<div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 flex items-center gap-2 text-xs text-on-surface">
+<span class="material-symbols-outlined text-primary text-sm">restaurant</span> General
+                                </div>
+</div>
+<div>
+<label class="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+<span class="material-symbols-outlined text-[12px]">person</span> Submitter
+                                </label>
+<div class="bg-surface-container-lowest px-4 py-2.5 rounded border border-outline-variant/10 flex items-center gap-2 text-xs text-on-surface">
+<div class="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[12px] text-primary">person</span>
+</div>
+                                    Sagar
+                                </div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- Reviewer Decision Area (Footer) -->
+<footer class="footer-decision px-8 py-6 flex items-center gap-4">
+<div class="flex-1 relative">
+<input class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-lg px-5 py-3 text-sm focus:ring-1 focus:ring-primary text-on-background placeholder-on-surface-variant/40" placeholder="Add a review note for the submitter..." type="text"/>
+<span class="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-on-surface-variant text-xl cursor-pointer hover:text-primary transition-colors">attachment</span>
+</div>
+<div class="flex gap-4">
+<button class="px-8 py-3 rounded-lg border border-error/40 text-error hover:bg-error/10 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-2 min-w-[160px] justify-center">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'opsz' 20;">cancel</span>
+                    Reject Claim
+                </button>
+<button class="px-8 py-3 rounded-lg bg-secondary text-on-primary-fixed font-black text-xs uppercase tracking-widest shadow-lg shadow-secondary/20 hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 min-w-[180px] justify-center">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1, 'opsz' 20;">verified</span>
+                    Approve Claim
+                </button>
+</div>
+</footer>
+</div>
+</body></html>
