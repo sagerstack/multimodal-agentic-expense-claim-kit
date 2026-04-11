@@ -219,6 +219,7 @@ __marimo__/
 
 # Eval results (captured outputs)
 eval/results/
+eval/results/*.json
 
 # Upload artifacts
 static/uploads/
