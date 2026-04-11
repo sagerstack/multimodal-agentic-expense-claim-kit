@@ -49,7 +49,7 @@ See MILESTONES.md for archived v1.0 details.
 5. All 61 existing unit/integration tests pass without modification; the ConversationRunner headless tests continue to function (backend unchanged)
 6. Each page load creates or retrieves a signed session cookie containing `thread_id` and `claim_id` -- verifiable by inspecting cookies in the browser
 
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
 - [x] 06-01-PLAN.md -- FastAPI app structure (`web/` package), uvicorn Docker config, lifespan (checkpointer + graph singleton), SessionMiddleware, StaticFiles, pytailwindcss build
@@ -74,7 +74,7 @@ Plans:
 5. The submission summary right panel updates in real-time to show current total, item count, category breakdown, and warning/flag count as claims are processed in the session
 6. The SSE endpoint uses a per-session `asyncio.Queue` to decouple the `POST /chat/message` form submission from the `GET /chat/stream` SSE connection -- a `curl` test can confirm the POST returns an HTMX fragment immediately while the SSE stream delivers events asynchronously
 
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
 - [x] 07-01-PLAN.md -- SSE event taxonomy (`SseEvent` constants), `POST /chat/message` -> `asyncio.Queue` -> `GET /chat/stream` pipeline, `EventSourceResponse`, disconnect cleanup
@@ -305,7 +305,7 @@ Plans:
 4. `/manage` and `/analytics` pages render matching their Stitch designs
 5. All existing tests pass
 
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
 - [x] 08.2-01-PLAN.md -- Review page overhaul: advisor LLM reasoning capture, aiInsight->submissionHistory rename, promote v2 as default, per-field confidence bars, Extracted Claim Information card
@@ -370,12 +370,13 @@ Plans:
 11. When `convertCurrency` fails with a 404 (unsupported currency), the agent asks the user once and accepts a manual exchange rate override (e.g. "1 VND = 0.92 SGD") — it does NOT retry the failing API call in a loop
 12. All existing tests pass; tool count updated from 5 to 6 in intake agent test assertions
 
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
 - [ ] 11-01-PLAN.md — Core multi-turn fix: askHuman tool + system prompt TURN ROUTING + currency fixes
 - [ ] 11-02-PLAN.md — Remove sendNotification from advisor, remove confirm/edit buttons, fix pathway reset
-- [ ] 11-03-PLAN.md — Observability: convert ~65 raw logger calls to logEvent(), suppress on_chat_model_stream noise
+- [ ] 11-03-PLAN.md — Observability: convert agent node + infra raw logger calls to logEvent(), suppress on_chat_model_stream noise
+- [ ] 11-04-PLAN.md — Observability: convert intake tool + openrouter client raw logger calls to logEvent()
 
 ---
 
