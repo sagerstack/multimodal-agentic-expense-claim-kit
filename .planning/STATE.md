@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 12 — deepeval/RAGAS Evaluation Suite (IN PROGRESS)
-Plan: 3/4 plans complete
-Status: Plan 12-03 complete. All metric classes implemented: 4 deterministic BaseMetric subclasses, 10 GEval semantic instances, HallucinationMetric for ER-018, retrieval metrics for ER-009/014/017, dispatcher + test case builder.
-Last activity: 2026-04-11 — Completed 12-03-PLAN.md (metrics engine: all scoring classes)
+Phase: 12 — deepeval/RAGAS Evaluation Suite (COMPLETE — awaiting checkpoint verification)
+Plan: 4/4 plans complete
+Status: Plan 12-04 complete. All eval modules built: scoring, capture runner (claude-code-sdk), run_eval.py orchestrator. Full pipeline wired.
+Last activity: 2026-04-11 — Completed 12-04-PLAN.md (orchestrator, scoring, capture runner)
 
 ```
 v2.0 Progress: [##################################] 33/38 plans
@@ -26,7 +26,7 @@ Phase 8.1:     [####......] 0/4 plans (in progress — bugs documented)
 Phase 8.2:     [##########] 3/3 plans (complete)
 Phase 10:      [..........] 0/2 plans
 Phase 11:      [##########] 4/4 plans (complete)
-Phase 12:      [######....] 3/4 plans (in progress)
+Phase 12:      [##########] 4/4 plans (complete — checkpoint pending)
 ```
 
 ## Performance Metrics
@@ -60,6 +60,10 @@ Phase 12 decisions (2026-04-11):
 - Enrichment uses psycopg (not asyncpg) — already in project dependencies
 - Qdrant enrichment uses scroll API with section metadata filter on expense_policies collection
 - DB enrichment overrides browser-scraped agentDecision with authoritative advisor_decision column
+- claude-code-sdk query() used for subagent capture (not ClaudeSDKClient -- benchmarks are stateless)
+- parseSubagentResponse() 3-tier extraction: plain JSON -> markdown-fenced -> balanced-brace scan
+- stepScore() reads metric.score attributes post-evaluate() (not EvaluationResult.test_results iteration)
+- LiteLLMModel uses base_url (not deprecated api_base)
 
 New for v2.0:
 - Chainlit replaced by FastAPI + Jinja2 + HTMX
@@ -126,7 +130,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-11
-Stopped at: Completed Phase 12 Plan 03 — metrics engine (all scoring classes: deterministic, semantic, safety, retrieval)
+Stopped at: Completed Phase 12 Plan 04 — orchestrator, scoring module, capture runner. Checkpoint pending (human verification of live pipeline run).
 Resume file: None
 
 ### Roadmap Evolution
