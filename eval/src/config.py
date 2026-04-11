@@ -52,7 +52,7 @@ def getEvalConfig() -> EvalConfig:
     judgeModel = LiteLLMModel(
         model="openrouter/openai/gpt-4o",
         api_key=openrouterApiKey,
-        api_base="https://openrouter.ai/api/v1",
+        base_url="https://openrouter.ai/api/v1",
     )
 
     appUrl = os.environ.get("EVAL_APP_URL", "http://localhost:8000")
