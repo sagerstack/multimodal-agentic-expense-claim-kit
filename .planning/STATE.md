@@ -11,8 +11,8 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 Phase: 11 — Intake Multi-Turn Fix (In progress)
 Plan: 2/4 complete
-Status: Plan 11-04 executed. Intake tools + OpenRouter client converted to structured logEvent() calls.
-Last activity: 2026-04-11 — Completed 11-04-PLAN.md
+Status: Plan 11-02 executed. Advisor sendNotification removed, confirm/edit buttons removed, pathway reset fixed.
+Last activity: 2026-04-11 — Completed 11-02-PLAN.md
 
 ```
 v2.0 Progress: [############################.] 28/38 plans
@@ -115,7 +115,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-11
-Stopped at: Completed 11-04-PLAN.md (intake tools + OpenRouter client structured logging)
+Stopped at: Completed 11-02-PLAN.md (advisor cleanup, dead UI removal, pathway reset fix)
 Resume file: None
 
 ### Roadmap Evolution
