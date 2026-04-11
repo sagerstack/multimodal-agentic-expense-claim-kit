@@ -2,6 +2,8 @@
 
 import json
 import logging
+import time
+import uuid
 from datetime import datetime
 
 from langchain_core.tools import tool
@@ -10,6 +12,7 @@ from agentic_claims.agents.intake.auditLogger import flushSteps
 from agentic_claims.agents.intake.extractionContext import extractedReceiptVar, sessionClaimIdVar
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
+from agentic_claims.core.logging import logEvent
 from agentic_claims.web.employeeIdContext import employeeIdVar
 from agentic_claims.web.imagePathContext import imagePathVar
 
@@ -18,6 +21,7 @@ logger = logging.getLogger(__name__)
 # Field mapping: agent vocabulary -> MCP parameter names
 CLAIM_FIELD_MAP = {
     "claimantId": "employeeId",
+    "employeeId": "employeeId",
     "amountSgd": "totalAmount",
 }
 
@@ -51,7 +55,8 @@ async def submitClaim(
             - status (optional, defaults to 'pending')
             - currency (optional, defaults to 'SGD')
             - expenseDate (optional)
-            - originalAmount, originalCurrency, convertedAmount, exchangeRate, conversionDate (optional)
+            - originalAmount, originalCurrency, convertedAmount, exchangeRate,
+              conversionDate (optional)
         receiptData: Receipt fields using agent vocabulary:
             - merchant (required)
             - date (required, maps to receiptDate)
@@ -68,16 +73,25 @@ async def submitClaim(
         or note key if duplicate detected, or error dict if submission fails
     """
     settings = getSettings()
+    toolStart = time.time()
 
     # Server-side employee ID override (BUG-015 fix)
     serverEmployeeId = employeeIdVar.get(None)
     if serverEmployeeId:
-        logger.info(
-            "Server-side employee ID override",
-            extra={
+        logEvent(
+            logger,
+            "claim.employee_id_injected",
+            logCategory="agent",
+            actorType="app",
+            agent="intake",
+            employeeId=serverEmployeeId,
+            toolName="submitClaim",
+            status="completed",
+            payload={
                 "serverEmployeeId": serverEmployeeId,
                 "llmProvidedId": claimData.get("claimantId"),
             },
+            message="Server-side employee ID override applied",
         )
         claimData["claimantId"] = serverEmployeeId
 
@@ -93,14 +107,21 @@ async def submitClaim(
         )
         receiptData["imagePath"] = serverImagePath
 
-    # Log tool entry
-    logger.info(
-        "submitClaim tool called",
-        extra={
-            "claimDataKeys": list(claimData.keys()),
-            "receiptDataKeys": list(receiptData.keys()),
-            "hasFindingsData": intakeFindings is not None,
+    logEvent(
+        logger,
+        "claim.submission_started",
+        logCategory="agent",
+        actorType="agent",
+        agent="intake",
+        employeeId=serverEmployeeId,
+        toolName="submitClaim",
+        status="started",
+        payload={
+            "claimData": claimData,
+            "receiptData": receiptData,
+            "intakeFindings": intakeFindings,
         },
+        message="Claim submission started",
     )
 
     # Build MCP arguments by mapping agent vocabulary to MCP parameter names
@@ -109,25 +130,25 @@ async def submitClaim(
     # Handle required fields with pass-through + fallback
     mergedArgs["status"] = claimData.get("status", "pending")
     mergedArgs["intakeFindings"] = intakeFindings or {}
+    if serverEmployeeId:
+        mergedArgs["intakeFindings"]["employeeId"] = serverEmployeeId
 
     # BUG-028: inject confidenceScores from VLM extraction context if LLM omitted them
     extractedReceipt = extractedReceiptVar.get(None)
     if extractedReceipt:
         findings = mergedArgs["intakeFindings"]
         if not findings.get("confidenceScores"):
-            confidence = extractedReceipt.get("confidence") or extractedReceipt.get("confidenceScores")
+            confidence = extractedReceipt.get("confidence") or extractedReceipt.get(
+                "confidenceScores"
+            )
             if confidence and isinstance(confidence, dict):
                 findings["confidenceScores"] = confidence
                 mergedArgs["intakeFindings"] = findings
 
-    # Idempotency key from natural key (employeeId + merchant + receiptDate + totalAmount)
-    idempParts = [
-        str(claimData.get("claimantId", "")),
-        str(receiptData.get("merchant", "")),
-        str(receiptData.get("date", "")),
-        str(receiptData.get("totalAmount", "")),
-    ]
-    mergedArgs["idempotencyKey"] = "_".join(idempParts)
+    # Final submissions are intentionally non-idempotent. The DB MCP fallback
+    # path creates a unique internal key when idempotencyKey is omitted, so
+    # duplicate receipts produce separate claims and fraud detection handles
+    # duplicate classification after insert.
 
     # If agent provides claimNumber, pass through but log warning (legacy path)
     if "claimNumber" in claimData:
@@ -196,10 +217,7 @@ async def submitClaim(
             mergedArgs["receiptNumber"] = f"REC-{receiptDate.replace('-', '')}"
         else:
             # Fallback if date missing
-            import hashlib
-
-            keyHash = hashlib.md5(mergedArgs["idempotencyKey"].encode()).hexdigest()[:8]
-            mergedArgs["receiptNumber"] = f"REC-{keyHash}"
+            mergedArgs["receiptNumber"] = f"REC-{uuid.uuid4().hex[:8]}"
 
     # Normalize receiptDate to YYYY-MM-DD format (PostgreSQL DATE column requirement)
     if "receiptDate" in mergedArgs and mergedArgs["receiptDate"]:
@@ -224,14 +242,18 @@ async def submitClaim(
     if "lineItems" in mergedArgs and not isinstance(mergedArgs["lineItems"], list):
         mergedArgs["lineItems"] = [mergedArgs["lineItems"]] if mergedArgs["lineItems"] else []
 
-    # Log before MCP call
-    logger.info(
-        "Calling MCP insertClaim tool",
-        extra={
-            "serverUrl": settings.db_mcp_url,
-            "toolName": "insertClaim",
-            "argumentKeys": list(mergedArgs.keys()),
-        },
+    logEvent(
+        logger,
+        "tool.start",
+        logCategory="agent",
+        actorType="agent",
+        agent="intake",
+        employeeId=serverEmployeeId,
+        toolName="insertClaim",
+        mcpServer=settings.db_mcp_url,
+        status="started",
+        payload={"arguments": mergedArgs},
+        message="Calling MCP insertClaim tool",
     )
 
     # Single atomic MCP call to insert both claim and receipt
@@ -239,13 +261,19 @@ async def submitClaim(
         serverUrl=settings.db_mcp_url, toolName="insertClaim", arguments=mergedArgs
     )
 
-    # Log result type
-    logger.info(
-        "MCP call completed",
-        extra={
-            "resultType": type(result).__name__,
-            "resultPreview": str(result)[:200] if not isinstance(result, dict) else None,
-        },
+    logEvent(
+        logger,
+        "tool.end",
+        logCategory="agent",
+        actorType="agent",
+        agent="intake",
+        employeeId=serverEmployeeId,
+        toolName="insertClaim",
+        mcpServer=settings.db_mcp_url,
+        status="completed",
+        elapsedMs=round((time.time() - toolStart) * 1000),
+        payload={"result": result},
+        message="MCP insertClaim tool completed",
     )
 
     # Handle string response: try parsing as JSON
@@ -255,18 +283,44 @@ async def submitClaim(
             result = json.loads(result)
             logger.info("JSON parse successful", extra={"parsedType": type(result).__name__})
         except (ValueError, TypeError) as e:
-            logger.error("JSON parse failed", extra={"error": str(e)}, exc_info=True)
+            logEvent(
+                logger,
+                "claim.submission_failed",
+                level=logging.ERROR,
+                logCategory="agent",
+                actorType="agent",
+                agent="intake",
+                employeeId=serverEmployeeId,
+                toolName="submitClaim",
+                status="failed",
+                elapsedMs=round((time.time() - toolStart) * 1000),
+                errorType=type(e).__name__,
+                payload={"error": str(e), "result": result},
+                message="Claim submission returned unparseable response",
+            )
             return {"error": f"insertClaim returned unparseable response: {result[:200]}"}
 
     # Log tool exit
     if isinstance(result, dict):
-        logger.info(
-            "submitClaim tool completed",
-            extra={
-                "success": "error" not in result,
-                "hasClaimData": "claim" in result,
-                "hasReceiptData": "receipt" in result,
-            },
+        claimRecord = result.get("claim", {}) if isinstance(result.get("claim"), dict) else {}
+        logEvent(
+            logger,
+            "claim.submission_failed" if "error" in result else "claim.submission_completed",
+            level=logging.ERROR if "error" in result else logging.INFO,
+            logCategory="agent",
+            actorType="agent",
+            agent="intake",
+            employeeId=serverEmployeeId,
+            dbClaimId=claimRecord.get("id"),
+            claimNumber=claimRecord.get("claim_number") or claimRecord.get("claimNumber"),
+            toolName="submitClaim",
+            status="failed" if "error" in result else "completed",
+            elapsedMs=round((time.time() - toolStart) * 1000),
+            errorType="ToolError" if "error" in result else None,
+            payload={"result": result},
+            message="Claim submission failed"
+            if "error" in result
+            else "Claim submission completed",
         )
         # BUG-027: flush buffered audit steps now that the DB claim ID is known.
         # Use sessionClaimIdVar as fallback when LLM doesn't pass sessionClaimId.

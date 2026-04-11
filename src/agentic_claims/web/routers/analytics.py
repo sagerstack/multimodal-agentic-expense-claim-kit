@@ -88,29 +88,37 @@ async def _queryAnalytics() -> dict:
         )
         topEmployeesRows = topEmployeesResult.all()
 
-        # Monthly trend: last 6 months
-        monthlyResult = await session.execute(
+        # Daily trend: past 5 days, including zero-count days
+        dailyResult = await session.execute(
             text(
                 """
                 SELECT
-                    TO_CHAR(date_trunc('month', created_at), 'Mon YYYY') AS month_label,
-                    date_trunc('month', created_at) AS month_date,
-                    COUNT(*) AS cnt
-                FROM claims
-                WHERE created_at >= NOW() - INTERVAL '6 months'
-                GROUP BY date_trunc('month', created_at)
-                ORDER BY month_date ASC
+                    TO_CHAR(day::date, 'Dy DD') AS day_label,
+                    day::date AS day_date,
+                    COUNT(c.id) AS cnt
+                FROM generate_series(
+                    CURRENT_DATE - INTERVAL '4 days',
+                    CURRENT_DATE,
+                    INTERVAL '1 day'
+                ) AS day
+                LEFT JOIN claims c ON c.created_at::date = day::date
+                GROUP BY day::date
+                ORDER BY day::date ASC
                 """
             )
         )
-        monthlyRows = monthlyResult.all()
+        dailyRows = dailyResult.all()
 
     totalClaims = int(kpiRow["total_claims"]) if kpiRow else 0
     totalAmount = float(kpiRow["total_amount"]) if kpiRow else 0.0
     processedClaims = int(kpiRow["processed_claims"]) if kpiRow else 0
     approvedClaims = int(kpiRow["approved_claims"]) if kpiRow else 0
-    avgProcessingHours = float(kpiRow["avg_processing_hours"]) if kpiRow and kpiRow["avg_processing_hours"] else 0.0
-    approvalRate = round((approvedClaims / processedClaims) * 100, 1) if processedClaims > 0 else 0.0
+    avgProcessingHours = (
+        float(kpiRow["avg_processing_hours"]) if kpiRow and kpiRow["avg_processing_hours"] else 0.0
+    )
+    approvalRate = (
+        round((approvedClaims / processedClaims) * 100, 1) if processedClaims > 0 else 0.0
+    )
 
     # Format avg processing time
     if avgProcessingHours < 1:
@@ -120,21 +128,17 @@ async def _queryAnalytics() -> dict:
     else:
         avgProcessingTime = f"{avgProcessingHours / 24:.1f}d"
 
-    statusBreakdown = [
-        {"status": row[0], "count": int(row[1])}
-        for row in statusRows
-    ]
+    statusBreakdown = [{"status": row[0], "count": int(row[1])} for row in statusRows]
 
-    categoryBreakdown = [
-        {"category": row[0], "count": int(row[1])}
-        for row in categoryRows
-    ]
+    categoryBreakdown = [{"category": row[0], "count": int(row[1])} for row in categoryRows]
 
     topEmployees = []
     for row in topEmployeesRows:
         employeeTotal = int(row[2])
         employeeApproved = int(row[4])
-        empApprovalRate = round((employeeApproved / employeeTotal) * 100, 1) if employeeTotal > 0 else 0.0
+        empApprovalRate = (
+            round((employeeApproved / employeeTotal) * 100, 1) if employeeTotal > 0 else 0.0
+        )
         topEmployees.append(
             {
                 "employeeId": row[0],
@@ -145,11 +149,8 @@ async def _queryAnalytics() -> dict:
             }
         )
 
-    monthlyTrend = [
-        {"label": row[0], "count": int(row[2])}
-        for row in monthlyRows
-    ]
-    maxMonthlyCount = max((m["count"] for m in monthlyTrend), default=1)
+    dailyTrend = [{"label": row[0], "count": int(row[2])} for row in dailyRows]
+    maxDailyCount = max((d["count"] for d in dailyTrend), default=1)
 
     return {
         "totalClaims": totalClaims,
@@ -159,8 +160,8 @@ async def _queryAnalytics() -> dict:
         "statusBreakdown": statusBreakdown,
         "categoryBreakdown": categoryBreakdown,
         "topEmployees": topEmployees,
-        "monthlyTrend": monthlyTrend,
-        "maxMonthlyCount": maxMonthlyCount,
+        "dailyTrend": dailyTrend,
+        "maxDailyCount": maxDailyCount,
     }
 
 
@@ -185,8 +186,8 @@ async def analyticsPage(request: Request):
             "statusBreakdown": [],
             "categoryBreakdown": [],
             "topEmployees": [],
-            "monthlyTrend": [],
-            "maxMonthlyCount": 1,
+            "dailyTrend": [],
+            "maxDailyCount": 1,
         }
 
     return templates.TemplateResponse(

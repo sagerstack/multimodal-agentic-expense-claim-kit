@@ -21,6 +21,7 @@ from starlette.templating import Jinja2Templates
 from agentic_claims.agents.intake.auditLogger import flushSteps, logIntakeStep
 from agentic_claims.agents.intake.extractionContext import sessionClaimIdVar
 from agentic_claims.core.config import getSettings
+from agentic_claims.core.logging import logEvent
 from agentic_claims.web.employeeIdContext import employeeIdVar
 from agentic_claims.web.sseEvents import SseEvent
 
@@ -171,11 +172,49 @@ def _buildPathwaySteps(
     extractionDetails: dict | None = None,
 ) -> list:
     """Build the 4 Decision Pathway steps from current tool state."""
+    completedTools = set(completedTools)
+    if "submitClaim" in completedTools:
+        completedTools.update({"extractReceiptFields", "searchPolicies"})
+    elif "searchPolicies" in completedTools:
+        completedTools.add("extractReceiptFields")
+
     steps = [
-        {"name": "Receipt Uploaded", "icon": "cloud_upload", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": ""},
-        {"name": "AI Extraction", "icon": "troubleshoot", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": PATHWAY_WAITING_TEXT[1]},
-        {"name": "Policy Check", "icon": "rule", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": PATHWAY_WAITING_TEXT[2]},
-        {"name": "Claim Submission", "icon": "send", "status": "pending", "timestamp": None, "details": None, "description": None, "waitingText": PATHWAY_WAITING_TEXT[3]},
+        {
+            "name": "Receipt Uploaded",
+            "icon": "cloud_upload",
+            "status": "pending",
+            "timestamp": None,
+            "details": None,
+            "description": None,
+            "waitingText": "",
+        },
+        {
+            "name": "AI Extraction",
+            "icon": "troubleshoot",
+            "status": "pending",
+            "timestamp": None,
+            "details": None,
+            "description": None,
+            "waitingText": PATHWAY_WAITING_TEXT[1],
+        },
+        {
+            "name": "Policy Check",
+            "icon": "rule",
+            "status": "pending",
+            "timestamp": None,
+            "details": None,
+            "description": None,
+            "waitingText": PATHWAY_WAITING_TEXT[2],
+        },
+        {
+            "name": "Claim Submission",
+            "icon": "send",
+            "status": "pending",
+            "timestamp": None,
+            "details": None,
+            "description": None,
+            "waitingText": PATHWAY_WAITING_TEXT[3],
+        },
     ]
 
     # Step 0: Receipt Uploaded
@@ -205,7 +244,11 @@ def _extractExtractionDetails(toolOutput) -> dict | None:
         if isinstance(toolOutput, str):
             data = json.loads(toolOutput)
         elif hasattr(toolOutput, "content"):
-            data = json.loads(toolOutput.content) if isinstance(toolOutput.content, str) else toolOutput.content
+            data = (
+                json.loads(toolOutput.content)
+                if isinstance(toolOutput.content, str)
+                else toolOutput.content
+            )
         else:
             data = toolOutput
 
@@ -217,7 +260,14 @@ def _extractExtractionDetails(toolOutput) -> dict | None:
 
         if isinstance(confidence, dict) and confidence:
             scores = [float(v) for v in confidence.values() if isinstance(v, (int, float))]
-            avgConfidence = round((sum(scores) / len(scores)) * 100 if scores and all(s <= 1 for s in scores) else sum(scores) / len(scores) if scores else 0, 1)
+            avgConfidence = round(
+                (sum(scores) / len(scores)) * 100
+                if scores and all(s <= 1 for s in scores)
+                else sum(scores) / len(scores)
+                if scores
+                else 0,
+                1,
+            )
         elif isinstance(confidence, (int, float)):
             avgConfidence = round(confidence * 100 if confidence <= 1 else confidence, 1)
         else:
@@ -235,6 +285,56 @@ def _extractExtractionDetails(toolOutput) -> dict | None:
         }
     except Exception:
         return None
+
+
+def _decodeToolOutput(toolOutput):
+    """Decode LangChain tool output into a Python value when possible."""
+    if isinstance(toolOutput, str):
+        try:
+            return json.loads(toolOutput)
+        except (json.JSONDecodeError, TypeError):
+            return toolOutput
+    if hasattr(toolOutput, "content"):
+        content = toolOutput.content
+        if isinstance(content, str):
+            try:
+                return json.loads(content)
+            except (json.JSONDecodeError, TypeError):
+                return content
+        return content
+    return toolOutput
+
+
+def _toolOutputError(toolOutput) -> str | None:
+    """Return a tool error string from dict/string outputs, if present."""
+    decoded = _decodeToolOutput(toolOutput)
+    if isinstance(decoded, dict) and decoded.get("error"):
+        return str(decoded["error"])
+    if isinstance(decoded, str) and "error" in decoded.lower():
+        return decoded
+    return None
+
+
+def _currencyCorrectionMessage(errorText: str) -> str | None:
+    """Map currency conversion errors to a single user correction request."""
+    lowered = errorText.lower()
+    if "currency" not in lowered and "frankfurter" not in lowered and "422" not in lowered:
+        return None
+    return " ".join(
+        [
+            "I could not convert the receipt amount because the receipt currency was missing",
+            "or invalid. Please tell me the currency shown on the receipt using a",
+            "3-letter code such as SGD, USD, EUR, or JPY, and I will continue.",
+        ]
+    )
+
+
+def _stateHasToolResult(stateValues: dict, toolName: str) -> bool:
+    """Return true when prior graph messages include a completed tool result."""
+    for msg in stateValues.get("messages", []):
+        if getattr(msg, "name", None) == toolName:
+            return True
+    return False
 
 
 async def _getFallbackMessage(graph, config: dict) -> str:
@@ -286,7 +386,9 @@ def _calcProgressPct(thinkingEntries: list, graphState: dict | None) -> int:
     return 0
 
 
-def _extractSummaryData(thinkingEntries: list, graphState: dict | None = None, claimId: str = "") -> dict | None:
+def _extractSummaryData(
+    thinkingEntries: list, graphState: dict | None = None, claimId: str = ""
+) -> dict | None:
     """Extract summary panel data from tool outputs and graph state.
 
     Uses thinkingEntries (current turn's tool outputs) first, then falls
@@ -303,8 +405,7 @@ def _extractSummaryData(thinkingEntries: list, graphState: dict | None = None, c
     extractedClaimNumber = ""
 
     submitCallInEntries = any(
-        e.get("name") == "submitClaim" and e.get("type") == "tool"
-        for e in thinkingEntries
+        e.get("name") == "submitClaim" and e.get("type") == "tool" for e in thinkingEntries
     )
 
     hasReceiptData = False
@@ -369,7 +470,9 @@ def _extractSummaryData(thinkingEntries: list, graphState: dict | None = None, c
 
         conversionData = graphState.get("currencyConversion")
         if isinstance(conversionData, dict) and not convertedAmount:
-            convertedAmount = str(conversionData.get("convertedAmount", conversionData.get("amountSgd", "")))
+            convertedAmount = str(
+                conversionData.get("convertedAmount", conversionData.get("amountSgd", ""))
+            )
 
     # Check graphState claimSubmitted regardless of hasReceiptData
     # (prior turn may have submitted while current turn has new receipt data)
@@ -384,7 +487,10 @@ def _extractSummaryData(thinkingEntries: list, graphState: dict | None = None, c
     # did submit). But if submitted was set from thinkingEntries parsing and
     # there's no actual submitClaim entry, suppress it (hallucination).
     if submitted and not submitCallInEntries and not graphState.get("claimSubmitted"):
-        logger.warning("BUG-013: _extractSummaryData suppressing submitted=True — no submitClaim in thinkingEntries and graphState not submitted")
+        logger.warning(
+            "BUG-013: _extractSummaryData suppressing submitted=True; "
+            "no submitClaim in thinkingEntries and graphState not submitted"
+        )
         submitted = False
         extractedClaimNumber = ""
 
@@ -527,7 +633,9 @@ async def runPostSubmissionAgents(graph, threadId: str, claimId: str):
         await graph.ainvoke(None, config=config)
         logger.info("Background post-submission completed for claim %s", claimId)
     except Exception as e:
-        logger.error("Background post-submission failed for claim %s: %s", claimId, e, exc_info=True)
+        logger.error(
+            "Background post-submission failed for claim %s: %s", claimId, e, exc_info=True
+        )
 
 
 async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2Templates):
@@ -538,10 +646,19 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     iteration to break on client disconnect.
     """
     settings = getSettings()
-    logger.info(
-        "runGraph started: threadId=%s, isResume=%s",
-        graphInput.get("threadId"),
-        graphInput.get("isResume"),
+    logEvent(
+        logger,
+        "agent.turn_started",
+        logCategory="agent",
+        actorType="agent",
+        agent="intake",
+        employeeId=employeeIdVar.get(None),
+        claimId=graphInput.get("claimId"),
+        draftClaimNumber=f"DRAFT-{graphInput.get('claimId', '')[:8]}",
+        threadId=graphInput.get("threadId"),
+        status="started",
+        payload={"graphInput": graphInput},
+        message="Intake agent turn started",
     )
     thinkingEntries = []
     tokenBuffer = ""
@@ -567,17 +684,14 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     # Submission table state (in-memory claims accumulated during the turn)
     tableClaims: list[dict] = []
 
-
     if hasImage:
         pathwayToolTimestamps["receiptUploaded"] = _nowTimestamp()
 
     threadId = graphInput["threadId"]
     config = {"configurable": {"thread_id": threadId}}
 
-    # BUG-024 fix: only detect hasImage from prior state (so "Receipt Uploaded"
-    # shows as completed if the image was uploaded in a prior turn during
-    # clarification). Do NOT pre-populate pathwayCompletedTools — only
-    # on_tool_start/on_tool_end events from the CURRENT stream should drive it.
+    # Seed pathway from prior state so navigation/resume keeps completed steps
+    # monotonic. Current-stream tool events can only advance these states.
     try:
         t0 = time.time()
         priorState = await graph.aget_state(config=config)
@@ -586,8 +700,20 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             sv = priorState.values
             if sv.get("extractedReceipt"):
                 hasImage = True
+                pathwayCompletedTools.add("extractReceiptFields")
+                pathwayExtractionDetails = _extractExtractionDetails(sv.get("extractedReceipt"))
                 if "receiptUploaded" not in pathwayToolTimestamps:
                     pathwayToolTimestamps["receiptUploaded"] = _nowTimestamp()
+                pathwayToolTimestamps.setdefault("extractReceiptFields", _nowTimestamp())
+            if _stateHasToolResult(sv, "searchPolicies"):
+                pathwayCompletedTools.add("searchPolicies")
+                pathwayCompletedTools.add("extractReceiptFields")
+                pathwayToolTimestamps.setdefault("searchPolicies", _nowTimestamp())
+            if sv.get("claimSubmitted") or _stateHasToolResult(sv, "submitClaim"):
+                pathwayCompletedTools.update(
+                    {"extractReceiptFields", "searchPolicies", "submitClaim"}
+                )
+                pathwayToolTimestamps.setdefault("submitClaim", _nowTimestamp())
     except Exception as e:
         logger.debug(f"Could not check prior state for hasImage: {e}")
 
@@ -595,8 +721,16 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
 
     # Initial pathway state
     try:
-        initialSteps = _buildPathwaySteps(pathwayCompletedTools, pathwayActiveTools, hasImage, pathwayToolTimestamps)
-        pathwayHtml = templates.get_template("partials/decision_pathway.html").render(steps=initialSteps)
+        initialSteps = _buildPathwaySteps(
+            pathwayCompletedTools,
+            pathwayActiveTools,
+            hasImage,
+            pathwayToolTimestamps,
+            pathwayExtractionDetails,
+        )
+        pathwayHtml = templates.get_template("partials/decision_pathway.html").render(
+            steps=initialSteps
+        )
         yield ServerSentEvent(raw_data=pathwayHtml, event=SseEvent.PATHWAY_UPDATE)
     except Exception as e:
         logger.error(f"Error rendering initial pathway: {e}", exc_info=True)
@@ -616,12 +750,18 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 break
 
             eventKind = event.get("event")
-            logger.info("astream_events event: %s - %s", eventKind, event.get("name", ""))
+            logger.debug("astream_events event: %s - %s", eventKind, event.get("name", ""))
 
             if eventKind == "on_chain_start" and shouldTerminateEarly:
                 # BUG-027/029: intakeNode has checkpointed — break before post-submission nodes
                 nodeName = event.get("name", "")
-                if nodeName in ("postSubmission", "compliance", "fraud", "advisor", "markAiReviewed"):
+                if nodeName in (
+                    "postSubmission",
+                    "compliance",
+                    "fraud",
+                    "advisor",
+                    "markAiReviewed",
+                ):
                     break
 
             if eventKind == "on_chat_model_stream":
@@ -631,7 +771,9 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 chunk = event.get("data", {}).get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     tokenBuffer += chunk.content
-                    if settings.enable_response_streaming and (not hadAnyToolCall or pendingToolCalls == 0):
+                    if settings.enable_response_streaming and (
+                        not hadAnyToolCall or pendingToolCalls == 0
+                    ):
                         yield ServerSentEvent(raw_data=chunk.content, event=SseEvent.TOKEN)
 
                 if chunk:
@@ -683,7 +825,9 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             event=SseEvent.STEP_NAME,
                         )
                         yield ServerSentEvent(
-                            raw_data=f'<div class="text-xs text-outline/50 italic mt-1">{preview}</div>',
+                            raw_data=(
+                                f'<div class="text-xs text-outline/50 italic mt-1">{preview}</div>'
+                            ),
                             event=SseEvent.STEP_CONTENT,
                         )
                     tokenBuffer = ""
@@ -705,10 +849,14 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             event=SseEvent.STEP_NAME,
                         )
                         yield ServerSentEvent(
-                            raw_data=f'<div class="text-xs text-outline/50 italic mt-1">{preview}</div>',
+                            raw_data=(
+                                f'<div class="text-xs text-outline/50 italic mt-1">{preview}</div>'
+                            ),
                             event=SseEvent.STEP_CONTENT,
                         )
-                    yield ServerSentEvent(raw_data="Preparing response...", event=SseEvent.STEP_NAME)
+                    yield ServerSentEvent(
+                        raw_data="Preparing response...", event=SseEvent.STEP_NAME
+                    )
                     # BUG-016: only capture the first non-empty finalResponse. The
                     # intake agent's confirmation message is the first non-tool
                     # on_chat_model_end. Post-submission agents (compliance, fraud,
@@ -732,6 +880,21 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 toolStartTimes[toolName] = time.time()
                 pendingToolCalls += 1
                 hadAnyToolCall = True
+                logEvent(
+                    logger,
+                    "tool.start",
+                    logCategory="agent",
+                    actorType="agent",
+                    agent="intake",
+                    employeeId=employeeIdVar.get(None),
+                    claimId=graphInput.get("claimId"),
+                    draftClaimNumber=f"DRAFT-{graphInput.get('claimId', '')[:8]}",
+                    threadId=threadId,
+                    toolName=toolName,
+                    status="started",
+                    payload={"input": event.get("data", {}).get("input")},
+                    message="Intake tool started",
+                )
                 label = TOOL_LABELS.get(toolName, f"Running {toolName}...")
                 yield ServerSentEvent(raw_data=label, event=SseEvent.STEP_NAME)
 
@@ -740,8 +903,16 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     pathwayActiveTools.add(toolName)
                     pathwayToolTimestamps[toolName] = _nowTimestamp()
                     try:
-                        steps = _buildPathwaySteps(pathwayCompletedTools, pathwayActiveTools, hasImage, pathwayToolTimestamps, pathwayExtractionDetails)
-                        pathwayHtml = templates.get_template("partials/decision_pathway.html").render(steps=steps)
+                        steps = _buildPathwaySteps(
+                            pathwayCompletedTools,
+                            pathwayActiveTools,
+                            hasImage,
+                            pathwayToolTimestamps,
+                            pathwayExtractionDetails,
+                        )
+                        pathwayHtml = templates.get_template(
+                            "partials/decision_pathway.html"
+                        ).render(steps=steps)
                         yield ServerSentEvent(raw_data=pathwayHtml, event=SseEvent.PATHWAY_UPDATE)
                     except Exception as e:
                         logger.error(f"Error rendering pathway on tool start: {e}", exc_info=True)
@@ -752,6 +923,25 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 startTime = toolStartTimes.pop(toolName, None)
                 elapsed = time.time() - startTime if startTime else 0
                 summary = _summarizeToolOutput(toolName, toolOutput)
+                toolError = _toolOutputError(toolOutput)
+                logEvent(
+                    logger,
+                    "tool.end" if not toolError else "tool.error",
+                    level=logging.WARNING if toolError else logging.INFO,
+                    logCategory="agent",
+                    actorType="agent",
+                    agent="intake",
+                    employeeId=employeeIdVar.get(None),
+                    claimId=graphInput.get("claimId"),
+                    draftClaimNumber=f"DRAFT-{graphInput.get('claimId', '')[:8]}",
+                    threadId=threadId,
+                    toolName=toolName,
+                    status="failed" if toolError else "completed",
+                    elapsedMs=round(elapsed * 1000),
+                    errorType="ToolError" if toolError else None,
+                    payload={"output": toolOutput, "error": toolError},
+                    message="Intake tool failed" if toolError else "Intake tool completed",
+                )
                 thinkingEntries.append(
                     {
                         "type": "tool",
@@ -766,19 +956,56 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     event=SseEvent.STEP_CONTENT,
                 )
 
+                if toolName == "convertCurrency" and toolError:
+                    correctionMessage = _currencyCorrectionMessage(toolError)
+                    if correctionMessage:
+                        finalResponse = correctionMessage
+                        pendingToolCalls = 0
+                        logEvent(
+                            logger,
+                            "tool.blocking_user_correction_requested",
+                            level=logging.WARNING,
+                            logCategory="chat_history",
+                            actorType="agent",
+                            agent="intake",
+                            employeeId=employeeIdVar.get(None),
+                            claimId=graphInput.get("claimId"),
+                            draftClaimNumber=f"DRAFT-{graphInput.get('claimId', '')[:8]}",
+                            threadId=threadId,
+                            toolName=toolName,
+                            status="blocked",
+                            payload={"error": toolError, "finalResponse": correctionMessage},
+                            message="Blocking currency correction requested",
+                        )
+                        break
+
                 # Pathway: mark tool as completed
-                if toolName in TOOL_TO_STEP:
+                if toolName in TOOL_TO_STEP and not toolError:
                     pathwayActiveTools.discard(toolName)
                     pathwayCompletedTools.add(toolName)
                     pathwayToolTimestamps[toolName] = _nowTimestamp()
                     if toolName == "submitClaim" and "searchPolicies" not in pathwayCompletedTools:
                         pathwayCompletedTools.add("searchPolicies")
                         pathwayToolTimestamps["searchPolicies"] = _nowTimestamp()
+                    if (
+                        toolName in ("searchPolicies", "submitClaim")
+                        and "extractReceiptFields" not in pathwayCompletedTools
+                    ):
+                        pathwayCompletedTools.add("extractReceiptFields")
+                        pathwayToolTimestamps["extractReceiptFields"] = _nowTimestamp()
                     if toolName == "extractReceiptFields":
                         pathwayExtractionDetails = _extractExtractionDetails(toolOutput)
                     try:
-                        steps = _buildPathwaySteps(pathwayCompletedTools, pathwayActiveTools, hasImage, pathwayToolTimestamps, pathwayExtractionDetails)
-                        pathwayHtml = templates.get_template("partials/decision_pathway.html").render(steps=steps)
+                        steps = _buildPathwaySteps(
+                            pathwayCompletedTools,
+                            pathwayActiveTools,
+                            hasImage,
+                            pathwayToolTimestamps,
+                            pathwayExtractionDetails,
+                        )
+                        pathwayHtml = templates.get_template(
+                            "partials/decision_pathway.html"
+                        ).render(steps=steps)
                         yield ServerSentEvent(raw_data=pathwayHtml, event=SseEvent.PATHWAY_UPDATE)
                     except Exception as e:
                         logger.error(f"Error rendering pathway on tool end: {e}", exc_info=True)
@@ -787,14 +1014,20 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 if toolName == "extractReceiptFields":
                     details = _extractExtractionDetails(toolOutput)
                     if details:
-                        tableClaims.append({
-                            "merchant": details.get("merchant", "Processing..."),
-                            "receipt_date": details.get("date", "--"),
-                            "total_amount": details.get("amount", "--").replace("SGD ", "").replace("USD ", ""),
-                            "currency": "SGD",
-                            "status": "processing",
-                            "created_at": datetime.now(ZoneInfo("Asia/Singapore")).strftime("%Y-%m-%d %H:%M"),
-                        })
+                        tableClaims.append(
+                            {
+                                "merchant": details.get("merchant", "Processing..."),
+                                "receipt_date": details.get("date", "--"),
+                                "total_amount": details.get("amount", "--")
+                                .replace("SGD ", "")
+                                .replace("USD ", ""),
+                                "currency": "SGD",
+                                "status": "processing",
+                                "created_at": datetime.now(ZoneInfo("Asia/Singapore")).strftime(
+                                    "%Y-%m-%d %H:%M"
+                                ),
+                            }
+                        )
                 elif toolName == "submitClaim":
                     if tableClaims:
                         tableClaims[-1]["status"] = "submitted"
@@ -809,7 +1042,11 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             dbClaims = await fetchClaimsForTable(employeeId=employeeIdVar.get(None))
                             if dbClaims:
                                 renderClaims = dbClaims
-                        sessionTotal = sum(float(c.get("total_amount", 0) or 0) for c in renderClaims if c.get("total_amount") and str(c.get("total_amount")) != "--")
+                        sessionTotal = sum(
+                            float(c.get("total_amount", 0) or 0)
+                            for c in renderClaims
+                            if c.get("total_amount") and str(c.get("total_amount")) != "--"
+                        )
                         tableHtml = templates.get_template("partials/submission_table.html").render(
                             claims=renderClaims,
                             sessionTotal=f"SGD {sessionTotal:.2f}",
@@ -882,7 +1119,9 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 if claimNumber:
                     updateValues["claimNumber"] = claimNumber
                 await graph.aupdate_state(config=config, values=updateValues)
-                logger.info("Force-updated graph state: claimSubmitted=True, dbClaimId=%s", dbClaimId)
+                logger.info(
+                    "Force-updated graph state: claimSubmitted=True, dbClaimId=%s", dbClaimId
+                )
             except Exception as e:
                 logger.error(f"Failed to force-update graph state: {e}", exc_info=True)
 
@@ -923,14 +1162,18 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         for c in dbClaims
                         if c.get("total_amount") and str(c.get("total_amount")) != "--"
                     )
-                    finalTableHtml = templates.get_template("partials/submission_table.html").render(
+                    finalTableHtml = templates.get_template(
+                        "partials/submission_table.html"
+                    ).render(
                         claims=dbClaims,
                         sessionTotal=f"SGD {sessionTotal:.2f}",
                         itemCount=len(dbClaims),
                     )
                     yield ServerSentEvent(raw_data=finalTableHtml, event=SseEvent.TABLE_UPDATE)
             except Exception as e:
-                logger.error(f"Error rendering final table update after advisor: {e}", exc_info=True)
+                logger.error(
+                    f"Error rendering final table update after advisor: {e}", exc_info=True
+                )
 
         # Check for interrupt via graph state
         try:
@@ -975,23 +1218,30 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     if finalText:
         submittedInText = "submitted" in finalText.lower() or "CLAIM-" in finalText
         submitCallMade = any(
-            e.get("name") == "submitClaim"
-            for e in thinkingEntries
-            if e.get("type") == "tool"
+            e.get("name") == "submitClaim" for e in thinkingEntries if e.get("type") == "tool"
         )
         if submittedInText and not submitCallMade:
-            logger.warning("BUG-013: Hallucinated submission detected — AI claimed submission without submitClaim tool call")
+            logger.warning(
+                "BUG-013: Hallucinated submission detected; "
+                "AI claimed submission without submitClaim tool call"
+            )
             try:
                 template = templates.get_template("partials/message_bubble.html")
                 errorHtml = template.render(
-                    content="I encountered an issue submitting your claim. The submission did not complete. Please try again by typing 'submit' or 'yes'.",
+                    content=(
+                        "I encountered an issue submitting your claim. The submission did "
+                        "not complete. Please try again by typing 'submit' or 'yes'."
+                    ),
                     isAi=True,
                     confidenceScores=None,
                     violations=None,
                     timestamp=datetime.now(ZoneInfo("Asia/Singapore")).strftime("%-I:%M %p"),
                 )
             except Exception:
-                errorHtml = '<div class="ai-message">I encountered an issue submitting your claim. Please try again by typing "submit".</div>'
+                errorHtml = (
+                    '<div class="ai-message">I encountered an issue submitting your claim. '
+                    'Please try again by typing "submit".</div>'
+                )
             yield ServerSentEvent(raw_data=errorHtml, event=SseEvent.MESSAGE)
             return
 
@@ -1010,4 +1260,18 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
         except Exception:
             messageHtml = f'<div class="ai-message">{finalText}</div>'
         yield ServerSentEvent(raw_data=messageHtml, event=SseEvent.MESSAGE)
-        logger.info("Message yielded: %d chars", len(finalText))
+        logEvent(
+            logger,
+            "assistant.chat_message_rendered",
+            logCategory="chat_history",
+            actorType="agent",
+            agent="intake",
+            employeeId=employeeIdVar.get(None),
+            claimId=graphInput.get("claimId"),
+            draftClaimNumber=f"DRAFT-{graphInput.get('claimId', '')[:8]}",
+            threadId=threadId,
+            claimNumber=summaryData.get("claimNumber") if summaryData else None,
+            status="rendered",
+            payload={"message": finalText},
+            message="Assistant chat message rendered",
+        )

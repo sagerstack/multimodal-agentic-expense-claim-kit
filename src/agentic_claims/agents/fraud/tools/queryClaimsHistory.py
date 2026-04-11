@@ -43,6 +43,7 @@ async def exactDuplicateCheck(
     merchant: str,
     receiptDate: str,
     amountSgd: float,
+    excludeClaimId: int | None = None,
 ) -> list[dict]:
     """Query for claims that match employee + merchant + date + amount exactly.
 
@@ -63,6 +64,9 @@ async def exactDuplicateCheck(
     safeMerchant = _sanitize(merchant)
     safeDate = _sanitize(receiptDate[:10] if receiptDate else "")
     safeAmount = float(amountSgd)
+    excludeClause = ""
+    if excludeClaimId is not None:
+        excludeClause = f" AND c.id != {int(excludeClaimId)}"
 
     query = f"""
         SELECT
@@ -82,13 +86,20 @@ async def exactDuplicateCheck(
           AND r.merchant ILIKE '{safeMerchant}'
           AND r.date::text LIKE '{safeDate}%'
           AND ABS(c.total_amount - {safeAmount}) < 0.01
+          {excludeClause}
         ORDER BY c.created_at DESC
         LIMIT 10
     """
 
     logger.info(
         "exactDuplicateCheck query",
-        extra={"employeeId": employeeId, "merchant": merchant, "date": receiptDate, "amount": amountSgd},
+        extra={
+            "employeeId": employeeId,
+            "merchant": merchant,
+            "date": receiptDate,
+            "amount": amountSgd,
+            "excludeClaimId": excludeClaimId,
+        },
     )
 
     result = await mcpCallTool(

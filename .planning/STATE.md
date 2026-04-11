@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Milestone v2.0 — Phase 8.2 complete, Phase 8.1 and 10 remain
+**Current focus:** Milestone v2.0 — Phase 8.2 complete, Phase 8.1, 10, 11, and 12 remain
 
 ## Current Position
 
@@ -15,7 +15,7 @@ Status: All plans executed and verified. Advisor LLM reasoning captured, review 
 Last activity: 2026-04-08 — Phase 8.2 verification passed
 
 ```
-v2.0 Progress: [##########################] 26/32 plans
+v2.0 Progress: [##########################] 26/38 plans
 Phase 6:       [##########] 3/3 plans (complete)
 Phase 7:       [##########] 3/3 plans (complete)
 Phase 6.1:     [##########] complete
@@ -25,6 +25,8 @@ Phase 8:       [##########] 5/5 plans (complete)
 Phase 8.1:     [####......] 0/4 plans (in progress — bugs documented)
 Phase 8.2:     [##########] 3/3 plans (complete)
 Phase 10:      [..........] 0/2 plans
+Phase 11:      [..........] 0/? plans (not planned)
+Phase 12:      [..........] 0/4 plans (not started)
 ```
 
 ## Performance Metrics
@@ -120,5 +122,6 @@ Resume file: None
 
 - v1.0 archived to MILESTONES.md (24/26 plans across phases 1–2.5)
 - v2.0 milestone started: Phases 6–10, 14 plans total
+- Phase 11 added: Intake Multi-Turn Fix — restore askHuman interrupt for multi-turn confirmation flow (2026-04-11)
 - Phase 6 completed: 2026-04-01 (3 plans, 3 waves)
 - Phase 7 completed: 2026-04-02 (3 plans, 3 waves, 36 new tests, browser UAT passed)

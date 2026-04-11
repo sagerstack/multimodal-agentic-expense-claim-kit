@@ -13,8 +13,8 @@ from starlette.responses import Response
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.imageStore import clearImage, getImage, getImagePath, storeImage
+from agentic_claims.core.logging import logEvent
 from agentic_claims.web.employeeIdContext import employeeIdVar
-from agentic_claims.web.employeeIdExtractor import extractEmployeeId
 from agentic_claims.web.imagePathContext import imagePathVar
 from agentic_claims.web.session import getSessionIds
 from agentic_claims.web.sessionQueues import getOrCreateQueue, removeQueue
@@ -44,9 +44,28 @@ async def postMessage(
         storeImage(claimId, imageB64)
         hasImage = True
 
-    extractedId = extractEmployeeId(message)
-    if extractedId:
-        request.session["employee_id"] = extractedId
+    employeeId = request.session.get("employee_id")
+    username = request.session.get("username")
+    draftClaimNumber = f"DRAFT-{claimId[:8]}"
+    logEvent(
+        logger,
+        "user.chat_message_submitted",
+        logCategory="chat_history",
+        actorType="user",
+        userId=username,
+        username=username,
+        employeeId=employeeId,
+        claimId=claimId,
+        draftClaimNumber=draftClaimNumber,
+        threadId=threadId,
+        status="received",
+        payload={
+            "message": message,
+            "receiptFilename": receipt.filename if receipt else None,
+            "hasImage": hasImage,
+        },
+        message="User chat message submitted",
+    )
 
     # Create draft claim on first message in session
     if not request.session.get("draft_created"):
@@ -56,8 +75,8 @@ async def postMessage(
                 serverUrl=settings.db_mcp_url,
                 toolName="insertClaim",
                 arguments={
-                    "claimNumber": f"DRAFT-{claimId[:8]}",
-                    "employeeId": request.session["employee_id"],
+                    "claimNumber": draftClaimNumber,
+                    "employeeId": employeeId,
                     "status": "draft",
                     "totalAmount": 0,
                     "currency": "SGD",
@@ -71,9 +90,40 @@ async def postMessage(
                 if isinstance(claimData, dict) and "id" in claimData:
                     request.session["draft_claim_id"] = claimData["id"]
             request.session["draft_created"] = True
-            logger.info("Draft claim created for session claimId=%s", claimId)
+            logEvent(
+                logger,
+                "claim.draft_created",
+                logCategory="chat_history",
+                actorType="app",
+                userId=username,
+                username=username,
+                employeeId=employeeId,
+                claimId=claimId,
+                dbClaimId=request.session.get("draft_claim_id"),
+                draftClaimNumber=draftClaimNumber,
+                threadId=threadId,
+                status="completed",
+                payload={"result": draftResult},
+                message="Draft claim created",
+            )
         except Exception as e:
-            logger.warning("Failed to create draft claim: %s", e)
+            logEvent(
+                logger,
+                "claim.draft_failed",
+                level=logging.WARNING,
+                logCategory="chat_history",
+                actorType="app",
+                userId=username,
+                username=username,
+                employeeId=employeeId,
+                claimId=claimId,
+                draftClaimNumber=draftClaimNumber,
+                threadId=threadId,
+                status="failed",
+                errorType=type(e).__name__,
+                payload={"error": str(e)},
+                message="Draft claim creation failed",
+            )
 
     awaitingClarification = request.session.get("awaiting_clarification", False)
 
@@ -112,7 +162,21 @@ async def streamChat(request: Request):
             yield ServerSentEvent(comment="ping")
             continue
 
-        logger.info("Queue got input: threadId=%s", graphInput.get("threadId"))
+        logEvent(
+            logger,
+            "agent.turn_queued",
+            logCategory="agent",
+            actorType="app",
+            employeeId=request.session.get("employee_id"),
+            username=request.session.get("username"),
+            agent="intake",
+            claimId=sessionIds["claimId"],
+            draftClaimNumber=f"DRAFT-{sessionIds['claimId'][:8]}",
+            threadId=graphInput.get("threadId"),
+            status="queued",
+            payload={"graphInput": graphInput},
+            message="Agent turn queued",
+        )
 
         try:
             employeeIdVar.set(request.session.get("employee_id"))
@@ -121,7 +185,20 @@ async def streamChat(request: Request):
             async for sseEvent in runGraph(graph, graphInput, request, templates):
                 yield sseEvent
 
-            logger.info("Stream complete, yielding done event")
+            logEvent(
+                logger,
+                "agent.turn_stream_completed",
+                logCategory="agent",
+                actorType="app",
+                employeeId=request.session.get("employee_id"),
+                username=request.session.get("username"),
+                agent="intake",
+                claimId=sessionIds["claimId"],
+                draftClaimNumber=f"DRAFT-{sessionIds['claimId'][:8]}",
+                threadId=graphInput.get("threadId"),
+                status="completed",
+                message="Agent turn stream completed",
+            )
         except Exception as e:
             logger.exception("SSE stream error: %s", e)
             yield ServerSentEvent(raw_data=str(e), event="error")
@@ -139,7 +216,9 @@ async def streamChat(request: Request):
                 )
             )
             request.state.backgroundTask = None
-            logger.info("Background post-submission task launched for claim %s", backgroundTask["claimId"])
+            logger.info(
+                "Background post-submission task launched for claim %s", backgroundTask["claimId"]
+            )
 
 
 @router.get("/chat/receipt-image")
@@ -171,6 +250,20 @@ async def resetChat(request: Request):
     request.session.pop("draft_created", None)
     request.session.pop("draft_claim_id", None)
 
+    logEvent(
+        logger,
+        "chat.reset",
+        logCategory="chat_history",
+        actorType="user",
+        employeeId=request.session.get("employee_id"),
+        username=request.session.get("username"),
+        claimId=request.session["claim_id"],
+        threadId=request.session["thread_id"],
+        status="completed",
+        payload={"oldClaimId": oldClaimId, "oldThreadId": oldThreadId},
+        message="Chat reset",
+    )
+
     return Response(status_code=204, headers={"HX-Redirect": "/"})
 
 
@@ -183,7 +276,7 @@ async def fetchClaimsForTable(employeeId: str | None = None) -> list[dict]:
         settings = getSettings()
         query = (
             "SELECT c.id, c.claim_number, c.employee_id, c.status, "
-            "c.total_amount, c.currency, c.created_at, "
+            "c.total_amount, c.currency, c.category, c.created_at, "
             "r.merchant, r.date as receipt_date, "
             "r.original_amount, r.original_currency, r.converted_amount_sgd, "
             "r.line_items "
@@ -213,9 +306,11 @@ async def fetchClaimsForTable(employeeId: str | None = None) -> list[dict]:
                     except Exception:
                         row["created_at"] = rawTs[:16].replace("T", " ")
 
-                # Extract category from line_items JSON
-                lineItems = row.get("line_items")
-                if lineItems:
+                if not row.get("category"):
+                    lineItems = row.get("line_items")
+                    if not lineItems:
+                        row["category"] = "--"
+                        continue
                     try:
                         import json as _json
 
@@ -226,8 +321,6 @@ async def fetchClaimsForTable(employeeId: str | None = None) -> list[dict]:
                             row["category"] = "--"
                     except Exception:
                         row["category"] = "--"
-                else:
-                    row["category"] = "--"
 
             return result
         if isinstance(result, dict) and "error" in result:

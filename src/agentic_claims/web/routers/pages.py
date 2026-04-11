@@ -1,17 +1,17 @@
 """Page route handlers for all application pages."""
 
-import uuid
+import logging
 
 from fastapi import APIRouter
 from starlette.requests import Request
 
-from agentic_claims.core.imageStore import clearImage
+from agentic_claims.core.logging import logEvent
 from agentic_claims.web.auth import getCurrentUser
 from agentic_claims.web.routers.chat import fetchClaimsForTable
 from agentic_claims.web.session import getSessionIds
-from agentic_claims.web.sessionQueues import removeQueue
 from agentic_claims.web.templating import templates
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -19,23 +19,26 @@ router = APIRouter()
 async def chatPage(request: Request):
     """Render the AI Expense Submission chat page.
 
-    Generates fresh thread_id and claim_id on every page load to match
-    Chainlit's on_chat_start behavior. This ensures the checkpointer
-    starts with a clean slate — no stale conversation history.
+    Reuses the active thread_id and claim_id so navigating away and back keeps
+    the current conversation. Fresh IDs are created only by /chat/reset,
+    logout, or the New Claim button that calls reset.
     """
-    oldClaimId = request.session.get("claim_id")
-    oldThreadId = request.session.get("thread_id")
-    if oldClaimId:
-        clearImage(oldClaimId)
-    if oldThreadId:
-        removeQueue(oldThreadId)
-
-    request.session["thread_id"] = str(uuid.uuid4())
-    request.session["claim_id"] = str(uuid.uuid4())
-    request.session.pop("awaiting_clarification", None)
-
     sessionIds = getSessionIds(request)
     currentUser = getCurrentUser(request)
+    logEvent(
+        logger,
+        "chat.page_loaded",
+        logCategory="chat_history",
+        actorType="user",
+        userId=currentUser["username"],
+        username=currentUser["username"],
+        employeeId=currentUser["employeeId"],
+        claimId=sessionIds["claimId"],
+        draftClaimNumber=f"DRAFT-{sessionIds['claimId'][:8]}",
+        threadId=sessionIds["threadId"],
+        status="loaded",
+        message="Chat page loaded with existing session",
+    )
 
     _pending = {"status": "pending", "timestamp": None, "details": None, "description": None}
     initialSteps = [

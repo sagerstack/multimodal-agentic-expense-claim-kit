@@ -28,7 +28,7 @@
        @dragleave="$el.classList.remove('ring-2', 'ring-secondary/50')"
        @drop.prevent="handleDrop($event)">
     <!-- System Greeting -->
-    <div class="flex gap-4 max-w-2xl">
+    <div id="systemGreeting" class="flex gap-4 max-w-2xl">
       <div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0 border border-outline-variant/20">
         <span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
       </div>
@@ -181,6 +181,8 @@
 <script>
 function chatState() {
   return {
+    threadId: '{{ threadId }}',
+    historyStorageKey: '',
     processing: false,
     thinkingCollapsed: false,
     turnDone: false,
@@ -190,6 +192,43 @@ function chatState() {
     activeToolName: 'Analyzing...',
     toolDuration: 0,
     toolTimer: null,
+
+    init() {
+      this.historyStorageKey = `claims.chat.history.${this.threadId}`;
+      this.restorePersistedHistory();
+    },
+
+    restorePersistedHistory() {
+      const savedHtml = window.localStorage ? window.localStorage.getItem(this.historyStorageKey) : null;
+      if (!savedHtml) return;
+      const thinkingPanel = document.getElementById('thinkingPanel');
+      if (thinkingPanel) {
+        thinkingPanel.insertAdjacentHTML('beforebegin', savedHtml);
+        this.renderMarkdownAndScroll();
+      }
+    },
+
+    persistHistory() {
+      if (!window.localStorage) return;
+      const greeting = document.getElementById('systemGreeting');
+      const thinkingPanel = document.getElementById('thinkingPanel');
+      if (!greeting || !thinkingPanel) return;
+      const parts = [];
+      let node = greeting.nextSibling;
+      while (node && node !== thinkingPanel) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const clone = node.cloneNode(true);
+          clone.querySelectorAll('img[src^="blob:"]').forEach((img) => {
+            img.setAttribute('src', '/chat/receipt-image');
+          });
+          parts.push(clone.outerHTML);
+        } else if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+          parts.push(node.textContent);
+        }
+        node = node.nextSibling;
+      }
+      window.localStorage.setItem(this.historyStorageKey, parts.join(''));
+    },
 
     handleFileSelect(event) {
       const file = event.target.files[0];
@@ -306,6 +345,7 @@ function chatState() {
       // If message SSE hasn't arrived yet, keep turnDone=true
       // so onMessageSwapped() can do the move later.
       if (moved) this.turnDone = false;
+      this.persistHistory();
     },
 
     moveAiMessages() {
@@ -321,6 +361,7 @@ function chatState() {
       }
       // Clear any remaining text nodes
       if (moved) aiMessages.innerHTML = '';
+      if (moved) this.persistHistory();
       return moved;
     },
 
@@ -346,6 +387,7 @@ function chatState() {
         this.renderMarkdownAndScroll();
         this.turnDone = false;
       }
+      this.persistHistory();
     },
 
     appendUserBubble(text, imageUrl, imageName) {
@@ -379,6 +421,7 @@ function chatState() {
       if (thinkingPanel) thinkingPanel.insertAdjacentHTML('beforebegin', html);
       const chatHistory = document.getElementById('chatHistory');
       if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;
+      this.persistHistory();
     }
   };
 }

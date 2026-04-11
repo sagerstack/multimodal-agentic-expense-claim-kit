@@ -26,6 +26,8 @@ See MILESTONES.md for archived v1.0 details.
 - [x] **Phase 8: Compliance, Fraud + Advisor Agents** -- Replace stubs with LLM-powered agents: policy audit, duplicate/anomaly detection, decision routing (auto-approve, return, escalate)
 - [ ] **Phase 8.1: Bug Fixes + UX Polish** -- Fix Phase 8 QA bugs (BUG-016–025), restructure claim status lifecycle (8 statuses), Claims page "My Claims" section, draft status in table, LLM timeout handling
 - [ ] **Phase 10: Browser E2E Tests** -- Playwright test suite covering all 4 pages against a live server
+- [ ] **Phase 11: Intake Multi-Turn Fix** -- Restore askHuman interrupt tool so intake agent pauses for user confirmation between extraction, policy check, and submission phases
+- [ ] **Phase 12: DeepEval + RAGAs Evaluation Suite** -- 20 MMGA benchmark test cases scored via Playwright browser capture + deepeval/RAGAs metrics, results on Confident AI dashboard
 
 ---
 
@@ -335,10 +337,152 @@ Plans:
 
 ---
 
+### Phase 11: Intake Multi-Turn Fix
+
+**Goal:** The intake agent pauses for user confirmation between phases instead of running all 3 phases (extraction, policy check, submission) in a single ReAct loop. Restore the `askHuman` interrupt tool, update the system prompt TURN ROUTING, remove dead tools and UI elements, fix logging noise, and resolve currency correction UX issues.
+
+**Depends on:** Phase 8.2
+
+**Issues in scope:**
+
+| # | Summary | Source |
+|---|---------|--------|
+| 0 | **Observability for backend debugging** -- Logs must be transparent enough to debug any issue in the backend processing pipeline. Every agent action, model invocation, user prompt, LLM response, RAG-retrieved chunks, MCP tool call/result, and claim lifecycle event must be recorded. **Log levels:** INFO for summary events (what happened), DEBUG for detailed payloads (prompts, responses, tool args/results, RAG chunks). Suppress `on_chat_model_stream` noise (app-owned logger leaking at DEBUG). Structured fields via `logEvent()`: `logCategory` (chat_history, mcp_tool_call, agent), `claimNumber`, `draftClaimNumber`, `actorType`, `userId`, `employeeId`, `username`, `agent`, `claimId`, `dbClaimId`, `threadId`, `turnId`, `toolName`, `mcpServer`, `status`, `elapsedMs`, `errorType`. Local-only full payload logging with `redactForLogging()`. **Gap analysis (2026-04-11):** (a) `openrouter/client.py` has ZERO logging — add `llm.call_started`/`llm.call_completed`/`llm.call_failed` with elapsed time, model, retry count; (b) all 4 agent nodes (`intake`, `compliance`, `fraud`, `advisor`) use raw `logger.info()` — convert to `logEvent()` with `agent.node_started`/`agent.node_completed`/`agent.node_failed` + elapsed time; (c) `sseHelpers.py` has ~12 raw `logger.debug()`/`logger.error()` calls lacking structured fields, plus `on_chat_model_stream` DEBUG noise leak; (d) intake tools (`searchPolicies`, `convertCurrency`, `extractReceiptFields`, `getClaimSchema`) use raw `logger.info()` — add `tool.start`/`tool.end` with elapsed time, RAG query/result count/scores; (e) `chat.py:208-220` background task launch uses raw logger, no completion tracking; (f) `graph.py` `markAiReviewedNode` and `evaluatorGate` use raw logger without structured fields. Already good: `mcpClient.py` (excellent), `submitClaim.py`, `chat.py` user events, `auth.py` login/logout | Seq screenshot, codex plan-001, gap analysis |
+| 1 | Agent calls `sendNotification` tool during intake (CLAIM-006) -- remove `sendNotification` from advisor tools, update advisor system prompt, no email needed after submission | CLAIM-006 screenshot |
+| 2 | Remove "Yes, looks correct" and "Edit details" buttons from message bubbles -- they don't trigger any action and are misleading | Chat UI screenshot |
+| 3 | Decision Pathway does not reset when user says "yes" to uploading another receipt after submission | Manual test |
+| 4 | System prompt Phase 1 step 9 says "I will continue using your authenticated session details" -- this is internal implementation detail, should not be shown to user | System prompt review |
+| 5 | Currency correction flow: agent asks user to confirm currency but doesn't recognize bare currency code (e.g. "USD") -- user must say "currency code is USD". Check `_currencyCorrectionMessage` regex and system prompt handling | Manual test |
+| 6 | Unsupported currency stuck loop: when Frankfurter API returns 404 for an unsupported currency (e.g. VND), the agent asks the user to provide the currency code but then retries `convertCurrency` with the same unsupported code, looping indefinitely. User provides a manual exchange rate ("1 VND = 0.92 SGD") but agent rejects it and re-calls the failing API. Fix: allow user to supply a manual exchange rate override when Frankfurter doesn't support the currency, skip `convertCurrency` and use the user-provided rate for submission | CLAIM screenshot (VND 510000) |
+| MT | Core multi-turn fix: restore `askHuman` interrupt tool so agent pauses between extraction, policy check, and submission phases | Root cause of CLAIM-004 |
+
+**Success Criteria** (what must be TRUE when Phase 11 completes):
+1. After uploading a receipt, the agent extracts fields and presents them to the user, then STOPS and waits for confirmation -- the agent does NOT proceed to policy check or submission without the user responding
+2. After the user confirms extraction details, the agent performs the policy check, presents results, and STOPS -- asking the user to confirm or provide justification before submitting
+3. After the user confirms/justifies, the agent calls `submitClaim` and presents the confirmation
+4. The existing SSE interrupt/resume pipeline (`SseEvent.INTERRUPT`, `awaiting_clarification`, `Command(resume=...)`) handles the pause/resume correctly
+5. The Decision Pathway sidebar correctly maintains completed steps across interrupt/resume turns and resets when a new receipt flow starts
+6. Seq shows high-signal app events filterable by `logCategory`, `claimNumber`, `draftClaimNumber`, `agent`, `toolName`, and `mcpServer` — without `on_chat_model_stream` noise flooding. All chat turns, MCP calls, agent events, and tool invocations emit structured `logEvent()` calls with the full field set
+7. No `sendNotification` tool exists in the advisor agent tools
+8. No "Yes, looks correct" / "Edit details" buttons appear in message bubbles
+9. System prompt does not reveal internal implementation details (authenticated session, etc.) to the user
+10. User can type a bare currency code (e.g. "USD", "SGD") and the agent recognizes it as a currency correction
+11. When `convertCurrency` fails with a 404 (unsupported currency), the agent asks the user once and accepts a manual exchange rate override (e.g. "1 VND = 0.92 SGD") — it does NOT retry the failing API call in a loop
+12. All existing tests pass; tool count updated from 5 to 6 in intake agent test assertions
+
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 11 to break down)
+
+---
+
+### Phase 12: DeepEval + RAGAs Evaluation Suite
+
+**Goal:** A standalone evaluation suite runs the 20 MMGA benchmark test cases against the live agentic system through the actual browser UI. A Claude subagent drives Playwright to interact with the chat page for each benchmark (upload receipt, converse with agent, capture output). Captured results are enriched with DB data, then scored with deepeval (deterministic checks, GEval LLM-as-judge, HallucinationMetric) and RAGAs (retrieval quality). Results are pushed to Confident AI dashboard.
+
+**Depends on:** Phase 8 (all agents functional)
+
+**Benchmarks in scope:** 20 test cases (ER-001 to ER-020) across 5 categories from `eval/MMGA_evaluation_v2.pdf`
+
+**Architecture:**
+
+```
+Execution Flow:
+  1. Playwright capture  → Claude subagent per benchmark, interacts via browser
+  2. DB enrichment       → Query claims/audit_log for findings + retrieval_context
+  3. Eval scoring        → deepeval + RAGAs against captured vs expected outputs
+  4. Reporting           → Terminal summary + Confident AI dashboard
+
+Folder Structure:
+  eval/
+  ├── run_eval.py                      # Orchestrator: capture → enrich → score
+  ├── src/
+  │   ├── __init__.py
+  │   ├── config.py                    # DeepEval judge model (OpenRouter/GPT-4o), DB, app URL
+  │   ├── dataset.py                   # 20 Goldens with expected outputs from PDF ground truth
+  │   ├── scoring.py                   # Weighted category scoring + terminal summary
+  │   ├── capture/
+  │   │   ├── __init__.py
+  │   │   ├── subagent.py              # Claude subagent prompt builder per benchmark
+  │   │   └── enrichment.py            # Post-capture DB query (findings + retrieval_context)
+  │   └── metrics/
+  │       ├── __init__.py
+  │       ├── deterministic.py         # Custom BaseMetric (exact match, field presence, arithmetic)
+  │       ├── semantic.py              # GEval instances per benchmark category
+  │       ├── safety.py                # HallucinationMetric config
+  │       └── retrieval.py             # RAGAs metrics (context_precision, recall, faithfulness)
+  ├── results/                         # Captured outputs — one JSON per benchmark (gitignored)
+  └── invoices/                        # Already exists — 19 receipt files
+```
+
+**Captured output schema:**
+
+```json
+{
+  "benchmarkId": "ER-XXX",
+  "benchmark": "E3_Core_Field_Extraction",
+  "category": "extraction",
+  "file": "5.png",
+  "scoringType": "deterministic",
+  "capture": {
+    "claimId": "CLAIM-XXX",
+    "conversationTranscript": [{"role": "...", "content": "..."}],
+    "extractedFields": {"merchant": "...", "date": "...", "total": 0.0, "currency": "..."},
+    "agentDecision": "approved|rejected|escalated",
+    "complianceFindings": {"status": "...", "violations": [], "policyReferences": []},
+    "fraudFindings": {"riskScore": 0.0, "flags": [], "evidence": []},
+    "advisorReasoning": "...",
+    "retrievedPolicyChunks": ["..."]
+  },
+  "expected": {
+    "decision": "...",
+    "fields": {"merchant": "...", "date": "...", "total": 0.0, "currency": "..."},
+    "passCriteria": "..."
+  }
+}
+```
+
+**Metric split:**
+
+| Approach | Benchmarks | Count |
+|---|---|---|
+| Custom `BaseMetric` (Python logic) | ER-001–006, ER-010, ER-015 | 8 |
+| `GEval` (LLM-as-judge via OpenRouter/GPT-4o) | ER-007–009, ER-011–014, ER-016–017, ER-019–020 | 10 |
+| `HallucinationMetric` | ER-018 | 1 |
+| RAGAs (retrieval quality) | ER-009, ER-014, ER-017, ER-018 | 4 |
+
+**Weighted scoring:** Classification 15%, Extraction 25%, Reasoning 30%, Safety/Control 20%, Workflow 10%
+
+**Primary targets:** Field extraction >= 95%, Amount reconciliation >= 99%, Duplicate detection >= 90%, Hallucination < 1%, Unsafe auto-processing = 0
+
+**Success Criteria:**
+1. `poetry run python eval/run_eval.py` executes the full pipeline: capture → enrich → score
+2. Each of 20 benchmarks launches a Claude subagent that drives Playwright to upload the receipt, converse with the agent, and capture structured output to `eval/results/ER-XXX.json`
+3. DB enrichment queries the claims and audit_log tables post-capture to attach compliance findings, fraud findings, advisor reasoning, and retrieved policy chunks
+4. 8 deterministic benchmarks use Python logic — no LLM judge cost, fully reproducible scores
+5. 10 semantic benchmarks use GEval with GPT-4o via OpenRouter as judge — each returns score + reason
+6. ER-018 uses `HallucinationMetric` to verify no field invention on ambiguous receipts
+7. 4 policy-dependent benchmarks additionally run RAGAs metrics against `retrieval_context` extracted from audit_log
+8. Terminal prints summary table: benchmark ID, category, score, pass/fail, and weighted overall score
+9. Results pushed to Confident AI dashboard with per-benchmark drill-down
+10. Re-running scoring without re-capturing is possible (reads from `eval/results/` JSON files)
+11. All existing tests pass without regression
+
+**Plans:** 4 plans
+
+Plans:
+- [ ] 12-01-PLAN.md — Foundation: deepeval + RAGAs + ragas dependencies, OpenRouter judge model config, dataset (20 Goldens from PDF ground truth with expected outputs)
+- [ ] 12-02-PLAN.md — Capture: Claude subagent prompt templates per benchmark, Playwright browser automation (login, upload receipt, converse, capture output), DB enrichment queries (claims + audit_log → findings + retrieval_context), results JSON writer
+- [ ] 12-03-PLAN.md — Metrics: 8 deterministic `BaseMetric` subclasses, 10 GEval instances with per-category evaluation_steps, `HallucinationMetric` config, 3 RAGAs metrics config, metric-to-benchmark mapping
+- [ ] 12-04-PLAN.md — Orchestration + reporting: `run_eval.py` entry point (capture/enrich/score/report modes), weighted scoring calculation, terminal summary table, Confident AI dashboard push, `--skip-capture` flag for re-scoring
+
+---
+
 ## Progress
 
 **Execution Order:**
-v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 10
+v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 10 -> 11 -> 12
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
@@ -351,7 +495,9 @@ v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 
 | 8.1. Bug Fixes + UX Polish | 0/4 | In progress | -- |
 | 8.2. Advisor Refactor + Schema Alignment | 3/3 | Complete | 2026-04-08 |
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
+| 11. Intake Multi-Turn Fix | 0/? | Not started | -- |
+| 12. DeepEval + RAGAs Evaluation Suite | 0/4 | Not started | -- |
 
-**v2.0 total:** 26/32 plans complete
+**v2.0 total:** 26/38 plans complete
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)

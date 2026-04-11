@@ -2,11 +2,36 @@
 
 import json
 import logging
+import time
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
+from agentic_claims.core.logging import logEvent
+
 logger = logging.getLogger(__name__)
+
+
+def _claimFieldsFromPayload(payload: dict | list | str | None) -> dict:
+    """Extract claim identifiers from MCP arguments/results for log filters."""
+    if not isinstance(payload, dict):
+        return {}
+    claimNumber = payload.get("claimNumber") or payload.get("claim_number")
+    claim = payload.get("claim")
+    if isinstance(claim, dict):
+        claimNumber = claimNumber or claim.get("claim_number") or claim.get("claimNumber")
+        dbClaimId = claim.get("id")
+    else:
+        dbClaimId = payload.get("dbClaimId") or payload.get("claimId")
+    fields = {}
+    if claimNumber:
+        if str(claimNumber).startswith("DRAFT-"):
+            fields["draftClaimNumber"] = claimNumber
+        else:
+            fields["claimNumber"] = claimNumber
+    if dbClaimId:
+        fields["dbClaimId"] = dbClaimId
+    return fields
 
 
 async def mcpCallTool(serverUrl: str, toolName: str, arguments: dict) -> list | dict:
@@ -21,14 +46,19 @@ async def mcpCallTool(serverUrl: str, toolName: str, arguments: dict) -> list | 
         Parsed result (dict or list) on success, error dict on failure.
         MCP TextContent is automatically parsed from JSON.
     """
-    # Log tool entry
-    logger.info(
-        "mcpCallTool called",
-        extra={
-            "serverUrl": serverUrl,
-            "toolName": toolName,
-            "argumentKeys": list(arguments.keys()),
-        }
+    startTime = time.time()
+    argumentClaimFields = _claimFieldsFromPayload(arguments)
+    logEvent(
+        logger,
+        "mcp.call",
+        logCategory="mcp_tool_call",
+        actorType="app",
+        toolName=toolName,
+        mcpServer=serverUrl,
+        status="started",
+        payload={"arguments": arguments},
+        **argumentClaimFields,
+        message="MCP tool call started",
     )
 
     try:
@@ -41,17 +71,8 @@ async def mcpCallTool(serverUrl: str, toolName: str, arguments: dict) -> list | 
                 await session.initialize()
 
                 # Call tool
-                logger.info("Calling MCP tool", extra={"toolName": toolName})
+                logger.debug("Calling MCP tool", extra={"toolName": toolName})
                 result = await session.call_tool(name=toolName, arguments=arguments)
-
-                # Log result details
-                logger.info(
-                    "MCP tool returned",
-                    extra={
-                        "contentCount": len(result.content) if result.content else 0,
-                        "hasText": hasattr(result.content[0], "text") if result.content else False,
-                    }
-                )
 
                 # Parse MCP content: extract text from first TextContent and parse as JSON
                 if result.content and hasattr(result.content[0], "text"):
@@ -60,32 +81,84 @@ async def mcpCallTool(serverUrl: str, toolName: str, arguments: dict) -> list | 
 
                     try:
                         parsed = json.loads(rawText)
-                        logger.info(
-                            "JSON parse successful",
-                            extra={"parsedType": type(parsed).__name__}
+                        logEvent(
+                            logger,
+                            "mcp.result",
+                            logCategory="mcp_tool_call",
+                            actorType="app",
+                            toolName=toolName,
+                            mcpServer=serverUrl,
+                            status="completed",
+                            elapsedMs=round((time.time() - startTime) * 1000),
+                            payload={"result": parsed},
+                            **{**argumentClaimFields, **_claimFieldsFromPayload(parsed)},
+                            message="MCP tool call completed",
                         )
                         return parsed
                     except (json.JSONDecodeError, TypeError) as e:
-                        logger.warning(
-                            "JSON parse failed, returning raw text",
-                            extra={"error": str(e)}
+                        logEvent(
+                            logger,
+                            "mcp.result",
+                            level=logging.WARNING,
+                            logCategory="mcp_tool_call",
+                            actorType="app",
+                            toolName=toolName,
+                            mcpServer=serverUrl,
+                            status="completed_unparsed",
+                            elapsedMs=round((time.time() - startTime) * 1000),
+                            errorType=type(e).__name__,
+                            payload={"result": rawText, "parseError": str(e)},
+                            **argumentClaimFields,
+                            message="MCP tool returned non-JSON text",
                         )
                         return rawText
 
-                logger.info("Returning raw content list")
+                logEvent(
+                    logger,
+                    "mcp.result",
+                    logCategory="mcp_tool_call",
+                    actorType="app",
+                    toolName=toolName,
+                    mcpServer=serverUrl,
+                    status="completed_raw",
+                    elapsedMs=round((time.time() - startTime) * 1000),
+                    payload={"result": result.content},
+                    **argumentClaimFields,
+                    message="MCP tool call completed with raw content",
+                )
                 return result.content
 
     except ConnectionError as e:
-        logger.error(
-            "MCP connection failed",
-            extra={"serverUrl": serverUrl, "error": str(e)},
-            exc_info=True
+        logEvent(
+            logger,
+            "mcp.error",
+            level=logging.ERROR,
+            logCategory="mcp_tool_call",
+            actorType="app",
+            toolName=toolName,
+            mcpServer=serverUrl,
+            status="failed",
+            elapsedMs=round((time.time() - startTime) * 1000),
+            errorType=type(e).__name__,
+            payload={"error": str(e), "arguments": arguments},
+            **argumentClaimFields,
+            message="MCP connection failed",
         )
         return {"error": f"Connection failed: {str(e)}"}
     except Exception as e:
-        logger.error(
-            "MCP call failed",
-            extra={"serverUrl": serverUrl, "toolName": toolName, "error": str(e)},
-            exc_info=True
+        logEvent(
+            logger,
+            "mcp.error",
+            level=logging.ERROR,
+            logCategory="mcp_tool_call",
+            actorType="app",
+            toolName=toolName,
+            mcpServer=serverUrl,
+            status="failed",
+            elapsedMs=round((time.time() - startTime) * 1000),
+            errorType=type(e).__name__,
+            payload={"error": str(e), "arguments": arguments},
+            **argumentClaimFields,
+            message="MCP call failed",
         )
         return {"error": f"MCP call failed: {str(e)}"}

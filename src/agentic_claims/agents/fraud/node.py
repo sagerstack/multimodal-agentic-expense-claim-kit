@@ -77,10 +77,7 @@ def _parseFraudResponse(rawContent: str) -> dict:
 
 def _isExactDuplicate(duplicates: list[dict]) -> tuple[bool, list[str]]:
     """Return (True, [claim_numbers]) if real duplicate rows were found."""
-    realDupes = [
-        row for row in duplicates
-        if isinstance(row, dict) and "error" not in row
-    ]
+    realDupes = [row for row in duplicates if isinstance(row, dict) and "error" not in row]
     if realDupes:
         claimNums = [row.get("claim_number", str(row.get("id", "?"))) for row in realDupes]
         return True, claimNums
@@ -110,7 +107,8 @@ def _computeAverage(merchantHistory: list[dict]) -> float | None:
 def _countMerchantIn30Days(recentClaims: list[dict], merchant: str) -> int:
     """Count how many recent claims are from the specified merchant."""
     return sum(
-        1 for row in recentClaims
+        1
+        for row in recentClaims
         if isinstance(row, dict) and merchant.lower() in str(row.get("merchant", "")).lower()
     )
 
@@ -177,14 +175,19 @@ async def fraudNode(state: ClaimState) -> dict:
 
     logger.info(
         "Fraud check context",
-        extra={"employeeId": employeeId, "merchant": merchant, "date": receiptDate, "amount": totalAmountSgd},
+        extra={
+            "employeeId": employeeId,
+            "merchant": merchant,
+            "date": receiptDate,
+            "amount": totalAmountSgd,
+        },
     )
 
     # ------------------------------------------------------------------
     # 2. Run DB queries in sequence (all read-only via DB MCP)
     # ------------------------------------------------------------------
     duplicates, recentClaims, merchantHistory = await _runDbQueries(
-        employeeId, merchant, receiptDate, totalAmountSgd
+        employeeId, merchant, receiptDate, totalAmountSgd, dbClaimId
     )
 
     # ------------------------------------------------------------------
@@ -198,19 +201,23 @@ async def fraudNode(state: ClaimState) -> dict:
         )
         fraudFindings = {
             "verdict": "duplicate",
-            "flags": [{
-                "type": "duplicate",
-                "description": f"Exact duplicate of: {', '.join(duplicateClaimNums)}",
-                "confidence": "high",
-                "relatedClaimNumber": duplicateClaimNums[0] if duplicateClaimNums else None,
-            }],
+            "flags": [
+                {
+                    "type": "duplicate",
+                    "description": f"Exact duplicate of: {', '.join(duplicateClaimNums)}",
+                    "confidence": "high",
+                    "relatedClaimNumber": duplicateClaimNums[0] if duplicateClaimNums else None,
+                }
+            ],
             "duplicateClaims": duplicateClaimNums,
             "summary": f"Exact duplicate of existing claim(s): {', '.join(duplicateClaimNums)}",
             "rawLlmResponse": None,
         }
         await _writeAuditLog(settings, dbClaimId, claimId, fraudFindings)
         return {
-            "messages": [AIMessage(content=f"**Fraud Check**: DUPLICATE — {fraudFindings['summary']}")],
+            "messages": [
+                AIMessage(content=f"**Fraud Check**: DUPLICATE — {fraudFindings['summary']}")
+            ],
             "fraudFindings": fraudFindings,
         }
 
@@ -296,10 +303,18 @@ async def fraudNode(state: ClaimState) -> dict:
                 response = await llm.ainvoke(llmMessages)
                 rawContent = response.content
             except Exception as fallbackErr:
-                logger.error("Fallback LLM also failed in fraudNode", extra={"error": str(fallbackErr)}, exc_info=True)
+                logger.error(
+                    "Fallback LLM also failed in fraudNode",
+                    extra={"error": str(fallbackErr)},
+                    exc_info=True,
+                )
                 rawContent = None
         else:
-            logger.error("LLM call failed in fraudNode", extra={"error": errorStr, "elapsedSeconds": llmElapsed}, exc_info=True)
+            logger.error(
+                "LLM call failed in fraudNode",
+                extra={"error": errorStr, "elapsedSeconds": llmElapsed},
+                exc_info=True,
+            )
             rawContent = None
 
     # Handle LLM failure: return a conservative requiresReview verdict so the
@@ -309,13 +324,19 @@ async def fraudNode(state: ClaimState) -> dict:
             "verdict": "suspicious",
             "flags": [],
             "duplicateClaims": [],
-            "summary": "Fraud check could not be completed (LLM unavailable). Manual review required.",
+            "summary": (
+                "Fraud check could not be completed (LLM unavailable). Manual review required."
+            ),
             "rawLlmResponse": None,
         }
         logger.warning("fraudNode returning error fallback verdict", extra={"claimId": claimId})
         await _writeAuditLog(settings, dbClaimId, claimId, fraudFindings)
         return {
-            "messages": [AIMessage(content="**Fraud Check**: SUSPICIOUS — LLM unavailable. Manual review required.")],
+            "messages": [
+                AIMessage(
+                    content="**Fraud Check**: SUSPICIOUS — LLM unavailable. Manual review required."
+                )
+            ],
             "fraudFindings": fraudFindings,
         }
 
@@ -346,6 +367,7 @@ async def _runDbQueries(
     merchant: str,
     receiptDate: str,
     amountSgd: float,
+    excludeClaimId: int | None = None,
 ) -> tuple[list, list, list]:
     """Run the three DB queries needed for fraud assessment.
 
@@ -354,7 +376,13 @@ async def _runDbQueries(
     a single DB failure does not crash the whole fraud check.
     """
     try:
-        duplicates = await exactDuplicateCheck(employeeId, merchant, receiptDate, amountSgd)
+        duplicates = await exactDuplicateCheck(
+            employeeId,
+            merchant,
+            receiptDate,
+            amountSgd,
+            excludeClaimId=excludeClaimId,
+        )
     except Exception as e:
         logger.error("exactDuplicateCheck failed", extra={"error": str(e)}, exc_info=True)
         duplicates = []
@@ -379,11 +407,13 @@ async def _writeAuditLog(settings, dbClaimId, claimId: str, fraudFindings: dict)
     if dbClaimId is None:
         return
     try:
-        auditValue = json.dumps({
-            "verdict": fraudFindings.get("verdict"),
-            "flags": fraudFindings.get("flags"),
-            "summary": fraudFindings.get("summary"),
-        })
+        auditValue = json.dumps(
+            {
+                "verdict": fraudFindings.get("verdict"),
+                "flags": fraudFindings.get("flags"),
+                "summary": fraudFindings.get("summary"),
+            }
+        )
         await mcpCallTool(
             serverUrl=settings.db_mcp_url,
             toolName="insertAuditLog",

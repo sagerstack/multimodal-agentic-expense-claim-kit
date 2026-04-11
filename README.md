@@ -20,7 +20,7 @@ Receipt Upload -> Intake Agent -> Compliance + Fraud (parallel) -> Advisor -> De
 | Component | Technology |
 |-----------|-----------|
 | Agents | LangGraph (Python) |
-| LLM/VLM | OpenRouter (Qwen 2.5 72B) |
+| LLM/VLM | OpenRouter (Qwen3 235B + Gemini 2.0 Flash) |
 | Web UI | FastAPI + Jinja2 + HTMX + Tailwind |
 | Database | PostgreSQL 16 |
 | Vector Store | Qdrant (policy embeddings) |
