@@ -14,6 +14,7 @@ from agentic_claims.agents.fraud.node import fraudNode
 from agentic_claims.agents.intake.node import intakeNode
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
+from agentic_claims.core.logging import logEvent
 from agentic_claims.core.state import ClaimState
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,14 @@ def evaluatorGate(state: ClaimState) -> str:
         "pending" if still in intake conversation (route to END)
     """
     result = "submitted" if state.get("claimSubmitted", False) else "pending"
-    logger.info("evaluatorGate decision", extra={"decision": result, "claimId": state.get("claimId")})
+    logEvent(
+        logger,
+        "graph.evaluator_gate",
+        logCategory="graph",
+        claimId=state.get("claimId"),
+        decision=result,
+        message="evaluatorGate decision",
+    )
     return result
 
 
@@ -55,11 +63,23 @@ async def markAiReviewedNode(state: ClaimState) -> dict:
                     "actor": "system",
                 },
             )
-            logger.info("markAiReviewedNode: status set to ai_reviewed", extra={"claimId": claimId, "dbClaimId": dbClaimId})
+            logEvent(
+                logger,
+                "graph.mark_ai_reviewed",
+                logCategory="graph",
+                claimId=claimId,
+                dbClaimId=dbClaimId,
+                message="markAiReviewedNode: status set to ai_reviewed",
+            )
         except Exception as e:
-            logger.warning(
-                "markAiReviewedNode: failed to update status — continuing to advisor",
-                extra={"claimId": claimId, "error": str(e)},
+            logEvent(
+                logger,
+                "graph.mark_ai_reviewed_error",
+                level=logging.WARNING,
+                logCategory="graph",
+                claimId=claimId,
+                error=str(e),
+                message="markAiReviewedNode: failed to update status — continuing to advisor",
             )
 
     return {"status": "ai_reviewed"}

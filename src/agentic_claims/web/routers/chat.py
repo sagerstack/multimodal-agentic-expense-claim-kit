@@ -245,7 +245,15 @@ async def streamChat(request: Request):
                 message="Agent turn stream completed",
             )
         except Exception as e:
-            logger.exception("SSE stream error: %s", e)
+            logEvent(
+                logger,
+                "sse.stream_error",
+                level=logging.ERROR,
+                logCategory="sse",
+                claimId=sessionIds.get("claimId"),
+                error=str(e),
+                message="SSE stream error",
+            )
             yield ServerSentEvent(raw_data=str(e), event="error")
 
         yield ServerSentEvent(raw_data="<!-- done -->", event="done")
@@ -261,8 +269,14 @@ async def streamChat(request: Request):
                 )
             )
             request.state.backgroundTask = None
-            logger.info(
-                "Background post-submission task launched for claim %s", backgroundTask["claimId"]
+            logEvent(
+                logger,
+                "sse.background_task_launched",
+                logCategory="sse",
+                actorType="app",
+                claimId=backgroundTask["claimId"],
+                threadId=backgroundTask["threadId"],
+                message="Background post-submission task launched",
             )
 
 
@@ -369,9 +383,23 @@ async def fetchClaimsForTable(employeeId: str | None = None) -> list[dict]:
 
             return result
         if isinstance(result, dict) and "error" in result:
-            logger.warning("fetchClaimsForTable DB error: %s", result["error"])
+            logEvent(
+                logger,
+                "chat.fetch_claims_db_error",
+                level=logging.WARNING,
+                logCategory="chat",
+                error=result["error"],
+                message="fetchClaimsForTable DB error",
+            )
             return []
         return []
     except Exception as e:
-        logger.warning("fetchClaimsForTable failed: %s", e)
+        logEvent(
+            logger,
+            "chat.fetch_claims_error",
+            level=logging.WARNING,
+            logCategory="chat",
+            error=str(e),
+            message="fetchClaimsForTable failed",
+        )
         return []
