@@ -352,7 +352,14 @@ async def _getFallbackMessage(graph, config: dict) -> str:
             ):
                 return _stripThinkingTags(_stripToolCallJson(str(msg.content)))
     except Exception as e:
-        logger.error(f"Error in fallback message extraction: {e}", exc_info=True)
+        logEvent(
+            logger,
+            "sse.fallback_message_error",
+            level=logging.ERROR,
+            logCategory="sse",
+            error=str(e),
+            message="Error in fallback message extraction",
+        )
     return ""
 
 
@@ -488,9 +495,12 @@ def _extractSummaryData(
     # did submit). But if submitted was set from thinkingEntries parsing and
     # there's no actual submitClaim entry, suppress it (hallucination).
     if submitted and not submitCallInEntries and not graphState.get("claimSubmitted"):
-        logger.warning(
-            "BUG-013: _extractSummaryData suppressing submitted=True; "
-            "no submitClaim in thinkingEntries and graphState not submitted"
+        logEvent(
+            logger,
+            "sse.hallucinated_submit_suppressed",
+            level=logging.WARNING,
+            logCategory="sse",
+            message="BUG-013: _extractSummaryData suppressing submitted=True; no submitClaim in thinkingEntries and graphState not submitted",
         )
         submitted = False
         extractedClaimNumber = ""
@@ -624,18 +634,40 @@ async def runPostSubmissionAgents(graph, threadId: str, claimId: str):
     try:
         currentState = await graph.aget_state(config)
         if not currentState.values.get("claimSubmitted"):
-            logger.error(
-                "Checkpoint guard failed for claim %s: claimSubmitted is not True",
-                claimId,
+            logEvent(
+                logger,
+                "sse.post_submission_guard_failed",
+                level=logging.ERROR,
+                logCategory="sse",
+                claimId=claimId,
+                message="Checkpoint guard failed: claimSubmitted is not True",
             )
             return
 
-        logger.info("Background post-submission started for claim %s", claimId)
+        logEvent(
+            logger,
+            "sse.post_submission_started",
+            logCategory="sse",
+            claimId=claimId,
+            message="Background post-submission started",
+        )
         await graph.ainvoke(None, config=config)
-        logger.info("Background post-submission completed for claim %s", claimId)
+        logEvent(
+            logger,
+            "sse.post_submission_completed",
+            logCategory="sse",
+            claimId=claimId,
+            message="Background post-submission completed",
+        )
     except Exception as e:
-        logger.error(
-            "Background post-submission failed for claim %s: %s", claimId, e, exc_info=True
+        logEvent(
+            logger,
+            "sse.post_submission_error",
+            level=logging.ERROR,
+            logCategory="sse",
+            claimId=claimId,
+            error=str(e),
+            message="Background post-submission failed",
         )
 
 
@@ -696,27 +728,50 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     try:
         t0 = time.time()
         priorState = await graph.aget_state(config=config)
-        logger.info("aget_state took %.2fs", time.time() - t0)
+        logEvent(
+            logger,
+            "sse.aget_state_timing",
+            logCategory="sse",
+            claimId=graphInput.get("claimId"),
+            elapsedSeconds=round(time.time() - t0, 2),
+            message="aget_state timing",
+        )
         if priorState and priorState.values:
             sv = priorState.values
-            if sv.get("extractedReceipt"):
-                hasImage = True
-                pathwayCompletedTools.add("extractReceiptFields")
-                pathwayExtractionDetails = _extractExtractionDetails(sv.get("extractedReceipt"))
-                if "receiptUploaded" not in pathwayToolTimestamps:
-                    pathwayToolTimestamps["receiptUploaded"] = _nowTimestamp()
-                pathwayToolTimestamps.setdefault("extractReceiptFields", _nowTimestamp())
-            if _stateHasToolResult(sv, "searchPolicies"):
-                pathwayCompletedTools.add("searchPolicies")
-                pathwayCompletedTools.add("extractReceiptFields")
-                pathwayToolTimestamps.setdefault("searchPolicies", _nowTimestamp())
-            if sv.get("claimSubmitted") or _stateHasToolResult(sv, "submitClaim"):
-                pathwayCompletedTools.update(
-                    {"extractReceiptFields", "searchPolicies", "submitClaim"}
-                )
-                pathwayToolTimestamps.setdefault("submitClaim", _nowTimestamp())
+
+            # Reset pathway when new receipt uploaded after prior submission
+            if graphInput.get("hasImage") and sv.get("claimSubmitted"):
+                pathwayCompletedTools = set()
+                pathwayToolTimestamps = {}
+                pathwayToolTimestamps["receiptUploaded"] = _nowTimestamp()
+                # Skip seeding from prior state — start fresh for new receipt
+            else:
+                if sv.get("extractedReceipt"):
+                    hasImage = True
+                    pathwayCompletedTools.add("extractReceiptFields")
+                    pathwayExtractionDetails = _extractExtractionDetails(sv.get("extractedReceipt"))
+                    if "receiptUploaded" not in pathwayToolTimestamps:
+                        pathwayToolTimestamps["receiptUploaded"] = _nowTimestamp()
+                    pathwayToolTimestamps.setdefault("extractReceiptFields", _nowTimestamp())
+                if _stateHasToolResult(sv, "searchPolicies"):
+                    pathwayCompletedTools.add("searchPolicies")
+                    pathwayCompletedTools.add("extractReceiptFields")
+                    pathwayToolTimestamps.setdefault("searchPolicies", _nowTimestamp())
+                if sv.get("claimSubmitted") or _stateHasToolResult(sv, "submitClaim"):
+                    pathwayCompletedTools.update(
+                        {"extractReceiptFields", "searchPolicies", "submitClaim"}
+                    )
+                    pathwayToolTimestamps.setdefault("submitClaim", _nowTimestamp())
     except Exception as e:
-        logger.debug(f"Could not check prior state for hasImage: {e}")
+        logEvent(
+            logger,
+            "sse.prior_state_check_error",
+            level=logging.DEBUG,
+            logCategory="sse",
+            claimId=graphInput.get("claimId"),
+            error=str(e),
+            message="Could not check prior state for hasImage",
+        )
 
     yield ServerSentEvent(raw_data="<!-- thinking -->", event=SseEvent.THINKING_START)
 
@@ -734,7 +789,15 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
         )
         yield ServerSentEvent(raw_data=pathwayHtml, event=SseEvent.PATHWAY_UPDATE)
     except Exception as e:
-        logger.error(f"Error rendering initial pathway: {e}", exc_info=True)
+        logEvent(
+            logger,
+            "sse.pathway_render_error",
+            level=logging.ERROR,
+            logCategory="sse",
+            claimId=graphInput.get("claimId"),
+            error=str(e),
+            message="Error rendering initial pathway",
+        )
 
     if graphInput.get("isResume"):
         invokeInput = Command(resume=graphInput["resumeData"])
@@ -751,7 +814,8 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 break
 
             eventKind = event.get("event")
-            logger.debug("astream_events event: %s - %s", eventKind, event.get("name", ""))
+            if eventKind != "on_chat_model_stream":
+                logger.debug("astream_events event: %s - %s", eventKind, event.get("name", ""))
 
             if eventKind == "on_chain_start" and shouldTerminateEarly:
                 # BUG-027/029: intakeNode has checkpointed — break before post-submission nodes
@@ -916,7 +980,16 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         ).render(steps=steps)
                         yield ServerSentEvent(raw_data=pathwayHtml, event=SseEvent.PATHWAY_UPDATE)
                     except Exception as e:
-                        logger.error(f"Error rendering pathway on tool start: {e}", exc_info=True)
+                        logEvent(
+                            logger,
+                            "sse.pathway_render_error",
+                            level=logging.ERROR,
+                            logCategory="sse",
+                            claimId=graphInput.get("claimId"),
+                            toolName=toolName,
+                            error=str(e),
+                            message="Error rendering pathway on tool start",
+                        )
 
             elif eventKind == "on_tool_end":
                 toolName = event.get("name", "unknown")
@@ -1009,7 +1082,16 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         ).render(steps=steps)
                         yield ServerSentEvent(raw_data=pathwayHtml, event=SseEvent.PATHWAY_UPDATE)
                     except Exception as e:
-                        logger.error(f"Error rendering pathway on tool end: {e}", exc_info=True)
+                        logEvent(
+                            logger,
+                            "sse.pathway_render_error",
+                            level=logging.ERROR,
+                            logCategory="sse",
+                            claimId=graphInput.get("claimId"),
+                            toolName=toolName,
+                            error=str(e),
+                            message="Error rendering pathway on tool end",
+                        )
 
                 # Table: add/update row after extraction or submission
                 if toolName == "extractReceiptFields":
@@ -1055,10 +1137,27 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         )
                         yield ServerSentEvent(raw_data=tableHtml, event=SseEvent.TABLE_UPDATE)
                     except Exception as e:
-                        logger.error(f"Error rendering table on tool end: {e}", exc_info=True)
+                        logEvent(
+                            logger,
+                            "sse.table_render_error",
+                            level=logging.ERROR,
+                            logCategory="sse",
+                            claimId=graphInput.get("claimId"),
+                            toolName=toolName,
+                            error=str(e),
+                            message="Error rendering table on tool end",
+                        )
 
     except Exception as e:
-        logger.error(f"Error during graph streaming: {e}", exc_info=True)
+        logEvent(
+            logger,
+            "sse.stream_error",
+            level=logging.ERROR,
+            logCategory="sse",
+            claimId=graphInput.get("claimId"),
+            error=str(e),
+            message="Error during graph streaming",
+        )
         yield ServerSentEvent(raw_data=str(e), event=SseEvent.ERROR)
         return
 
@@ -1068,7 +1167,14 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     toolLabel = "tool" if toolCount == 1 else "tools"
     summary = f"Thought for {_formatElapsed(totalElapsed)} . {toolCount} {toolLabel}"
     yield ServerSentEvent(raw_data=summary, event=SseEvent.THINKING_DONE)
-    logger.info("Thinking done: %s", summary)
+    logEvent(
+        logger,
+        "sse.thinking_done",
+        logCategory="sse",
+        claimId=graphInput.get("claimId"),
+        summary=summary,
+        message="Thinking done",
+    )
 
     # Fetch graph state once — reused for summary panel, interrupt check, and fallback message
     finalState = None
@@ -1077,7 +1183,15 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
         finalState = await graph.aget_state(config=config)
         graphStateValues = finalState.values if finalState else None
     except Exception as e:
-        logger.error(f"Error fetching graph state: {e}", exc_info=True)
+        logEvent(
+            logger,
+            "sse.graph_state_fetch_error",
+            level=logging.ERROR,
+            logCategory="sse",
+            claimId=graphInput.get("claimId"),
+            error=str(e),
+            message="Error fetching graph state",
+        )
 
     # Summary panel update (uses graph state for cross-turn receipt data)
     claimId = graphInput.get("claimId", "")
@@ -1088,7 +1202,15 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             summaryHtml = summaryTemplate.render(**summaryData)
             yield ServerSentEvent(raw_data=summaryHtml, event=SseEvent.SUMMARY_UPDATE)
         except Exception as e:
-            logger.error(f"Error rendering summary panel: {e}", exc_info=True)
+            logEvent(
+                logger,
+                "sse.summary_render_error",
+                level=logging.ERROR,
+                logCategory="sse",
+                claimId=graphInput.get("claimId"),
+                error=str(e),
+                message="Error rendering summary panel",
+            )
 
     # BUG-026/027/028/029: the astream_events generator exhausts after the inner
     # ReAct agent finishes but BEFORE intakeNode post-processing runs. The
@@ -1120,11 +1242,24 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 if claimNumber:
                     updateValues["claimNumber"] = claimNumber
                 await graph.aupdate_state(config=config, values=updateValues)
-                logger.info(
-                    "Force-updated graph state: claimSubmitted=True, dbClaimId=%s", dbClaimId
+                logEvent(
+                    logger,
+                    "sse.graph_state_force_updated",
+                    logCategory="sse",
+                    claimId=sessionClaimId,
+                    dbClaimId=dbClaimId,
+                    message="Force-updated graph state: claimSubmitted=True",
                 )
             except Exception as e:
-                logger.error(f"Failed to force-update graph state: {e}", exc_info=True)
+                logEvent(
+                    logger,
+                    "sse.graph_state_force_update_error",
+                    level=logging.ERROR,
+                    logCategory="sse",
+                    claimId=sessionClaimId,
+                    error=str(e),
+                    message="Failed to force-update graph state",
+                )
 
         # BUG-027: Flush buffered audit steps and write claim_submitted entry
         if dbClaimId and sessionClaimId:
@@ -1136,9 +1271,24 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     action="claim_submitted",
                     details={"claimNumber": claimNumber or "", "status": "pending"},
                 )
-                logger.info("Flushed audit steps for claim %s (db=%s)", sessionClaimId, dbClaimId)
+                logEvent(
+                    logger,
+                    "sse.audit_steps_flushed",
+                    logCategory="sse",
+                    claimId=sessionClaimId,
+                    dbClaimId=dbClaimId,
+                    message="Flushed audit steps for claim",
+                )
             except Exception as e:
-                logger.error(f"Failed to flush audit steps: {e}", exc_info=True)
+                logEvent(
+                    logger,
+                    "sse.audit_steps_flush_error",
+                    level=logging.ERROR,
+                    logCategory="sse",
+                    claimId=sessionClaimId,
+                    error=str(e),
+                    message="Failed to flush audit steps",
+                )
 
             # Queue background task for post-submission agents
         if not hasattr(request.state, "backgroundTask"):
@@ -1148,7 +1298,13 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             "threadId": threadId,
             "claimId": sessionClaimId,
         }
-        logger.info("Background task queued for post-submission agents (claim %s)", sessionClaimId)
+        logEvent(
+            logger,
+            "sse.background_task_queued",
+            logCategory="sse",
+            claimId=sessionClaimId,
+            message="Background task queued for post-submission agents",
+        )
     else:
         # BUG-016: after the graph completes, refresh the submission table from DB.
         # The advisor node may have updated the claim status (e.g. submitted ->
@@ -1172,8 +1328,14 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     )
                     yield ServerSentEvent(raw_data=finalTableHtml, event=SseEvent.TABLE_UPDATE)
             except Exception as e:
-                logger.error(
-                    f"Error rendering final table update after advisor: {e}", exc_info=True
+                logEvent(
+                    logger,
+                    "sse.table_render_error",
+                    level=logging.ERROR,
+                    logCategory="sse",
+                    claimId=graphInput.get("claimId"),
+                    error=str(e),
+                    message="Error rendering final table update after advisor",
                 )
 
         # Check for interrupt via graph state
@@ -1191,7 +1353,15 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         yield ServerSentEvent(raw_data=question, event=SseEvent.INTERRUPT)
                         return
         except Exception as e:
-            logger.error(f"Error checking interrupt state: {e}", exc_info=True)
+            logEvent(
+                logger,
+                "sse.interrupt_check_error",
+                level=logging.ERROR,
+                logCategory="sse",
+                claimId=graphInput.get("claimId"),
+                error=str(e),
+                message="Error checking interrupt state",
+            )
 
     # Extract final response text
     finalText = ""
@@ -1222,9 +1392,13 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             e.get("name") == "submitClaim" for e in thinkingEntries if e.get("type") == "tool"
         )
         if submittedInText and not submitCallMade:
-            logger.warning(
-                "BUG-013: Hallucinated submission detected; "
-                "AI claimed submission without submitClaim tool call"
+            logEvent(
+                logger,
+                "sse.hallucinated_submit_detected",
+                level=logging.WARNING,
+                logCategory="sse",
+                claimId=graphInput.get("claimId"),
+                message="BUG-013: Hallucinated submission detected; AI claimed submission without submitClaim tool call",
             )
             try:
                 template = templates.get_template("partials/message_bubble.html")
