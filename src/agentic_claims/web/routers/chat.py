@@ -38,15 +38,60 @@ async def postMessage(
     claimId = sessionIds["claimId"]
 
     hasImage = False
+    imageB64 = None
     if receipt and receipt.filename:
         imageBytes = await receipt.read()
         imageB64 = base64.b64encode(imageBytes).decode("utf-8")
-        storeImage(claimId, imageB64)
         hasImage = True
 
     employeeId = request.session.get("employee_id")
     username = request.session.get("username")
     draftClaimNumber = f"DRAFT-{claimId[:8]}"
+
+    # Auto-reset session when user sends any message after claim submission
+    graph = request.app.state.graph
+    config = {"configurable": {"thread_id": threadId}}
+    try:
+        priorState = await graph.aget_state(config)
+        if priorState and priorState.values and priorState.values.get("claimSubmitted"):
+            # Reset session: new thread_id, new claim_id, clear old resources
+            oldClaimId = claimId
+            oldThreadId = threadId
+            if oldClaimId:
+                clearImage(oldClaimId)
+            if oldThreadId:
+                removeQueue(oldThreadId)
+            # Generate new IDs
+            request.session["thread_id"] = str(uuid.uuid4())
+            request.session["claim_id"] = str(uuid.uuid4())
+            request.session.pop("awaiting_clarification", None)
+            request.session.pop("draft_created", None)
+            request.session.pop("draft_claim_id", None)
+            # Update local vars for rest of handler
+            threadId = request.session["thread_id"]
+            claimId = request.session["claim_id"]
+            draftClaimNumber = f"DRAFT-{claimId[:8]}"
+            logEvent(
+                logger,
+                "chat.auto_reset",
+                logCategory="chat_history",
+                actorType="app",
+                userId=username,
+                username=username,
+                employeeId=employeeId,
+                claimId=claimId,
+                threadId=threadId,
+                status="completed",
+                payload={"oldClaimId": oldClaimId, "oldThreadId": oldThreadId, "trigger": "claimSubmitted"},
+                message="Session auto-reset after claim submission",
+            )
+    except Exception:
+        pass  # If state check fails, continue normally
+
+    # Store image under the (possibly new) claimId
+    if hasImage and imageB64:
+        storeImage(claimId, imageB64)
+
     logEvent(
         logger,
         "user.chat_message_submitted",
