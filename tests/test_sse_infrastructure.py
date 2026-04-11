@@ -108,8 +108,8 @@ def testSummarizeToolOutputExtractReceipt():
     assert "Starbucks" in result
 
 
-def testToolLabelsHasFiveEntries():
-    assert len(TOOL_LABELS) == 5
+def testToolLabelsHasSixEntries():
+    assert len(TOOL_LABELS) == 6
 
 
 def testToolLabelsIncludesGetClaimSchema():

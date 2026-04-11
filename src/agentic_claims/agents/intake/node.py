@@ -11,7 +11,7 @@ from langgraph.prebuilt import create_react_agent
 
 from agentic_claims.agents.intake.auditLogger import bufferStep, flushSteps, logIntakeStep
 from agentic_claims.agents.intake.extractionContext import extractedReceiptVar
-from agentic_claims.agents.intake.prompts.agentSystemPrompt_v2 import INTAKE_AGENT_SYSTEM_PROMPT
+from agentic_claims.agents.intake.prompts.agentSystemPrompt_v3 import INTAKE_AGENT_SYSTEM_PROMPT
 from agentic_claims.agents.intake.tools.askHuman import askHuman
 from agentic_claims.agents.intake.tools.convertCurrency import convertCurrency
 from agentic_claims.agents.intake.tools.extractReceiptFields import extractReceiptFields
