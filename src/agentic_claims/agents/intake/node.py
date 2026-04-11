@@ -19,6 +19,7 @@ from agentic_claims.agents.intake.tools.getClaimSchema import getClaimSchema
 from agentic_claims.agents.intake.tools.searchPolicies import searchPolicies
 from agentic_claims.agents.intake.tools.submitClaim import submitClaim
 from agentic_claims.core.config import getSettings
+from agentic_claims.core.logging import logEvent
 from agentic_claims.core.state import ClaimState
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,15 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
         Partial state update with new messages and optional status/fields
     """
     nodeStart = time.time()
-    logger.info("intakeNode started", extra={"claimId": state.get("claimId"), "messageCount": len(state.get("messages", []))})
+    logEvent(
+        logger,
+        "intake.started",
+        logCategory="agent",
+        agent="intake",
+        claimId=state.get("claimId"),
+        messageCount=len(state.get("messages", [])),
+        message="intakeNode started",
+    )
 
     settings = getSettings()
 
@@ -110,13 +119,17 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
         errorStr = str(e)
         # Check for 402 payment/quota errors
         if "402" in errorStr or "credits" in errorStr.lower() or "quota" in errorStr.lower():
-            logger.warning(
-                "Primary LLM model returned 402, falling back to secondary model",
-                extra={
-                    "primary_model": settings.openrouter_model_llm,
-                    "fallback_model": settings.openrouter_fallback_model_llm,
-                    "error": errorStr,
-                },
+            logEvent(
+                logger,
+                "intake.llm_402_fallback",
+                level=logging.WARNING,
+                logCategory="agent",
+                agent="intake",
+                claimId=state.get("claimId"),
+                model=settings.openrouter_model_llm,
+                fallbackModel=settings.openrouter_fallback_model_llm,
+                error=errorStr,
+                message="Primary LLM model returned 402, falling back to secondary model",
             )
             # Retry with fallback agent
             fallbackAgent = getIntakeAgent(useFallback=True)
@@ -124,7 +137,16 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
         else:
             raise
 
-    logger.info("intakeNode agent.ainvoke completed", extra={"elapsed": f"{time.time() - nodeStart:.2f}s", "resultMessageCount": len(result.get("messages", []))})
+    logEvent(
+        logger,
+        "intake.agent_invoked",
+        logCategory="agent",
+        agent="intake",
+        claimId=state.get("claimId"),
+        elapsed=f"{time.time() - nodeStart:.2f}s",
+        resultMessageCount=len(result.get("messages", [])),
+        message="intakeNode agent.ainvoke completed",
+    )
 
     # Build state update
     stateUpdate = {"messages": result["messages"]}
@@ -226,5 +248,14 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
     if "violations" not in stateUpdate:
         stateUpdate["violations"] = []
 
-    logger.info("intakeNode completed", extra={"elapsed": f"{time.time() - nodeStart:.2f}s", "stateUpdateKeys": list(stateUpdate.keys())})
+    logEvent(
+        logger,
+        "intake.completed",
+        logCategory="agent",
+        agent="intake",
+        claimId=state.get("claimId"),
+        elapsed=f"{time.time() - nodeStart:.2f}s",
+        stateUpdateKeys=list(stateUpdate.keys()),
+        message="intakeNode completed",
+    )
     return stateUpdate

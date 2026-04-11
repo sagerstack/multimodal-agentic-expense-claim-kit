@@ -31,6 +31,7 @@ from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.agents.shared.llmFactory import buildAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
 from agentic_claims.core.config import getSettings
+from agentic_claims.core.logging import logEvent
 from agentic_claims.core.state import ClaimState
 
 logger = logging.getLogger(__name__)
@@ -127,7 +128,14 @@ def _extractAdvisorDecision(messages: list) -> str:
         if "escalate_to_reviewer" in contentLower or "escalate" in contentLower:
             return "escalate_to_reviewer"
 
-    logger.warning("Could not extract advisor decision from messages — defaulting to escalate_to_reviewer")
+    logEvent(
+        logger,
+        "advisor.decision_extract_fallback",
+        level=logging.WARNING,
+        logCategory="agent",
+        agent="advisor",
+        message="Could not extract advisor decision from messages — defaulting to escalate_to_reviewer",
+    )
     return "escalate_to_reviewer"
 
 
@@ -152,9 +160,15 @@ async def _advisorErrorFallback(
 
     Returns a valid partial state update.
     """
-    logger.error(
-        "advisorNode failed — applying error fallback (escalate_to_reviewer)",
-        extra={"claimId": claimId, "error": errorStr},
+    logEvent(
+        logger,
+        "advisor.error",
+        level=logging.ERROR,
+        logCategory="agent",
+        agent="advisor",
+        claimId=claimId,
+        error=errorStr,
+        message="advisorNode failed — applying error fallback (escalate_to_reviewer)",
     )
 
     if dbClaimId is not None:
@@ -178,9 +192,15 @@ async def _advisorErrorFallback(
                 },
             )
         except Exception as auditErr:
-            logger.warning(
-                "Error fallback: failed to write advisor audit log",
-                extra={"claimId": claimId, "error": str(auditErr)},
+            logEvent(
+                logger,
+                "advisor.audit_log_error",
+                level=logging.WARNING,
+                logCategory="agent",
+                agent="advisor",
+                claimId=claimId,
+                error=str(auditErr),
+                message="Error fallback: failed to write advisor audit log",
             )
 
         try:
@@ -204,9 +224,15 @@ async def _advisorErrorFallback(
                 },
             )
         except Exception as updateErr:
-            logger.warning(
-                "Error fallback: failed to update claim status",
-                extra={"claimId": claimId, "error": str(updateErr)},
+            logEvent(
+                logger,
+                "advisor.status_update_error",
+                level=logging.WARNING,
+                logCategory="agent",
+                agent="advisor",
+                claimId=claimId,
+                error=str(updateErr),
+                message="Error fallback: failed to update claim status",
             )
 
     return {
@@ -235,7 +261,14 @@ async def advisorNode(state: ClaimState) -> dict:
     """
     settings = getSettings()
     claimId = state.get("claimId", "unknown")
-    logger.info("advisorNode started", extra={"claimId": claimId})
+    logEvent(
+        logger,
+        "advisor.started",
+        logCategory="agent",
+        agent="advisor",
+        claimId=claimId,
+        message="Advisor agent started",
+    )
 
     # ------------------------------------------------------------------
     # 1. Read findings and identifiers from state
@@ -269,7 +302,15 @@ async def advisorNode(state: ClaimState) -> dict:
     claimNumber = _extractClaimNumber(state)
 
     if dbClaimId is None:
-        logger.warning("dbClaimId not found in state — DB update may be skipped by agent", extra={"claimId": claimId})
+        logEvent(
+            logger,
+            "advisor.missing_db_claim_id",
+            level=logging.WARNING,
+            logCategory="agent",
+            agent="advisor",
+            claimId=claimId,
+            message="dbClaimId not found in state — DB update may be skipped by agent",
+        )
 
     employeeId = (
         intakeFindings.get("employeeId")
@@ -284,16 +325,18 @@ async def advisorNode(state: ClaimState) -> dict:
         or 0.0
     )
 
-    logger.info(
-        "Advisor context built",
-        extra={
-            "claimId": claimId,
-            "dbClaimId": dbClaimId,
-            "claimNumber": claimNumber,
-            "employeeId": employeeId,
-            "complianceVerdict": complianceFindings.get("verdict"),
-            "fraudVerdict": fraudFindings.get("verdict"),
-        },
+    logEvent(
+        logger,
+        "advisor.context_built",
+        logCategory="agent",
+        agent="advisor",
+        claimId=claimId,
+        dbClaimId=dbClaimId,
+        claimNumber=claimNumber,
+        employeeId=employeeId,
+        complianceVerdict=complianceFindings.get("verdict"),
+        fraudVerdict=fraudFindings.get("verdict"),
+        message="Advisor context built",
     )
 
     # ------------------------------------------------------------------
@@ -327,13 +370,15 @@ async def advisorNode(state: ClaimState) -> dict:
     agent = _getAdvisorAgent()
     agentInput = {"messages": [HumanMessage(content=contextMessage)]}
 
-    logger.info(
-        "advisorNode LLM request",
-        extra={
-            "claimId": claimId,
-            "model": modelName,
-            "userPrompt": contextMessage[:2000],
-        },
+    logEvent(
+        logger,
+        "advisor.llm_request",
+        logCategory="agent",
+        agent="advisor",
+        claimId=claimId,
+        model=modelName,
+        payload={"userPrompt": contextMessage[:2000]},
+        message="Advisor LLM request",
     )
     llmStartTime = time.time()
 
@@ -344,24 +389,33 @@ async def advisorNode(state: ClaimState) -> dict:
         # Log all agent output messages for debugging
         agentMessages = result.get("messages", [])
         lastContent = agentMessages[-1].content if agentMessages else ""
-        logger.info(
-            "advisorNode LLM response",
-            extra={
-                "claimId": claimId,
-                "model": modelName,
-                "elapsedSeconds": llmElapsed,
-                "messageCount": len(agentMessages),
-                "lastMessageContent": lastContent[:2000] if isinstance(lastContent, str) else str(lastContent)[:2000],
-            },
+        logEvent(
+            logger,
+            "advisor.llm_response",
+            logCategory="agent",
+            agent="advisor",
+            claimId=claimId,
+            model=modelName,
+            elapsedSeconds=llmElapsed,
+            messageCount=len(agentMessages),
+            payload={"lastMessageContent": lastContent[:2000] if isinstance(lastContent, str) else str(lastContent)[:2000]},
+            message="Advisor LLM response",
         )
 
     except Exception as e:
         llmElapsed = round(time.time() - llmStartTime, 2)
         errorStr = str(e)
         if "402" in errorStr or "credits" in errorStr.lower() or "quota" in errorStr.lower():
-            logger.warning(
-                "Primary LLM returned 402 in advisorNode — falling back",
-                extra={"error": errorStr, "elapsedSeconds": llmElapsed},
+            logEvent(
+                logger,
+                "advisor.llm_402_fallback",
+                level=logging.WARNING,
+                logCategory="agent",
+                agent="advisor",
+                claimId=claimId,
+                elapsedSeconds=llmElapsed,
+                error=errorStr,
+                message="Primary LLM returned 402 in advisorNode — falling back",
             )
             try:
                 fallbackAgent = _getAdvisorAgent(useFallback=True)
@@ -393,9 +447,15 @@ async def advisorNode(state: ClaimState) -> dict:
     newStatus = DECISION_TO_STATUS.get(advisorDecision, "escalated")
     approvedBy = "agent" if advisorDecision == "auto_approve" else ""
 
-    logger.info(
-        "advisorNode completed",
-        extra={"claimId": claimId, "advisorDecision": advisorDecision, "newStatus": newStatus},
+    logEvent(
+        logger,
+        "advisor.completed",
+        logCategory="agent",
+        agent="advisor",
+        claimId=claimId,
+        advisorDecision=advisorDecision,
+        newStatus=newStatus,
+        message="Advisor agent completed",
     )
 
     # ------------------------------------------------------------------
@@ -434,11 +494,26 @@ async def advisorNode(state: ClaimState) -> dict:
                     "oldValue": "",
                 },
             )
-            logger.debug("Advisor audit log written", extra={"claimId": claimId, "dbClaimId": dbClaimId})
+            logEvent(
+                logger,
+                "advisor.audit_log_written",
+                level=logging.DEBUG,
+                logCategory="agent",
+                agent="advisor",
+                claimId=claimId,
+                dbClaimId=dbClaimId,
+                message="Advisor audit log written",
+            )
         except Exception as e:
-            logger.warning(
-                "Failed to write advisor audit log — continuing",
-                extra={"claimId": claimId, "error": str(e)},
+            logEvent(
+                logger,
+                "advisor.audit_log_error",
+                level=logging.WARNING,
+                logCategory="agent",
+                agent="advisor",
+                claimId=claimId,
+                error=str(e),
+                message="Failed to write advisor audit log — continuing",
             )
 
         try:
@@ -456,11 +531,27 @@ async def advisorNode(state: ClaimState) -> dict:
                     "approvedBy": approvedBy,
                 },
             )
-            logger.debug("Advisor updateClaimStatus written", extra={"claimId": claimId, "newStatus": newStatus, "approvedBy": approvedBy})
+            logEvent(
+                logger,
+                "advisor.status_update",
+                level=logging.DEBUG,
+                logCategory="agent",
+                agent="advisor",
+                claimId=claimId,
+                newStatus=newStatus,
+                approvedBy=approvedBy,
+                message="Advisor updateClaimStatus written",
+            )
         except Exception as e:
-            logger.warning(
-                "Failed to write advisor updateClaimStatus — continuing",
-                extra={"claimId": claimId, "error": str(e)},
+            logEvent(
+                logger,
+                "advisor.status_update_error",
+                level=logging.WARNING,
+                logCategory="agent",
+                agent="advisor",
+                claimId=claimId,
+                error=str(e),
+                message="Failed to write advisor updateClaimStatus — continuing",
             )
 
     # ------------------------------------------------------------------

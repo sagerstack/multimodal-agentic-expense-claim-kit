@@ -31,6 +31,7 @@ from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.agents.shared.llmFactory import buildAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
 from agentic_claims.core.config import getSettings
+from agentic_claims.core.logging import logEvent
 from agentic_claims.core.state import ClaimState
 
 logger = logging.getLogger(__name__)
@@ -58,9 +59,24 @@ def _parseFraudResponse(rawContent: str) -> dict:
                 "rawLlmResponse": rawContent,
             }
         except (json.JSONDecodeError, KeyError) as e:
-            logger.warning("JSON parse failed for fraud response", extra={"error": str(e)})
+            logEvent(
+                logger,
+                "fraud.parse_error",
+                level=logging.WARNING,
+                logCategory="agent",
+                agent="fraud",
+                error=str(e),
+                message="JSON parse failed for fraud response",
+            )
 
-    logger.warning("Defaulting fraud findings to suspicious (parse error)")
+    logEvent(
+        logger,
+        "fraud.parse_fallback",
+        level=logging.WARNING,
+        logCategory="agent",
+        agent="fraud",
+        message="Defaulting fraud findings to suspicious (parse error)",
+    )
     return {
         "verdict": "suspicious",
         "flags": [],
@@ -137,7 +153,14 @@ async def fraudNode(state: ClaimState) -> dict:
     settings = getSettings()
     claimId = state.get("claimId", "unknown")
     dbClaimId = state.get("dbClaimId")
-    logger.info("fraudNode started", extra={"claimId": claimId})
+    logEvent(
+        logger,
+        "fraud.started",
+        logCategory="agent",
+        agent="fraud",
+        claimId=claimId,
+        message="Fraud agent started",
+    )
 
     # Write start audit entry so the timeline shows "Processing"
     if dbClaimId is not None:
@@ -173,14 +196,17 @@ async def fraudNode(state: ClaimState) -> dict:
         or 0.0
     )
 
-    logger.info(
-        "Fraud check context",
-        extra={
-            "employeeId": employeeId,
-            "merchant": merchant,
-            "date": receiptDate,
-            "amount": totalAmountSgd,
-        },
+    logEvent(
+        logger,
+        "fraud.context_read",
+        logCategory="agent",
+        agent="fraud",
+        claimId=claimId,
+        employeeId=employeeId,
+        merchant=merchant,
+        receiptDate=receiptDate,
+        amountSgd=totalAmountSgd,
+        message="Fraud check context",
     )
 
     # ------------------------------------------------------------------
@@ -195,9 +221,14 @@ async def fraudNode(state: ClaimState) -> dict:
     # ------------------------------------------------------------------
     isDuplicate, duplicateClaimNums = _isExactDuplicate(duplicates)
     if isDuplicate:
-        logger.info(
-            "Exact duplicate detected — short-circuiting LLM",
-            extra={"duplicates": duplicateClaimNums, "claimId": claimId},
+        logEvent(
+            logger,
+            "fraud.duplicate_detected",
+            logCategory="agent",
+            agent="fraud",
+            claimId=claimId,
+            duplicates=duplicateClaimNums,
+            message="Exact duplicate detected — short-circuiting LLM",
         )
         fraudFindings = {
             "verdict": "duplicate",
@@ -263,14 +294,15 @@ async def fraudNode(state: ClaimState) -> dict:
         HumanMessage(content=fraudPrompt),
     ]
 
-    logger.info(
-        "fraudNode LLM request",
-        extra={
-            "claimId": claimId,
-            "model": modelName,
-            "systemPrompt": FRAUD_SYSTEM_PROMPT,
-            "userPrompt": fraudPrompt,
-        },
+    logEvent(
+        logger,
+        "fraud.llm_request",
+        logCategory="agent",
+        agent="fraud",
+        claimId=claimId,
+        model=modelName,
+        payload={"systemPrompt": FRAUD_SYSTEM_PROMPT, "userPrompt": fraudPrompt},
+        message="Fraud LLM request",
     )
     llmStartTime = time.time()
 
@@ -279,41 +311,61 @@ async def fraudNode(state: ClaimState) -> dict:
         rawContent = response.content
         llmElapsed = round(time.time() - llmStartTime, 2)
 
-        logger.info(
-            "fraudNode LLM response",
-            extra={
-                "claimId": claimId,
-                "model": modelName,
-                "elapsedSeconds": llmElapsed,
-                "responseLength": len(rawContent) if rawContent else 0,
-                "rawResponse": rawContent[:2000] if rawContent else None,
-            },
+        logEvent(
+            logger,
+            "fraud.llm_response",
+            logCategory="agent",
+            agent="fraud",
+            claimId=claimId,
+            model=modelName,
+            elapsedSeconds=llmElapsed,
+            responseLength=len(rawContent) if rawContent else 0,
+            payload={"rawResponse": rawContent[:2000] if rawContent else None},
+            message="Fraud LLM response",
         )
 
     except Exception as e:
         llmElapsed = round(time.time() - llmStartTime, 2)
         errorStr = str(e)
         if "402" in errorStr or "credits" in errorStr.lower() or "quota" in errorStr.lower():
-            logger.warning(
-                "Primary LLM returned 402 in fraudNode — falling back",
-                extra={"error": errorStr, "elapsedSeconds": llmElapsed},
+            logEvent(
+                logger,
+                "fraud.llm_402_fallback",
+                level=logging.WARNING,
+                logCategory="agent",
+                agent="fraud",
+                claimId=claimId,
+                elapsedSeconds=llmElapsed,
+                error=errorStr,
+                message="Primary LLM returned 402 in fraudNode — falling back",
             )
             llm = buildAgentLlm(settings, temperature=0.1, useFallback=True)
             try:
                 response = await llm.ainvoke(llmMessages)
                 rawContent = response.content
             except Exception as fallbackErr:
-                logger.error(
-                    "Fallback LLM also failed in fraudNode",
-                    extra={"error": str(fallbackErr)},
-                    exc_info=True,
+                logEvent(
+                    logger,
+                    "fraud.llm_fallback_error",
+                    level=logging.ERROR,
+                    logCategory="agent",
+                    agent="fraud",
+                    claimId=claimId,
+                    error=str(fallbackErr),
+                    message="Fallback LLM also failed in fraudNode",
                 )
                 rawContent = None
         else:
-            logger.error(
-                "LLM call failed in fraudNode",
-                extra={"error": errorStr, "elapsedSeconds": llmElapsed},
-                exc_info=True,
+            logEvent(
+                logger,
+                "fraud.llm_error",
+                level=logging.ERROR,
+                logCategory="agent",
+                agent="fraud",
+                claimId=claimId,
+                elapsedSeconds=llmElapsed,
+                error=errorStr,
+                message="LLM call failed in fraudNode",
             )
             rawContent = None
 
@@ -329,7 +381,15 @@ async def fraudNode(state: ClaimState) -> dict:
             ),
             "rawLlmResponse": None,
         }
-        logger.warning("fraudNode returning error fallback verdict", extra={"claimId": claimId})
+        logEvent(
+            logger,
+            "fraud.fallback",
+            level=logging.WARNING,
+            logCategory="agent",
+            agent="fraud",
+            claimId=claimId,
+            message="fraudNode returning error fallback verdict",
+        )
         await _writeAuditLog(settings, dbClaimId, claimId, fraudFindings)
         return {
             "messages": [
@@ -347,7 +407,15 @@ async def fraudNode(state: ClaimState) -> dict:
 
     verdict = fraudFindings.get("verdict", "unknown").upper()
     summary = fraudFindings.get("summary", "")
-    logger.info("fraudNode completed", extra={"claimId": claimId, "verdict": verdict})
+    logEvent(
+        logger,
+        "fraud.completed",
+        logCategory="agent",
+        agent="fraud",
+        claimId=claimId,
+        verdict=verdict,
+        message="Fraud agent completed",
+    )
 
     await _writeAuditLog(settings, dbClaimId, claimId, fraudFindings)
 
@@ -384,19 +452,46 @@ async def _runDbQueries(
             excludeClaimId=excludeClaimId,
         )
     except Exception as e:
-        logger.error("exactDuplicateCheck failed", extra={"error": str(e)}, exc_info=True)
+        logEvent(
+            logger,
+            "fraud.history_query_error",
+            level=logging.ERROR,
+            logCategory="agent",
+            agent="fraud",
+            toolName="exactDuplicateCheck",
+            error=str(e),
+            message="exactDuplicateCheck failed",
+        )
         duplicates = []
 
     try:
         recentClaims = await recentClaimsByEmployee(employeeId, days=30)
     except Exception as e:
-        logger.error("recentClaimsByEmployee failed", extra={"error": str(e)}, exc_info=True)
+        logEvent(
+            logger,
+            "fraud.history_query_error",
+            level=logging.ERROR,
+            logCategory="agent",
+            agent="fraud",
+            toolName="recentClaimsByEmployee",
+            error=str(e),
+            message="recentClaimsByEmployee failed",
+        )
         recentClaims = []
 
     try:
         merchantHistory = await claimsByMerchantAndEmployee(employeeId, merchant)
     except Exception as e:
-        logger.error("claimsByMerchantAndEmployee failed", extra={"error": str(e)}, exc_info=True)
+        logEvent(
+            logger,
+            "fraud.history_query_error",
+            level=logging.ERROR,
+            logCategory="agent",
+            agent="fraud",
+            toolName="claimsByMerchantAndEmployee",
+            error=str(e),
+            message="claimsByMerchantAndEmployee failed",
+        )
         merchantHistory = []
 
     return duplicates, recentClaims, merchantHistory
@@ -425,9 +520,24 @@ async def _writeAuditLog(settings, dbClaimId, claimId: str, fraudFindings: dict)
                 "oldValue": "",
             },
         )
-        logger.debug("Fraud audit log written", extra={"claimId": claimId, "dbClaimId": dbClaimId})
+        logEvent(
+            logger,
+            "fraud.audit_log_written",
+            level=logging.DEBUG,
+            logCategory="agent",
+            agent="fraud",
+            claimId=claimId,
+            dbClaimId=dbClaimId,
+            message="Fraud audit log written",
+        )
     except Exception as e:
-        logger.warning(
-            "Failed to write fraud audit log — continuing",
-            extra={"claimId": claimId, "error": str(e)},
+        logEvent(
+            logger,
+            "fraud.audit_log_error",
+            level=logging.WARNING,
+            logCategory="agent",
+            agent="fraud",
+            claimId=claimId,
+            error=str(e),
+            message="Failed to write fraud audit log — continuing",
         )

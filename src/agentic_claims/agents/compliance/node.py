@@ -25,6 +25,7 @@ from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.agents.shared.llmFactory import buildAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
 from agentic_claims.core.config import getSettings
+from agentic_claims.core.logging import logEvent
 from agentic_claims.core.state import ClaimState
 
 logger = logging.getLogger(__name__)
@@ -56,9 +57,24 @@ def _parseComplianceResponse(rawContent: str) -> dict:
                 "rawLlmResponse": rawContent,
             }
         except (json.JSONDecodeError, KeyError) as e:
-            logger.warning("JSON parse failed for compliance response", extra={"error": str(e)})
+            logEvent(
+                logger,
+                "compliance.parse_error",
+                level=logging.WARNING,
+                logCategory="agent",
+                agent="compliance",
+                message="JSON parse failed for compliance response",
+                error=str(e),
+            )
 
-    logger.warning("Defaulting compliance findings to fail/requiresReview (parse error)")
+    logEvent(
+        logger,
+        "compliance.parse_fallback",
+        level=logging.WARNING,
+        logCategory="agent",
+        agent="compliance",
+        message="Defaulting compliance findings to fail/requiresReview (parse error)",
+    )
     return {
         "verdict": "fail",
         "violations": [],
@@ -95,7 +111,14 @@ async def complianceNode(state: ClaimState) -> dict:
     settings = getSettings()
     claimId = state.get("claimId", "unknown")
     dbClaimId = state.get("dbClaimId")
-    logger.info("complianceNode started", extra={"claimId": claimId})
+    logEvent(
+        logger,
+        "compliance.started",
+        logCategory="agent",
+        agent="compliance",
+        claimId=claimId,
+        message="Compliance agent started",
+    )
 
     # Write start audit entry so the timeline shows "Processing"
     if dbClaimId is not None:
@@ -133,16 +156,31 @@ async def complianceNode(state: ClaimState) -> dict:
         or 0.0
     )
 
-    logger.info(
-        "Claim context read",
-        extra={"claimId": claimId, "category": category, "merchant": merchant, "amountSgd": totalAmountSgd},
+    logEvent(
+        logger,
+        "compliance.context_read",
+        logCategory="agent",
+        agent="compliance",
+        claimId=claimId,
+        category=category,
+        merchant=merchant,
+        amountSgd=totalAmountSgd,
+        message="Claim context read",
     )
 
     # ------------------------------------------------------------------
     # 2. Fetch relevant policy rules via RAG MCP
     # ------------------------------------------------------------------
     policyQuery = f"{category} expense policy spending limit approval threshold budget {merchant}"
-    logger.info("Querying RAG MCP for policy rules", extra={"query": policyQuery})
+    logEvent(
+        logger,
+        "compliance.rag_query",
+        logCategory="agent",
+        agent="compliance",
+        claimId=claimId,
+        query=policyQuery,
+        message="Querying RAG MCP for policy rules",
+    )
 
     policyResults = await mcpCallTool(
         serverUrl=settings.rag_mcp_url,
@@ -151,9 +189,15 @@ async def complianceNode(state: ClaimState) -> dict:
     )
 
     if isinstance(policyResults, dict) and "error" in policyResults:
-        logger.warning(
-            "RAG MCP returned error — proceeding with empty policy context",
-            extra={"error": policyResults["error"]},
+        logEvent(
+            logger,
+            "compliance.rag_error",
+            level=logging.WARNING,
+            logCategory="agent",
+            agent="compliance",
+            claimId=claimId,
+            error=policyResults["error"],
+            message="RAG MCP returned error — proceeding with empty policy context",
         )
         policyResults = []
 
@@ -193,15 +237,23 @@ async def complianceNode(state: ClaimState) -> dict:
 
     # Log the exact SDK params to debug why OpenRouter takes 500s vs 0.1s direct
     sdkParams = llm._default_params
-    logger.info(
-        "complianceNode LLM request",
-        extra={
-            "claimId": claimId,
-            "model": modelName,
+    try:
+        sdkParamsLog = {k: str(v)[:200] for k, v in sdkParams.items()}
+    except Exception:
+        sdkParamsLog = {}
+    logEvent(
+        logger,
+        "compliance.llm_request",
+        logCategory="agent",
+        agent="compliance",
+        claimId=claimId,
+        model=modelName,
+        payload={
             "systemPrompt": COMPLIANCE_SYSTEM_PROMPT,
             "userPrompt": evaluationPrompt,
-            "sdkParams": {k: str(v)[:200] for k, v in sdkParams.items()},
+            "sdkParams": sdkParamsLog,
         },
+        message="Compliance LLM request",
     )
     llmStartTime = time.time()
 
@@ -210,34 +262,63 @@ async def complianceNode(state: ClaimState) -> dict:
         rawContent = response.content
         llmElapsed = round(time.time() - llmStartTime, 2)
 
-        logger.info(
-            "complianceNode LLM response",
-            extra={
-                "claimId": claimId,
-                "model": modelName,
-                "elapsedSeconds": llmElapsed,
-                "responseLength": len(rawContent) if rawContent else 0,
-                "rawResponse": rawContent[:2000] if rawContent else None,
-            },
+        logEvent(
+            logger,
+            "compliance.llm_response",
+            logCategory="agent",
+            agent="compliance",
+            claimId=claimId,
+            model=modelName,
+            elapsedSeconds=llmElapsed,
+            responseLength=len(rawContent) if rawContent else 0,
+            payload={"rawResponse": rawContent[:2000] if rawContent else None},
+            message="Compliance LLM response",
         )
 
     except Exception as e:
         llmElapsed = round(time.time() - llmStartTime, 2)
         errorStr = str(e)
         if "402" in errorStr or "credits" in errorStr.lower() or "quota" in errorStr.lower():
-            logger.warning(
-                "Primary LLM returned 402 in complianceNode — falling back",
-                extra={"primary": settings.openrouter_model_llm, "error": errorStr, "elapsedSeconds": llmElapsed},
+            logEvent(
+                logger,
+                "compliance.llm_402_fallback",
+                level=logging.WARNING,
+                logCategory="agent",
+                agent="compliance",
+                claimId=claimId,
+                model=settings.openrouter_model_llm,
+                elapsedSeconds=llmElapsed,
+                error=errorStr,
+                message="Primary LLM returned 402 in complianceNode — falling back",
             )
             llm = buildAgentLlm(settings, temperature=0.1, useFallback=True)
             try:
                 response = await llm.ainvoke(llmMessages)
                 rawContent = response.content
             except Exception as fallbackErr:
-                logger.error("Fallback LLM also failed in complianceNode", extra={"error": str(fallbackErr)}, exc_info=True)
+                logEvent(
+                    logger,
+                    "compliance.llm_fallback_error",
+                    level=logging.ERROR,
+                    logCategory="agent",
+                    agent="compliance",
+                    claimId=claimId,
+                    error=str(fallbackErr),
+                    message="Fallback LLM also failed in complianceNode",
+                )
                 rawContent = None
         else:
-            logger.error("LLM call failed in complianceNode", extra={"error": errorStr, "elapsedSeconds": llmElapsed}, exc_info=True)
+            logEvent(
+                logger,
+                "compliance.llm_error",
+                level=logging.ERROR,
+                logCategory="agent",
+                agent="compliance",
+                claimId=claimId,
+                elapsedSeconds=llmElapsed,
+                error=errorStr,
+                message="LLM call failed in complianceNode",
+            )
             rawContent = None
 
     # Handle LLM failure: return a conservative requiresReview verdict so the
@@ -250,7 +331,15 @@ async def complianceNode(state: ClaimState) -> dict:
             "requiresReview": True,
             "summary": "Compliance check could not be completed (LLM unavailable). Manual review required.",
         }
-        logger.warning("complianceNode returning error fallback verdict", extra={"claimId": claimId})
+        logEvent(
+            logger,
+            "compliance.fallback",
+            level=logging.WARNING,
+            logCategory="agent",
+            agent="compliance",
+            claimId=claimId,
+            message="complianceNode returning error fallback verdict",
+        )
 
         if dbClaimId is not None:
             try:
@@ -285,9 +374,15 @@ async def complianceNode(state: ClaimState) -> dict:
 
     verdict = complianceFindings.get("verdict", "unknown").upper()
     summary = complianceFindings.get("summary", "")
-    logger.info(
-        "complianceNode completed",
-        extra={"claimId": claimId, "verdict": verdict, "requiresReview": complianceFindings.get("requiresReview")},
+    logEvent(
+        logger,
+        "compliance.completed",
+        logCategory="agent",
+        agent="compliance",
+        claimId=claimId,
+        verdict=verdict,
+        requiresReview=complianceFindings.get("requiresReview"),
+        message="Compliance agent completed",
     )
 
     # ------------------------------------------------------------------
@@ -311,11 +406,26 @@ async def complianceNode(state: ClaimState) -> dict:
                     "oldValue": "",
                 },
             )
-            logger.debug("Compliance audit log written", extra={"claimId": claimId, "dbClaimId": dbClaimId})
+            logEvent(
+                logger,
+                "compliance.audit_log_written",
+                level=logging.DEBUG,
+                logCategory="agent",
+                agent="compliance",
+                claimId=claimId,
+                dbClaimId=dbClaimId,
+                message="Compliance audit log written",
+            )
         except Exception as e:
-            logger.warning(
-                "Failed to write compliance audit log — continuing",
-                extra={"claimId": claimId, "error": str(e)},
+            logEvent(
+                logger,
+                "compliance.audit_log_error",
+                level=logging.WARNING,
+                logCategory="agent",
+                agent="compliance",
+                claimId=claimId,
+                error=str(e),
+                message="Failed to write compliance audit log — continuing",
             )
 
     summaryMsg = f"**Compliance Check**: {verdict} — {summary}"
