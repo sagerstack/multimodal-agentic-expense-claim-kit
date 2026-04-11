@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 11 — Intake Multi-Turn Fix (In progress)
-Plan: 1/4 complete
-Status: Plan 11-01 executed. askHuman tool created, v3 system prompt deployed, auto-reset session added.
-Last activity: 2026-04-11 — Completed 11-01-PLAN.md
+Plan: 2/4 complete
+Status: Plan 11-04 executed. Intake tools + OpenRouter client converted to structured logEvent() calls.
+Last activity: 2026-04-11 — Completed 11-04-PLAN.md
 
 ```
-v2.0 Progress: [###########################.] 27/38 plans
+v2.0 Progress: [############################.] 28/38 plans
 Phase 6:       [##########] 3/3 plans (complete)
 Phase 7:       [##########] 3/3 plans (complete)
 Phase 6.1:     [##########] complete
@@ -25,7 +25,7 @@ Phase 8:       [##########] 5/5 plans (complete)
 Phase 8.1:     [####......] 0/4 plans (in progress — bugs documented)
 Phase 8.2:     [##########] 3/3 plans (complete)
 Phase 10:      [..........] 0/2 plans
-Phase 11:      [##........] 1/4 plans (in progress)
+Phase 11:      [####......] 2/4 plans (in progress)
 Phase 12:      [..........] 0/4 plans (not started)
 ```
 
@@ -115,7 +115,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-11
-Stopped at: Completed 11-01-PLAN.md (askHuman tool, v3 system prompt, auto-reset session)
+Stopped at: Completed 11-04-PLAN.md (intake tools + OpenRouter client structured logging)
 Resume file: None
 
 ### Roadmap Evolution
