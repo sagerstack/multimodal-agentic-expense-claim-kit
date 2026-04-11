@@ -26,7 +26,7 @@ See MILESTONES.md for archived v1.0 details.
 - [x] **Phase 8: Compliance, Fraud + Advisor Agents** -- Replace stubs with LLM-powered agents: policy audit, duplicate/anomaly detection, decision routing (auto-approve, return, escalate)
 - [ ] **Phase 8.1: Bug Fixes + UX Polish** -- Fix Phase 8 QA bugs (BUG-016–025), restructure claim status lifecycle (8 statuses), Claims page "My Claims" section, draft status in table, LLM timeout handling
 - [ ] **Phase 10: Browser E2E Tests** -- Playwright test suite covering all 4 pages against a live server
-- [ ] **Phase 11: Intake Multi-Turn Fix** -- Restore askHuman interrupt tool so intake agent pauses for user confirmation between extraction, policy check, and submission phases
+- [x] **Phase 11: Intake Multi-Turn Fix** -- Restore askHuman interrupt tool so intake agent pauses for user confirmation between extraction, policy check, and submission phases
 - [ ] **Phase 12: DeepEval + RAGAs Evaluation Suite** -- 20 MMGA benchmark test cases scored via Playwright browser capture + deepeval/RAGAs metrics, results on Confident AI dashboard
 
 ---
@@ -373,10 +373,10 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — Core multi-turn fix: askHuman tool + system prompt TURN ROUTING + currency fixes
-- [ ] 11-02-PLAN.md — Remove sendNotification from advisor, remove confirm/edit buttons, fix pathway reset
-- [ ] 11-03-PLAN.md — Observability: convert agent node + infra raw logger calls to logEvent(), suppress on_chat_model_stream noise
-- [ ] 11-04-PLAN.md — Observability: convert intake tool + openrouter client raw logger calls to logEvent()
+- [x] 11-01-PLAN.md — Core multi-turn fix: askHuman tool + system prompt TURN ROUTING + currency fixes
+- [x] 11-02-PLAN.md — Remove sendNotification from advisor, remove confirm/edit buttons, fix pathway reset
+- [x] 11-03-PLAN.md — Observability: convert agent node + infra raw logger calls to logEvent(), suppress on_chat_model_stream noise
+- [x] 11-04-PLAN.md — Observability: convert intake tool + openrouter client raw logger calls to logEvent()
 
 ---
 
@@ -498,7 +498,7 @@ v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 
 | 8.1. Bug Fixes + UX Polish | 0/4 | In progress | -- |
 | 8.2. Advisor Refactor + Schema Alignment | 3/3 | Complete | 2026-04-08 |
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
-| 11. Intake Multi-Turn Fix | 0/4 | Not started | -- |
+| 11. Intake Multi-Turn Fix | 4/4 | Complete | 2026-04-11 |
 | 12. DeepEval + RAGAs Evaluation Suite | 0/4 | Not started | -- |
 
 **v2.0 total:** 26/38 plans complete

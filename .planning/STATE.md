@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Milestone v2.0 — Phase 8.2 complete, Phase 8.1, 10, 11, and 12 remain
+**Current focus:** Milestone v2.0 — Phase 11 complete, Phase 8.1, 10, and 12 remain
 
 ## Current Position
 
-Phase: 11 — Intake Multi-Turn Fix (In progress)
-Plan: 3/4 complete
-Status: Plan 11-03 executed. All 7 agent/sse/graph/chat files converted to logEvent(), on_chat_model_stream noise suppressed.
-Last activity: 2026-04-11 — Completed 11-03-PLAN.md
+Phase: 11 — Intake Multi-Turn Fix (COMPLETE)
+Plan: 4/4 plans complete
+Status: All plans executed and verified. askHuman interrupt tool restored, v3 system prompt with conditional TURN ROUTING, auto-reset session, advisor cleanup, structured logging across all agents/tools/infra.
+Last activity: 2026-04-11 — Phase 11 verification passed
 
 ```
-v2.0 Progress: [############################.] 28/38 plans
+v2.0 Progress: [#############################] 30/38 plans
 Phase 6:       [##########] 3/3 plans (complete)
 Phase 7:       [##########] 3/3 plans (complete)
 Phase 6.1:     [##########] complete
@@ -25,14 +25,14 @@ Phase 8:       [##########] 5/5 plans (complete)
 Phase 8.1:     [####......] 0/4 plans (in progress — bugs documented)
 Phase 8.2:     [##########] 3/3 plans (complete)
 Phase 10:      [..........] 0/2 plans
-Phase 11:      [######....] 3/4 plans (in progress)
+Phase 11:      [##########] 4/4 plans (complete)
 Phase 12:      [..........] 0/4 plans (not started)
 ```
 
 ## Performance Metrics
 
 **Velocity (from v1.0):**
-- Total plans completed: 27
+- Total plans completed: 31
 - Average duration: 8 min
 - Total execution time: ~3.5 hours
 
@@ -115,7 +115,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-11
-Stopped at: Completed 11-03-PLAN.md (structured logging conversion across all agent/sse/graph files)
+Stopped at: Completed Phase 11 — Intake Multi-Turn Fix (4 plans, 2 waves, verification passed)
 Resume file: None
 
 ### Roadmap Evolution
@@ -125,3 +125,4 @@ Resume file: None
 - Phase 11 added: Intake Multi-Turn Fix — restore askHuman interrupt for multi-turn confirmation flow (2026-04-11)
 - Phase 6 completed: 2026-04-01 (3 plans, 3 waves)
 - Phase 7 completed: 2026-04-02 (3 plans, 3 waves, 36 new tests, browser UAT passed)
+- Phase 11 completed: 2026-04-11 (4 plans, 2 waves, 18/18 must-haves verified)
