@@ -9,13 +9,13 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 8.2 — Advisor Refactor + Schema Alignment (COMPLETE)
-Plan: 3/3 plans complete
-Status: All plans executed and verified. Advisor LLM reasoning captured, review v2 promoted, category pipeline wired, Manage + Analytics pages added.
-Last activity: 2026-04-08 — Phase 8.2 verification passed
+Phase: 11 — Intake Multi-Turn Fix (In progress)
+Plan: 1/4 complete
+Status: Plan 11-01 executed. askHuman tool created, v3 system prompt deployed, auto-reset session added.
+Last activity: 2026-04-11 — Completed 11-01-PLAN.md
 
 ```
-v2.0 Progress: [##########################] 26/38 plans
+v2.0 Progress: [###########################.] 27/38 plans
 Phase 6:       [##########] 3/3 plans (complete)
 Phase 7:       [##########] 3/3 plans (complete)
 Phase 6.1:     [##########] complete
@@ -25,7 +25,7 @@ Phase 8:       [##########] 5/5 plans (complete)
 Phase 8.1:     [####......] 0/4 plans (in progress — bugs documented)
 Phase 8.2:     [##########] 3/3 plans (complete)
 Phase 10:      [..........] 0/2 plans
-Phase 11:      [..........] 0/? plans (not planned)
+Phase 11:      [##........] 1/4 plans (in progress)
 Phase 12:      [..........] 0/4 plans (not started)
 ```
 
@@ -114,8 +114,8 @@ From research (see .planning/research/PITFALLS.md):
 
 ## Session Continuity
 
-Last session: 2026-04-08
-Stopped at: Completed 08.2-03-PLAN.md (Manage Claims page, Analytics page, sidebar Manage/Analytics links, category fix in review.py)
+Last session: 2026-04-11
+Stopped at: Completed 11-01-PLAN.md (askHuman tool, v3 system prompt, auto-reset session)
 Resume file: None
 
 ### Roadmap Evolution
