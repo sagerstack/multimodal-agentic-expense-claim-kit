@@ -15,6 +15,7 @@ from agentic_claims.agents.intake.prompts.vlmExtractionPrompt import VLM_EXTRACT
 from agentic_claims.agents.intake.utils.imageQuality import checkImageQuality
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.imageStore import getImage, getImagePath
+from agentic_claims.core.logging import logEvent
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ async def extractReceiptFields(claimId: str) -> dict:
         - Error: {"error": "reason"}
     """
     toolStart = time.time()
-    logger.info("extractReceiptFields started", extra={"claimId": claimId})
+    logEvent(logger, "tool.extractReceiptFields.started", logCategory="tool", toolName="extractReceiptFields", claimId=claimId)
 
     settings = getSettings()
 
@@ -98,13 +99,16 @@ async def extractReceiptFields(claimId: str) -> dict:
             errorStr = str(e)
             # Check for 402 payment/quota errors
             if "402" in errorStr or "credits" in errorStr.lower() or "quota" in errorStr.lower():
-                logger.warning(
-                    "Primary VLM model returned 402, falling back to secondary model",
-                    extra={
-                        "primary_model": settings.openrouter_model_vlm,
-                        "fallback_model": settings.openrouter_fallback_model_vlm,
-                        "error": errorStr,
-                    },
+                logEvent(
+                    logger,
+                    "tool.extractReceiptFields.vlm_fallback",
+                    level=logging.WARNING,
+                    logCategory="tool",
+                    toolName="extractReceiptFields",
+                    claimId=claimId,
+                    primaryModel=settings.openrouter_model_vlm,
+                    fallbackModel=settings.openrouter_fallback_model_vlm,
+                    error=errorStr,
                 )
                 # Retry with fallback VLM model
                 fallbackVlm = ChatOpenRouter(
@@ -124,9 +128,13 @@ async def extractReceiptFields(claimId: str) -> dict:
             else:
                 raise
 
-        logger.info(
-            "extractReceiptFields VLM call completed",
-            extra={"elapsed": f"{time.time() - toolStart:.2f}s"},
+        logEvent(
+            logger,
+            "tool.extractReceiptFields.vlm_completed",
+            logCategory="tool",
+            toolName="extractReceiptFields",
+            claimId=claimId,
+            elapsed=f"{time.time() - toolStart:.2f}s",
         )
 
         rawContent = response.content.strip()
@@ -140,12 +148,14 @@ async def extractReceiptFields(claimId: str) -> dict:
 
         try:
             result = json.loads(rawContent)
-            logger.info(
-                "extractReceiptFields completed",
-                extra={
-                    "elapsed": f"{time.time() - toolStart:.2f}s",
-                    "hasFields": "fields" in result,
-                },
+            logEvent(
+                logger,
+                "tool.extractReceiptFields.completed",
+                logCategory="tool",
+                toolName="extractReceiptFields",
+                claimId=claimId,
+                elapsed=f"{time.time() - toolStart:.2f}s",
+                hasFields="fields" in result,
             )
 
             # Include imagePath in result so LLM passes it in receiptData.imagePath

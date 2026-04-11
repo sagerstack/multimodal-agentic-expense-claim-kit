@@ -9,6 +9,7 @@ from agentic_claims.agents.intake.auditLogger import bufferStep
 from agentic_claims.agents.intake.extractionContext import sessionClaimIdVar
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
+from agentic_claims.core.logging import logEvent
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ async def searchPolicies(query: str, limit: int = 5, claimId: str | None = None)
         or error dict if search fails
     """
     toolStart = time.time()
-    logger.info("searchPolicies started", extra={"query": query, "limit": limit})
+    logEvent(logger, "tool.searchPolicies.started", logCategory="tool", toolName="searchPolicies", mcpServer="mcp-rag", query=query, limit=limit)
 
     settings = getSettings()
 
@@ -37,12 +38,14 @@ async def searchPolicies(query: str, limit: int = 5, claimId: str | None = None)
         arguments={"query": query, "limit": limit},
     )
 
-    logger.info(
-        "searchPolicies completed",
-        extra={
-            "elapsed": f"{time.time() - toolStart:.2f}s",
-            "resultCount": len(result) if isinstance(result, list) else 0,
-        },
+    logEvent(
+        logger,
+        "tool.searchPolicies.completed",
+        logCategory="tool",
+        toolName="searchPolicies",
+        mcpServer="mcp-rag",
+        elapsed=f"{time.time() - toolStart:.2f}s",
+        resultCount=len(result) if isinstance(result, list) else 0,
     )
 
     # Buffer policy check audit step using session claimId from ContextVar fallback

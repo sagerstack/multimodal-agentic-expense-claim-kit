@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
+from agentic_claims.core.logging import logEvent
 
 
 @tool
@@ -24,7 +25,7 @@ async def convertCurrency(amount: float, fromCurrency: str, toCurrency: str) -> 
         or error dict if conversion fails
     """
     toolStart = time.time()
-    logger.info("convertCurrency started", extra={"amount": amount, "fromCurrency": fromCurrency, "toCurrency": toCurrency})
+    logEvent(logger, "tool.convertCurrency.started", logCategory="tool", toolName="convertCurrency", mcpServer="mcp-currency", amount=amount, fromCurrency=fromCurrency, toCurrency=toCurrency)
 
     settings = getSettings()
 
@@ -34,5 +35,5 @@ async def convertCurrency(amount: float, fromCurrency: str, toCurrency: str) -> 
         arguments={"amount": amount, "fromCurrency": fromCurrency, "toCurrency": toCurrency},
     )
 
-    logger.info("convertCurrency completed", extra={"elapsed": f"{time.time() - toolStart:.2f}s"})
+    logEvent(logger, "tool.convertCurrency.completed", logCategory="tool", toolName="convertCurrency", mcpServer="mcp-currency", elapsed=f"{time.time() - toolStart:.2f}s")
     return result
