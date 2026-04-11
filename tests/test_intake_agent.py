@@ -20,8 +20,8 @@ def test_getIntakeAgentReturnsCompiledGraph():
     assert callable(agent.ainvoke), "ainvoke should be callable"
 
 
-def test_intakeAgentHasFiveTools():
-    """Verify the ReAct agent has all 5 domain tools registered."""
+def test_intakeAgentHasSixTools():
+    """Verify the ReAct agent has all 6 domain tools registered."""
     with patch("agentic_claims.agents.intake.node.create_react_agent") as mockCreateAgent:
         # Mock the agent creation to capture arguments
         mockAgent = MagicMock()
@@ -37,8 +37,8 @@ def test_intakeAgentHasFiveTools():
         callArgs = mockCreateAgent.call_args
         tools = callArgs.kwargs.get("tools", [])
 
-        # Verify 5 tools
-        assert len(tools) == 5, f"Expected 5 tools, got {len(tools)}"
+        # Verify 6 tools
+        assert len(tools) == 6, f"Expected 6 tools, got {len(tools)}"
 
         # Verify tool names
         toolNames = [tool.name for tool in tools]
@@ -48,6 +48,7 @@ def test_intakeAgentHasFiveTools():
             "searchPolicies",
             "convertCurrency",
             "submitClaim",
+            "askHuman",
         ]
         for expectedTool in expectedTools:
             assert expectedTool in toolNames, f"Tool {expectedTool} missing from agent"

@@ -41,6 +41,7 @@ TOOL_LABELS = {
     "searchPolicies": "Checking policies...",
     "convertCurrency": "Converting currency...",
     "submitClaim": "Submitting claim...",
+    "askHuman": "Waiting for your input...",
 }
 
 

@@ -12,6 +12,7 @@ from langgraph.prebuilt import create_react_agent
 from agentic_claims.agents.intake.auditLogger import bufferStep, flushSteps, logIntakeStep
 from agentic_claims.agents.intake.extractionContext import extractedReceiptVar
 from agentic_claims.agents.intake.prompts.agentSystemPrompt_v2 import INTAKE_AGENT_SYSTEM_PROMPT
+from agentic_claims.agents.intake.tools.askHuman import askHuman
 from agentic_claims.agents.intake.tools.convertCurrency import convertCurrency
 from agentic_claims.agents.intake.tools.extractReceiptFields import extractReceiptFields
 from agentic_claims.agents.intake.tools.getClaimSchema import getClaimSchema
@@ -27,7 +28,7 @@ def getIntakeAgent(useFallback: bool = False):
     """Create and return the compiled ReAct agent for intake processing.
 
     The agent uses ChatOpenRouter as the LLM and has access to
-    5 domain tools for the intake workflow.
+    6 domain tools for the intake workflow.
 
     Args:
         useFallback: If True, use fallback LLM model instead of primary
@@ -60,6 +61,7 @@ def getIntakeAgent(useFallback: bool = False):
         searchPolicies,
         convertCurrency,
         submitClaim,
+        askHuman,
     ]
 
     # Create ReAct agent with system prompt
