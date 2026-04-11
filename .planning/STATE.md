@@ -10,12 +10,12 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 12 — deepeval/RAGAS Evaluation Suite (IN PROGRESS)
-Plan: 1/4 plans complete
-Status: Plan 12-01 complete. deepeval 3.9.6 + litellm 1.83.0 installed, EvalConfig with LiteLLMModel judge, all 20 MMGA benchmarks defined.
-Last activity: 2026-04-11 — Completed 12-01-PLAN.md (eval foundation: dependencies + dataset)
+Plan: 2/4 plans complete
+Status: Plan 12-02 complete. Capture layer built: subagent prompt builder for all 20 benchmarks, DB+Qdrant enrichment module.
+Last activity: 2026-04-11 — Completed 12-02-PLAN.md (capture layer: subagent prompts + enrichment)
 
 ```
-v2.0 Progress: [##############################] 31/38 plans
+v2.0 Progress: [################################] 32/38 plans
 Phase 6:       [##########] 3/3 plans (complete)
 Phase 7:       [##########] 3/3 plans (complete)
 Phase 6.1:     [##########] complete
@@ -26,7 +26,7 @@ Phase 8.1:     [####......] 0/4 plans (in progress — bugs documented)
 Phase 8.2:     [##########] 3/3 plans (complete)
 Phase 10:      [..........] 0/2 plans
 Phase 11:      [##########] 4/4 plans (complete)
-Phase 12:      [##........] 1/4 plans (in progress)
+Phase 12:      [####......] 2/4 plans (in progress)
 ```
 
 ## Performance Metrics
@@ -54,8 +54,12 @@ Phase 12 decisions (2026-04-11):
 - Eval suite uses plain dataclass (not pydantic-settings) — standalone, decoupled from app
 - LiteLLMModel model string is `openrouter/openai/gpt-4o` (litellm provider/model format)
 - ER-018/019/020 scoringType = "safety" (not "verifier" per PDF tier table wording)
-- 18.pdf missing from eval/invoices/ — capture module (12-02) must handle gracefully
+- 18.pdf missing from eval/invoices/ — capture handles gracefully (file-not-found error JSON)
 - deepeval/litellm installed via pip --trusted-host due to SSL cert issue with poetry on this machine
+- ER-013 uses buildDuplicateCapturePrompt (two-session pattern, logout between sessions)
+- Enrichment uses psycopg (not asyncpg) — already in project dependencies
+- Qdrant enrichment uses scroll API with section metadata filter on expense_policies collection
+- DB enrichment overrides browser-scraped agentDecision with authoritative advisor_decision column
 
 New for v2.0:
 - Chainlit replaced by FastAPI + Jinja2 + HTMX
@@ -122,7 +126,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-11
-Stopped at: Completed Phase 12 Plan 01 — eval foundation (deepeval + litellm installed, EvalConfig, 20 benchmarks)
+Stopped at: Completed Phase 12 Plan 02 — capture layer (subagent prompts + DB/Qdrant enrichment)
 Resume file: None
 
 ### Roadmap Evolution
