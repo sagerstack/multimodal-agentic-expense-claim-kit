@@ -7,7 +7,7 @@ Workflow:
   2. Read dbClaimId directly from state (written by intakeNode after submitClaim)
   3. Build context message for the ReAct agent
   4. Invoke agent (with 402 fallback) to: optionally search policies, update claim
-     status via DB MCP, send email notifications
+     status via DB MCP
   5. Extract advisorDecision from agent output messages
   6. Write advisor_decision audit_log entry via DB MCP insertAuditLog
   7. Return summary AIMessage only (message hygiene — no ReAct tool noise)
@@ -15,7 +15,6 @@ Workflow:
 MCP servers used:
   - mcp-rag  (port 8001): searchPolicies — cite policy clauses in decision
   - mcp-db   (port 8002): updateClaimStatus + insertAuditLog
-  - mcp-email (port 8004): sendClaimNotification — notify claimant and/or reviewer
 """
 
 import json
@@ -27,7 +26,6 @@ from langgraph.prebuilt import create_react_agent
 
 from agentic_claims.agents.advisor.prompts.advisorSystemPrompt import ADVISOR_SYSTEM_PROMPT
 from agentic_claims.agents.advisor.tools.searchPolicies import searchPolicies
-from agentic_claims.agents.advisor.tools.sendNotification import sendNotification
 from agentic_claims.agents.advisor.tools.updateClaimStatus import updateClaimStatus
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.agents.shared.llmFactory import buildAgentLlm
@@ -58,13 +56,13 @@ DECISION_LABELS = {
 
 
 def _getAdvisorAgent(useFallback: bool = False):
-    """Create the ReAct advisor agent with its three tools."""
+    """Create the ReAct advisor agent with its two tools."""
     settings = getSettings()
     llm = buildAgentLlm(settings, temperature=0.2, useFallback=useFallback)
 
     return create_react_agent(
         model=llm,
-        tools=[searchPolicies, updateClaimStatus, sendNotification],
+        tools=[searchPolicies, updateClaimStatus],
         prompt=ADVISOR_SYSTEM_PROMPT,
     )
 
@@ -317,8 +315,7 @@ async def advisorNode(state: ClaimState) -> dict:
         "## Claim Review Context\n\n"
         f"```json\n{json.dumps(advisorContext, indent=2, default=str)}\n```\n\n"
         "Apply the decision rules from your system prompt.\n"
-        "Follow the mandatory workflow: decide → updateClaimStatus → sendNotification (claimant) "
-        "→ sendNotification (reviewer, if escalating).\n"
+        "Follow the mandatory workflow: decide → updateClaimStatus.\n"
         "End with the final JSON summary.\n"
         "/no_think"
     )
