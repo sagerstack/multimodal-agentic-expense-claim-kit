@@ -475,9 +475,9 @@ Folder Structure:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 12-01-PLAN.md — Foundation: deepeval + RAGAs + ragas dependencies, OpenRouter judge model config, dataset (20 Goldens from PDF ground truth with expected outputs)
+- [ ] 12-01-PLAN.md — Foundation: deepeval + litellm dependencies, OpenRouter judge model config, dataset (20 Goldens from PDF ground truth with expected outputs)
 - [ ] 12-02-PLAN.md — Capture: Claude subagent prompt templates per benchmark, Playwright browser automation (login, upload receipt, converse, capture output), DB enrichment queries (claims + audit_log → findings + retrieval_context), results JSON writer
-- [ ] 12-03-PLAN.md — Metrics: 8 deterministic `BaseMetric` subclasses, 10 GEval instances with per-category evaluation_steps, `HallucinationMetric` config, 3 RAGAs metrics config, metric-to-benchmark mapping
+- [ ] 12-03-PLAN.md — Metrics: 8 deterministic `BaseMetric` subclasses, 10 GEval instances with per-category evaluation_steps, `HallucinationMetric` config, 3 native deepeval retrieval metrics config, metric-to-benchmark mapping
 - [ ] 12-04-PLAN.md — Orchestration + reporting: `run_eval.py` entry point (capture/enrich/score/report modes), weighted scoring calculation, terminal summary table, Confident AI dashboard push, `--skip-capture` flag for re-scoring
 
 ---
@@ -498,7 +498,7 @@ v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 
 | 8.1. Bug Fixes + UX Polish | 0/4 | In progress | -- |
 | 8.2. Advisor Refactor + Schema Alignment | 3/3 | Complete | 2026-04-08 |
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
-| 11. Intake Multi-Turn Fix | 0/? | Not started | -- |
+| 11. Intake Multi-Turn Fix | 0/4 | Not started | -- |
 | 12. DeepEval + RAGAs Evaluation Suite | 0/4 | Not started | -- |
 
 **v2.0 total:** 26/38 plans complete
