@@ -370,10 +370,12 @@ Plans:
 11. When `convertCurrency` fails with a 404 (unsupported currency), the agent asks the user once and accepts a manual exchange rate override (e.g. "1 VND = 0.92 SGD") — it does NOT retry the failing API call in a loop
 12. All existing tests pass; tool count updated from 5 to 6 in intake agent test assertions
 
-**Plans:** 0 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 11 to break down)
+- [ ] 11-01-PLAN.md — Core multi-turn fix: askHuman tool + system prompt TURN ROUTING + currency fixes
+- [ ] 11-02-PLAN.md — Remove sendNotification from advisor, remove confirm/edit buttons, fix pathway reset
+- [ ] 11-03-PLAN.md — Observability: convert ~65 raw logger calls to logEvent(), suppress on_chat_model_stream noise
 
 ---
 
