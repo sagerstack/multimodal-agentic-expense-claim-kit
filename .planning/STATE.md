@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 13 — Intake Agent Hybrid Routing + Bug Fixes (In progress)
-Plan: 5/9 plans complete (13-01, 13-02, 13-03, 13-04, 13-05 done)
-Status: Plan 13-05 complete. postToolFlagSetter derives unsupportedCurrencies/clarificationPending/askHumanCount from ToolMessages; submitClaimGuard detects Bug 3 (submitClaim hallucination). 21 new tests, 276 total passing.
-Last activity: 2026-04-12 — Completed 13-05-PLAN.md (post-tool flag setter and submit guard)
+Plan: 6/9 plans complete (13-01 through 13-06 done)
+Status: Plan 13-06 complete. Keystone wiring: buildIntakeSubgraph (v5 + hooks + checkpointer=None), _mergeSubgraphResult whitelist, preIntakeValidator, postIntakeRouter → humanEscalation. 14 tests updated, 261 passing.
+Last activity: 2026-04-12 — Completed 13-06-PLAN.md (wrapper graph wiring)
 
 ```
 v2.0 Progress: [##################################] 33/38 plans
@@ -130,7 +130,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-12
-Stopped at: Completed Phase 13 Plan 05 — postToolFlagSetter + submitClaimGuard hooks (21 new tests, 276 passing).
+Stopped at: Completed Phase 13 Plan 06 — wrapper graph wiring (buildIntakeSubgraph, _mergeSubgraphResult, preIntakeValidator, postIntakeRouter, humanEscalation wired into main graph). 261 passing, 14 tests updated.
 Resume file: None
 
 ### Roadmap Evolution
@@ -142,6 +142,12 @@ Resume file: None
 - Phase 7 completed: 2026-04-02 (3 plans, 3 waves, 36 new tests, browser UAT passed)
 - Phase 11 completed: 2026-04-11 (4 plans, 2 waves, 18/18 must-haves verified)
 - Phase 13 added: Intake Agent Hybrid Routing + Bug Fixes — align intake agent with docs/deep-research-*.md (hybrid code-enforced routing + prompt-driven conversation); closes 6 open intake-layer bugs (2, 3, 4, 5, 6, 7) as symptoms of the misalignment (2026-04-12)
+
+Phase 13 decisions (2026-04-12, Plan 06):
+- messages delta form chosen in _mergeSubgraphResult: slice result["messages"][priorCount:] so outer add_messages reducer appends only new messages without duplicates
+- phase field absent from IntakeSubgraphState: 13-02 boolean-flag decomposition supersedes single enum; phase key does not exist in ClaimState
+- _intakeConditionalRouter: postIntakeRouter + evaluatorGate composed inline in a single conditional edge — escalation takes precedence over submitted/pending routing
+- _buildLlmAndTools extracted as shared factory for both getIntakeAgent and intakeNode
 
 Phase 13 decisions (2026-04-12):
 - convertCurrency structured contract: two-layer normalisation — MCP server (source of truth) + intake tool wrapper (defence-in-depth for legacy shapes)
