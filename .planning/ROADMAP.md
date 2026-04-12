@@ -28,6 +28,7 @@ See MILESTONES.md for archived v1.0 details.
 - [ ] **Phase 10: Browser E2E Tests** -- Playwright test suite covering all 4 pages against a live server
 - [x] **Phase 11: Intake Multi-Turn Fix** -- Restore askHuman interrupt tool so intake agent pauses for user confirmation between extraction, policy check, and submission phases
 - [ ] **Phase 12: DeepEval + RAGAs Evaluation Suite** -- 20 MMGA benchmark test cases scored via Playwright browser capture + deepeval/RAGAs metrics, results on Confident AI dashboard
+- [x] **Phase 13: Intake Agent Hybrid Routing + Bug Fixes** -- Align intake agent with docs/deep-research-*.md: migrate from prompt-only routing (v4.1) to hybrid (code-enforced routing via hooks + state flags, prompt-driven conversation). Closes 6 open intake-layer bugs (2, 3, 4, 5, 6, 7) as symptoms of the misalignment.
 
 ---
 
@@ -482,10 +483,70 @@ Plans:
 
 ---
 
+### Phase 13: Intake Agent Hybrid Routing + Bug Fixes
+
+**Goal:** Align the intake agent implementation with the architecture prescribed in `docs/deep-research-langgraph-react-node.md`, `docs/deep-research-systemprompt-chat-agent.md`, and `docs/deep-research-report.md`. Migrate from prompt-only routing (v4.1) to the hybrid pattern all three research docs converge on: code-enforced routing (graph topology + pre/post-model hooks + state flags) with prompt-driven conversation (layered operating manual, strict tool contracts, content-only per-phase instructions). The 6 open bugs in the intake layer are symptoms of the misalignment; this phase closes them by fixing the architecture, not by adding prose rules.
+
+**Depends on:** Phase 11
+
+**Research alignment:**
+
+| Research recommendation | Source | Current state | Phase 13 outcome |
+|---|---|---|---|
+| Custom LangGraph node (model + ToolNode loop) with explicit checkpoints, not vanilla `create_react_agent` | langgraph-react-node §"Recommended default architecture" | Vanilla `create_react_agent`, no hooks, no explicit checkpoints | Pre-model + post-tool hooks wired; explicit phase state; `human_escalation` node |
+| Interrupts as first-class HITL, not inferred from error strings | langgraph-react-node §"Interactive clarifications: interrupts vs MCP elicitation" | `askHuman` interrupts work, but LLM frequently skips them on tool errors | Post-tool hook forces interrupt path on unsupported-currency + retryable failures; LLM no longer parses error strings |
+| Tool-execution errors separated from protocol/contract failures; retries at tool boundary, not via LLM inference | systemprompt-chat-agent §"Error recovery" | LLM asked to pattern-match "404"/"not found" strings to decide retry vs manual-rate | `convertCurrency` returns structured `{supported: false, ...}`; retry/fallback logic in hook, not prompt |
+| Approval as a first-class step, enforced by code | systemprompt-chat-agent §"User confirmation and consent flows" | `submitClaim` success can be hallucinated without the tool actually running | Post-model validator rejects AIMessages claiming submission without a matching `submitClaim` tool call this turn |
+| Loop bounds mandatory for any retry or HITL loop | langgraph-react-node §"Error handling and retries" | No counter; agent can re-`askHuman` same question indefinitely | `askHumanCount` state field + conditional edge → `human_escalation` at count > 3 |
+| Layered operating manual prompt: persona, tool contracts, content — not control flow | systemprompt-chat-agent §"Prompt structure" + report §"Policy-variable base prompt" | v4.1 prompt contains TURN ROUTING, ACTIVE-CLAIM GATE, CONVERSATION DISCIPLINE (routing logic in prose) | v5 prompt: persona + tool catalog + behavioral principles + per-phase content; routing removed, pointer to synthetic SystemMessage contract |
+| Fallback provider chain for external APIs | langgraph-react-node §"Error handling and retries" | Single Frankfurter provider; 404 on VND/THB/IDR/etc. | Provider abstraction + chain (Frankfurter → ExchangeRateApi → structured `supported: false`) in currency MCP |
+| Observability at every tool edge with structured fields | langgraph-react-node §"Observability and audit trails" | PROBE A/D ad-hoc debug logs still in `sseHelpers.py`; `aget_state` duplicated | PROBE cleanup; single `aget_state()` snapshot read per handler |
+
+**Issues in scope:**
+
+| # | Bug | Symptom of misalignment with |
+|---|---|---|
+| 2 | LLM emits plain-text AIMessage instead of `askHuman` on `convertCurrency` error | Interrupts-as-first-class + error separation |
+| 3 | `submitClaim` success hallucinated without tool call | Approval as first-class step + tool contract |
+| 4 | VND hardcoded examples in v4.1 prompt (L154 rate `0.000054`, L181 display example) | Prompt layering (no fact baking) |
+| 5 | PROBE A/D debug logs left in `sseHelpers.py` (~L1395, ~L793) | Structured observability standard |
+| 6 | Frankfurter VND 404 has no fallback provider | Fallback provider chain |
+| 7 | Duplicate `aget_state()` calls in `/chat/message` handler | Clean handler boundary |
+
+Bug 1 (resume contract drift — session vs checkpointer) is already resolved via the Option 3 checkpointer-based interrupt detection shipped earlier on this branch.
+
+**Success Criteria** (what must be TRUE when Phase 13 completes):
+1. Intake agent uses `pre_model_hook` and `post_tool_hook` (or equivalent wrapper) to route tool outcomes; no routing logic remains in system prompt
+2. v5 prompt exists at `agentSystemPrompt_v5.py`; v4.1 no longer imported; prompt length reduced to descriptive content only (persona, tool catalog, behavioral principles, per-phase content)
+3. `convertCurrency` returns `{supported: bool, ...}` structured shape; unsupported currencies never retry the failing provider; LLM never pattern-matches error strings
+4. Post-model validator detects and prevents `submitClaim` success claims in AIMessages without a matching tool call this turn
+5. `ClaimState` has `askHumanCount` + `unsupportedCurrencies` + `phase` fields with correct reducers; conditional edge routes to `human_escalation` node when `askHumanCount > 3`
+6. Currency MCP server implements a two-tier chain: Frankfurter as primary provider; when a currency is unsupported (e.g., VND/THB/IDR), the tool returns `{supported: false}` and the post-tool hook routes to `askHuman` for manual-rate entry. Per locked architectural decision in `13-CONTEXT.md`, no secondary API provider is in scope for Phase 13.
+7. `sseHelpers.py` PROBE A (~L1395) and PROBE D (~L793) removed after end-to-end validation passes
+8. `/chat/message` handler reads `graph.aget_state()` exactly once per request; both auto-reset check and resume detection consume the same snapshot
+9. Bug 2 acceptance scenarios pass end-to-end against live stack: VND receipt → `askHuman` for manual rate via hook-driven flow; unsupported currency after provider chain exhausted → same flow
+10. All existing tests pass; new tests cover hooks, validator, provider chain, and state reducers
+11. Implementation choices traceable to specific sections of the three deep-research docs (every architectural decision cites source)
+
+**Plans:** 9 plans in 5 waves
+
+Plans:
+- [ ] 13-01-PLAN.md -- Tool-contract hardening: convertCurrency {supported: bool, ...} at both tool + MCP layers (KEYSTONE)
+- [ ] 13-02-PLAN.md -- ClaimState additions + _unionSet reducer for six new routing fields
+- [ ] 13-03-PLAN.md -- v5 intake system prompt: layered operating manual, routing logic stripped
+- [ ] 13-04-PLAN.md -- preModelHook, postModelHook, humanEscalationNode modules
+- [ ] 13-05-PLAN.md -- postToolFlagSetter + submitClaimGuard hook modules
+- [ ] 13-06-PLAN.md -- Wrapper graph wiring: intake/node.py rewrite + core/graph.py topology update
+- [ ] 13-07-PLAN.md -- Unit tests for all four hooks + wrapper-graph router
+- [ ] 13-08-PLAN.md -- End-to-end VND test + trace-reconstruction test (gates cleanup)
+- [ ] 13-09-PLAN.md -- Cleanup: remove PROBE A/D from sseHelpers.py, single aget_state in chat.py
+
+---
+
 ## Progress
 
 **Execution Order:**
-v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 10 -> 11 -> 12
+v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 10 -> 11 -> 12 -> 13
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
@@ -500,7 +561,8 @@ v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 
 | 10. Browser E2E Tests | 0/2 | Not started | -- |
 | 11. Intake Multi-Turn Fix | 4/4 | Complete | 2026-04-11 |
 | 12. DeepEval + RAGAs Evaluation Suite | 0/4 | Not started | -- |
+| 13. Intake Agent Hybrid Routing + Bug Fixes | 9/9 | Complete | 2026-04-13 |
 
-**v2.0 total:** 26/38 plans complete
+**v2.0 total:** 35/47+ plans complete (Phase 13 adds 9 plans)
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)
