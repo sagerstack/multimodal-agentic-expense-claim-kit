@@ -6,8 +6,25 @@ into Phase 13 state flags that downstream hooks read:
     -> unsupportedCurrencies: {X}, clarificationPending: True
   - askHuman ToolMessage (any result — the interrupt resumed)
     -> askHumanCount += 1
+    -> IF state.clarificationPending was True: clarificationPending: False
+       (the user's answer resolves the pending state)
   - Any tool error (ToolMessage.status == "error")
     -> validatorEscalate: True (routes to humanEscalationNode)
+
+Flag-clearing semantics (F1, Plan 13-12):
+  - askHuman ToolMessage AND state.clarificationPending was True
+    -> clarificationPending: False (the user's answer resolves the pending state)
+
+  - When a turn has BOTH convertCurrency(supported=false) AND an askHuman
+    ToolMessage, the clarification stays True (a new unsupported currency was
+    detected; the pending state moves from one topic to another). This matches
+    the "last write wins" semantic: clearClarificationPending is applied BEFORE
+    setClarification, so a turn with both ends up pending=True.
+
+  - Clearing is EXCLUSIVE to askHuman ToolMessages. convertCurrency,
+    searchPolicies, and submitClaim ToolMessages do NOT clear the flag.
+    Rationale: only askHuman represents a user answer that resolves a pending
+    clarification.
 
 This module is the single place in Phase 13 where raw tool output is
 inspected for routing decisions. The LLM never does this — the prompt
@@ -24,6 +41,8 @@ Sources:
     L153 (Gap 3 — structured error -> state flag)
   - 13-01-SUMMARY.md (convertCurrency {supported} contract)
   - 13-02-SUMMARY.md (ClaimState field definitions and reducers)
+  - 13-DEBUG-policy-exception-loop.md F1 (clear on askHuman resolution)
+  - 13-DEBUG-display-regression.md Fix C (same fix, consolidated)
 """
 
 import json
@@ -84,6 +103,7 @@ async def postToolFlagSetter(state: dict) -> dict:
     currentAskHumanCount = int(state.get("askHumanCount") or 0)
     newUnsupported: set[str] = set()
     setClarification = False
+    clearClarificationPending = False
     setEscalate = False
     askHumanIncrement = 0
 
@@ -110,9 +130,14 @@ async def postToolFlagSetter(state: dict) -> dict:
                         agent="intake",
                     )
 
-        # askHuman resumed -> increment loop counter
+        # askHuman resumed -> increment loop counter + resolve pending clarification
         if toolName == "askHuman":
             askHumanIncrement += 1
+            # F1 (13-12): askHuman ToolMessage is definitionally a user answer.
+            # If a clarification was pending, it is now resolved.
+            # Source: 13-DEBUG-policy-exception-loop.md F1; 13-DEBUG-display-regression.md Fix C.
+            if state.get("clarificationPending"):
+                clearClarificationPending = True
             logEvent(
                 logger,
                 "intake.hook.post_tool.flag_set",
@@ -145,8 +170,29 @@ async def postToolFlagSetter(state: dict) -> dict:
     updates: dict[str, Any] = {}
     if newUnsupported:
         updates["unsupportedCurrencies"] = newUnsupported
+
+    # F1: clear on askHuman resume BEFORE reapplying setClarification, so
+    # a turn that has both (unusual — new unsupported + a separate askHuman)
+    # correctly ends up with clarificationPending=True (last-write-wins: the
+    # new unsupported-currency event wins over the resolution).
+    if clearClarificationPending and not setClarification:
+        updates["clarificationPending"] = False
+        logEvent(
+            logger,
+            "intake.hook.post_tool.flag_set",
+            logCategory="routing",
+            claimId=claimId,
+            threadId=threadId,
+            flagName="clarificationPending",
+            flagValue=False,
+            toolName="askHuman",
+            reason="askHuman_resolved_pending",
+            agent="intake",
+        )
+
     if setClarification:
         updates["clarificationPending"] = True
+
     if askHumanIncrement:
         updates["askHumanCount"] = currentAskHumanCount + askHumanIncrement
     if setEscalate:
