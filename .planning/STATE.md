@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Milestone v2.0 — Phase 11 complete, Phase 8.1, 10, 12, and 13 remain
+**Current focus:** Milestone v2.0 — Phases 11 and 13 complete; Phase 8.1, 10, 12 remain
 
 ## Current Position
 
-Phase: 13 — Intake Agent Hybrid Routing + Bug Fixes (In progress)
-Plan: 7/9 plans complete (13-01 through 13-07 done)
-Status: Plan 13-07 complete. Unit test suite: test_intake_hooks.py (18 tests, all four hook modules), test_intake_agent.py extended (+13 tests, boundary/integration/MCP). 311 passing.
-Last activity: 2026-04-12 — Completed 13-07-PLAN.md (hook and router unit tests)
+Phase: 13 — Intake Agent Hybrid Routing + Bug Fixes (Complete)
+Plan: 9/9 plans complete (13-01 through 13-09 done)
+Status: Phase 13 complete. Plan 13-09 cleanup delivered: PROBE A/D downgraded to DEBUG level per user directive (retained, not deleted — deviation from original plan); single graph.aget_state() per /chat/message request with auto-reset short-circuit. All 11 ROADMAP Phase 13 success criteria met (Criterion #7 reinterpreted as "probes no longer emit at default level"). 311 tests passing (pre-existing failures unchanged).
+Last activity: 2026-04-13 — Completed 13-09-PLAN.md (final plan in Phase 13)
 
 ```
 v2.0 Progress: [##################################] 33/38 plans
@@ -27,6 +27,7 @@ Phase 8.2:     [##########] 3/3 plans (complete)
 Phase 10:      [..........] 0/2 plans
 Phase 11:      [##########] 4/4 plans (complete)
 Phase 12:      [##########] 4/4 plans (complete — checkpoint pending)
+Phase 13:      [##########] 9/9 plans (complete)
 ```
 
 ## Performance Metrics
@@ -129,8 +130,8 @@ From research (see .planning/research/PITFALLS.md):
 
 ## Session Continuity
 
-Last session: 2026-04-12
-Stopped at: Completed Phase 13 Plan 07 — hook and router unit tests. test_intake_hooks.py (18 tests), test_intake_agent.py +13 tests (boundary, integration, MCP call). 311 passing, 5 pre-existing failures.
+Last session: 2026-04-13
+Stopped at: Completed Phase 13 Plan 09 — cleanup (PROBE A/D level downgrade + chat.py single-snapshot consolidation). Phase 13 complete (9/9 plans, all 11 ROADMAP success criteria met). 311 passing, pre-existing failures unchanged.
 Resume file: None
 
 ### Roadmap Evolution
@@ -166,3 +167,9 @@ Phase 13 decisions (2026-04-12):
 - postToolFlagSetter scans only trailing unbroken ToolMessage run (this-turn scope) to avoid double-counting across turns (13-05)
 - submitClaimGuard escalates immediately on hallucination detection — no soft-rewrite for submitClaim hallucinations per 13-CONTEXT.md (13-05)
 - logEvent(logger, event, logCategory=...) is the correct call convention — plan examples used wrong dict-as-first-arg form (13-05)
+
+Phase 13 decisions (2026-04-13, Plan 09):
+- PROBE A and PROBE D retained at logging.DEBUG level instead of deleted — user directive (overrides plan's "fully remove" must_haves). Rationale: probes remain diagnostically useful; DEBUG level prevents default log noise. ROADMAP Criterion #7 reinterpreted as "probes no longer emit at default log level" and treated as satisfied.
+- Single aget_state() per /chat/message request: single fetch wrapped by sse.aget_state_timing (logCategory="chat" to disambiguate from sseHelpers' own timing event); auto-reset short-circuits the resume check because a new thread_id has no pending interrupts by construction — satisfies ROADMAP Criterion #8 without second DB read.
+- priorStateFetchFailed flag: when the single aget_state raises, chat.resume_check_failed fires once; both auto-reset and resume checks skip their state-dependent logic.
+- interruptDetection.py (Option 3 resume contract) committed alongside chat.py refactor — the module is the authoritative source for pending-interrupt state (checkpointer, not session cookie).
