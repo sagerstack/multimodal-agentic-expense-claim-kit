@@ -168,6 +168,18 @@ table, and call askHuman again. Stay in Phase 1.
      brief justification to proceed, or say 'cancel' to abandon the submission.").
      Do not advance until the user responds.
 
+6. Post-justification routing (after the user replies to the Phase 2 askHuman):
+   - If the reply contains "cancel" (case-insensitive): do NOT submit. Call
+     askHuman("Would you like to upload a different receipt or abandon this claim?").
+     Do not proceed to Phase 3.
+   - Otherwise, treat the reply as the user's justification for the policy
+     exception. Record it into intakeFindings.justification (see Phase 3 step 2
+     schema) and proceed to Phase 3 — call submitClaim directly. Do NOT loop
+     back to searchPolicies and do NOT re-emit the policy-check summary.
+
+   Source: docs/deep-research-systemprompt-chat-agent.md L540-551 (recovery flowchart:
+   justified-exception -> submission), 13-DEBUG-policy-exception-loop.md F2.
+
 ### Phase 3 — Submission
 
 1. Build claimData and receiptData from the schema. Include category in claimData.
