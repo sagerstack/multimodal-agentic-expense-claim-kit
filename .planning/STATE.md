@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 13 — Intake Agent Hybrid Routing + Bug Fixes (In progress)
-Plan: 2/9 plans complete (13-01 done, 13-03 done; 13-02 not yet executed)
-Status: Plan 13-03 complete. agentSystemPrompt_v5.py created — 8-section layered operating manual, all routing logic stripped, directive contract + verbatim escalation message present.
-Last activity: 2026-04-12 — Completed 13-03-PLAN.md (v5 system prompt)
+Plan: 3/9 plans complete (13-01 done, 13-02 done, 13-03 done)
+Status: Plan 13-02 complete. ClaimState extended with six Phase 13 routing fields (_unionSet reducer for unsupportedCurrencies, askHumanCount, clarificationPending, validatorRetryCount, validatorEscalate, turnIndex). RemoveMessage/REMOVE_ALL_MESSAGES import verified.
+Last activity: 2026-04-12 — Completed 13-02-PLAN.md (ClaimState reducers)
 
 ```
 v2.0 Progress: [##################################] 33/38 plans
@@ -130,7 +130,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-12
-Stopped at: Completed Phase 13 Plan 03 — agentSystemPrompt_v5.py (layered operating manual, routing stripped).
+Stopped at: Completed Phase 13 Plan 02 — ClaimState reducers (six Phase 13 routing fields, _unionSet, RemoveMessage verified).
 Resume file: None
 
 ### Roadmap Evolution
@@ -152,3 +152,5 @@ Phase 13 decisions (2026-04-12):
 - v5 prompt: 8-section layered operating manual; all routing removed; Section 6 synthetic directive contract readies LLM for ROUTING DIRECTIVE SystemMessages from pre-model hook (Plan 05)
 - v5 confidence thresholds: High >=0.85, Medium 0.60-0.84, Low <0.60 (tightened from v4.1)
 - deep-research-report.md is upstream synthesis; systemprompt-chat-agent.md and technical.md are the authoritative cite-sites for implementation (intentional traceability model)
+- Boolean-flag decomposition chosen over single phase enum: composable flags (clarificationPending + askHumanCount + unsupportedCurrencies) provide finer routing granularity without enum exhaustion (13-02)
+- TypedDict fields have no default factories — consuming code uses .get(field, default) convention (13-02)
