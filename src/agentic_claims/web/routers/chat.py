@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import logging
+import time
 import uuid
 
 from fastapi import APIRouter, File, Form, UploadFile
@@ -16,6 +17,7 @@ from agentic_claims.core.imageStore import clearImage, getImage, getImagePath, s
 from agentic_claims.core.logging import logEvent
 from agentic_claims.web.employeeIdContext import employeeIdVar
 from agentic_claims.web.imagePathContext import imagePathVar
+from agentic_claims.web.interruptDetection import isPausedAtInterrupt
 from agentic_claims.web.session import getSessionIds
 from agentic_claims.web.sessionQueues import getOrCreateQueue, removeQueue
 from agentic_claims.web.sseHelpers import runGraph, runPostSubmissionAgents
@@ -48,11 +50,45 @@ async def postMessage(
     username = request.session.get("username")
     draftClaimNumber = f"DRAFT-{claimId[:8]}"
 
-    # Auto-reset session when user sends any message after claim submission
+    # Single-snapshot read: one graph.aget_state() per /chat/message request.
+    # Both the auto-reset check and the resume detection below consume this
+    # same StateSnapshot (ROADMAP Criterion 8; Bug 7). If an auto-reset
+    # fires, the thread_id changes — the resume check then short-circuits to
+    # False (a brand-new thread has no pending interrupts by construction).
     graph = request.app.state.graph
     config = {"configurable": {"thread_id": threadId}}
+    priorState = None
+    priorStateFetchFailed = False
     try:
+        t0 = time.time()
         priorState = await graph.aget_state(config)
+        logEvent(
+            logger,
+            "sse.aget_state_timing",
+            logCategory="chat",
+            claimId=claimId,
+            threadId=threadId,
+            elapsedSeconds=round(time.time() - t0, 2),
+            message="aget_state timing (chat/message single snapshot)",
+        )
+    except Exception as e:
+        priorStateFetchFailed = True
+        logEvent(
+            logger,
+            "chat.resume_check_failed",
+            level=logging.WARNING,
+            logCategory="chat",
+            claimId=claimId,
+            threadId=threadId,
+            errorType=type(e).__name__,
+            payload={"error": str(e)},
+            message="Checkpointer read failed; treating as fresh turn (no auto-reset, no resume)",
+        )
+
+    # Auto-reset session when user sends any message after claim submission.
+    # Consumes the single priorState snapshot fetched above.
+    autoResetFired = False
+    try:
         if priorState and priorState.values and priorState.values.get("claimSubmitted"):
             # Reset session: new thread_id, new claim_id, clear old resources
             oldClaimId = claimId
@@ -64,13 +100,13 @@ async def postMessage(
             # Generate new IDs
             request.session["thread_id"] = str(uuid.uuid4())
             request.session["claim_id"] = str(uuid.uuid4())
-            request.session.pop("awaiting_clarification", None)
             request.session.pop("draft_created", None)
             request.session.pop("draft_claim_id", None)
             # Update local vars for rest of handler
             threadId = request.session["thread_id"]
             claimId = request.session["claim_id"]
             draftClaimNumber = f"DRAFT-{claimId[:8]}"
+            autoResetFired = True
             logEvent(
                 logger,
                 "chat.auto_reset",
@@ -86,7 +122,7 @@ async def postMessage(
                 message="Session auto-reset after claim submission",
             )
     except Exception:
-        pass  # If state check fails, continue normally
+        pass  # If auto-reset decision fails, continue normally
 
     # Store image under the (possibly new) claimId
     if hasImage and imageB64:
@@ -170,7 +206,29 @@ async def postMessage(
                 message="Draft claim creation failed",
             )
 
-    awaitingClarification = request.session.get("awaiting_clarification", False)
+    # Resume detection: reuse the single priorState snapshot fetched above
+    # (ROADMAP Criterion 8; Bug 7). If auto-reset fired, the thread_id is a
+    # brand-new UUID whose checkpoint does not exist yet — no pending
+    # interrupts by construction, so short-circuit to False without an extra
+    # DB round-trip. If the earlier aget_state() call failed, priorState is
+    # None and awaitingClarification stays False (the earlier except already
+    # emitted chat.resume_check_failed).
+    awaitingClarification = False
+    if not autoResetFired and not priorStateFetchFailed:
+        try:
+            awaitingClarification = isPausedAtInterrupt(priorState)
+        except Exception as e:
+            logEvent(
+                logger,
+                "chat.resume_check_failed",
+                level=logging.WARNING,
+                logCategory="chat",
+                claimId=claimId,
+                threadId=threadId,
+                errorType=type(e).__name__,
+                payload={"error": str(e)},
+                message="isPausedAtInterrupt raised on single snapshot; treating as fresh turn",
+            )
 
     graphInput = {
         "threadId": threadId,
@@ -182,7 +240,6 @@ async def postMessage(
 
     if awaitingClarification:
         graphInput["resumeData"] = {"response": message, "action": "confirm"}
-        request.session["awaiting_clarification"] = False
 
     queue = getOrCreateQueue(threadId)
     await queue.put(graphInput)
@@ -305,7 +362,6 @@ async def resetChat(request: Request):
 
     request.session["thread_id"] = str(uuid.uuid4())
     request.session["claim_id"] = str(uuid.uuid4())
-    request.session.pop("awaiting_clarification", None)
     request.session.pop("draft_created", None)
     request.session.pop("draft_claim_id", None)
 
@@ -341,8 +397,9 @@ async def fetchClaimsForTable(employeeId: str | None = None) -> list[dict]:
             "r.line_items "
             "FROM claims c LEFT JOIN receipts r ON r.claim_id = c.id "
         )
+        query += "WHERE LOWER(COALESCE(c.status, '')) != 'draft' "
         if employeeId:
-            query += f"WHERE c.employee_id = $${employeeId}$$ "
+            query += f"AND c.employee_id = $${employeeId}$$ "
         query += "ORDER BY c.created_at DESC LIMIT 50"
 
         result = await mcpCallTool(
@@ -351,7 +408,13 @@ async def fetchClaimsForTable(employeeId: str | None = None) -> list[dict]:
             arguments={"query": query},
         )
         if isinstance(result, list):
-            for row in result:
+            filteredRows = [
+                row
+                for row in result
+                if str(row.get("status", "") or "").strip().lower() != "draft"
+            ]
+
+            for row in filteredRows:
                 rawTs = row.get("created_at", "")
                 if rawTs and isinstance(rawTs, str) and "T" in rawTs:
                     try:
@@ -381,7 +444,7 @@ async def fetchClaimsForTable(employeeId: str | None = None) -> list[dict]:
                     except Exception:
                         row["category"] = "--"
 
-            return result
+            return filteredRows
         if isinstance(result, dict) and "error" in result:
             logEvent(
                 logger,
