@@ -6,12 +6,36 @@ from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 
 
+def _unionSet(existing: set | None, update: set | None) -> set:
+    """Reducer for Annotated set fields: merges two sets by union.
+
+    Called by LangGraph when a node returns a partial state update that
+    includes a field annotated with this reducer. Either arg may be None
+    (first write / empty update).
+
+    Pattern reference: docs/deep-research-langgraph-react-node.md
+    (state-driven routing with accumulating collections).
+    """
+    a = existing or set()
+    b = update or set()
+    return a | b
+
+
 class ClaimState(TypedDict):
     """State for the expense claim workflow.
 
     This is the shared state passed between all agent nodes in the LangGraph.
     Phase 1 intentionally keeps it minimal - future phases will expand with
     receipt data, findings, policy results, etc.
+
+    # Phase 13 additions per:
+    #   - 13-RESEARCH.md Section 3 "State Shape and Reducers"
+    #   - 13-CONTEXT.md "Hook architecture — directive injection" decision
+    #
+    # Note: ROADMAP Criterion 5 "phase field" is satisfied by the boolean-flag
+    # decomposition (clarificationPending + askHumanCount + unsupportedCurrencies)
+    # per CONTEXT.md "Hook architecture" decision. A single phase enum was
+    # rejected in favour of composable flags.
     """
 
     claimId: str
@@ -33,3 +57,11 @@ class ClaimState(TypedDict):
     fraudFindings: Optional[dict]  # Structured fraud verdict from fraud agent
     advisorDecision: Optional[str]  # One of "auto_approve" | "return_to_claimant" | "escalate_to_reviewer"
     dbClaimId: Optional[int]  # Integer DB primary key from submitClaim, used by post-submission agents
+
+    # Phase 13: routing / loop-bound / validator state (source: 13-RESEARCH.md §3)
+    askHumanCount: int  # loop-bound counter; incremented per askHuman interrupt
+    unsupportedCurrencies: Annotated[set[str], _unionSet]  # additive across turns
+    clarificationPending: bool  # set by post-tool flag setter when user input is required
+    validatorRetryCount: int  # soft-rewrite attempts this turn
+    validatorEscalate: bool  # postModelHook → outer router signal
+    turnIndex: int  # per-turn correlation counter for log events
