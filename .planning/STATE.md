@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 13 — Intake Agent Hybrid Routing + Bug Fixes (In progress)
-Plan: 3/9 plans complete (13-01 done, 13-02 done, 13-03 done)
-Status: Plan 13-02 complete. ClaimState extended with six Phase 13 routing fields (_unionSet reducer for unsupportedCurrencies, askHumanCount, clarificationPending, validatorRetryCount, validatorEscalate, turnIndex). RemoveMessage/REMOVE_ALL_MESSAGES import verified.
-Last activity: 2026-04-12 — Completed 13-02-PLAN.md (ClaimState reducers)
+Plan: 5/9 plans complete (13-01, 13-02, 13-03, 13-04, 13-05 done)
+Status: Plan 13-05 complete. postToolFlagSetter derives unsupportedCurrencies/clarificationPending/askHumanCount from ToolMessages; submitClaimGuard detects Bug 3 (submitClaim hallucination). 21 new tests, 276 total passing.
+Last activity: 2026-04-12 — Completed 13-05-PLAN.md (post-tool flag setter and submit guard)
 
 ```
 v2.0 Progress: [##################################] 33/38 plans
@@ -130,7 +130,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-12
-Stopped at: Completed Phase 13 Plan 02 — ClaimState reducers (six Phase 13 routing fields, _unionSet, RemoveMessage verified).
+Stopped at: Completed Phase 13 Plan 05 — postToolFlagSetter + submitClaimGuard hooks (21 new tests, 276 passing).
 Resume file: None
 
 ### Roadmap Evolution
@@ -154,3 +154,6 @@ Phase 13 decisions (2026-04-12):
 - deep-research-report.md is upstream synthesis; systemprompt-chat-agent.md and technical.md are the authoritative cite-sites for implementation (intentional traceability model)
 - Boolean-flag decomposition chosen over single phase enum: composable flags (clarificationPending + askHumanCount + unsupportedCurrencies) provide finer routing granularity without enum exhaustion (13-02)
 - TypedDict fields have no default factories — consuming code uses .get(field, default) convention (13-02)
+- postToolFlagSetter scans only trailing unbroken ToolMessage run (this-turn scope) to avoid double-counting across turns (13-05)
+- submitClaimGuard escalates immediately on hallucination detection — no soft-rewrite for submitClaim hallucinations per 13-CONTEXT.md (13-05)
+- logEvent(logger, event, logCategory=...) is the correct call convention — plan examples used wrong dict-as-first-arg form (13-05)
