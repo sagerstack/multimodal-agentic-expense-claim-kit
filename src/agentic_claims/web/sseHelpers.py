@@ -316,20 +316,6 @@ def _toolOutputError(toolOutput) -> str | None:
     return None
 
 
-def _currencyCorrectionMessage(errorText: str) -> str | None:
-    """Map currency conversion errors to a single user correction request."""
-    lowered = errorText.lower()
-    if "currency" not in lowered and "frankfurter" not in lowered and "422" not in lowered:
-        return None
-    return " ".join(
-        [
-            "I could not convert the receipt amount because the receipt currency was missing",
-            "or invalid. Please tell me the currency shown on the receipt using a",
-            "3-letter code such as SGD, USD, EUR, or JPY, and I will continue.",
-        ]
-    )
-
-
 def _stateHasToolResult(stateValues: dict, toolName: str) -> bool:
     """Return true when prior graph messages include a completed tool result."""
     for msg in stateValues.get("messages", []):
@@ -804,6 +790,20 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     else:
         invokeInput = _buildGraphInput(graphInput)
 
+    # PROBE D — Command(resume) built (resume-contract debug)
+    logEvent(
+        logger,
+        "debug.invoke_input_built",
+        level=logging.DEBUG,
+        logCategory="sse",
+        claimId=graphInput.get("claimId"),
+        threadId=graphInput.get("threadId"),
+        isResume=graphInput.get("isResume"),
+        invokeInputType=type(invokeInput).__name__,
+        resumeData=graphInput.get("resumeData"),
+        message="Graph input built for astream_events",
+    )
+
     # BUG-027: set sessionClaimIdVar so submitClaim can flush audit steps even
     # when the LLM doesn't pass sessionClaimId as a tool argument
     sessionClaimIdVar.set(graphInput.get("claimId", None))
@@ -816,6 +816,47 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             eventKind = event.get("event")
             if eventKind != "on_chat_model_stream":
                 logger.debug("astream_events event: %s - %s", eventKind, event.get("name", ""))
+
+            if eventKind == "on_chat_model_start":
+                try:
+                    inputData = event.get("data", {}).get("input", {}) or {}
+                    rawMessages = inputData.get("messages", [])
+                    # astream_events sometimes nests messages as [[msg, msg, ...]]
+                    messages = rawMessages[0] if rawMessages and isinstance(rawMessages[0], list) else rawMessages
+                    metadata = event.get("metadata", {}) or {}
+                    serializedMessages = []
+                    for m in messages:
+                        msgType = type(m).__name__
+                        content = getattr(m, "content", "")
+                        contentStr = content if isinstance(content, str) else str(content)
+                        entry = {"type": msgType, "content": contentStr}
+                        toolCalls = getattr(m, "tool_calls", None)
+                        if toolCalls:
+                            entry["toolCalls"] = [
+                                {"name": tc.get("name"), "args": tc.get("args")}
+                                for tc in toolCalls
+                            ]
+                        toolName = getattr(m, "name", None)
+                        if toolName:
+                            entry["toolName"] = toolName
+                        serializedMessages.append(entry)
+                    logEvent(
+                        logger,
+                        "llm.call_started",
+                        logCategory="llm",
+                        actorType="agent",
+                        agent="intake",
+                        claimId=graphInput.get("claimId"),
+                        threadId=graphInput.get("threadId"),
+                        model=metadata.get("ls_model_name"),
+                        messageCount=len(messages),
+                        messageTypes=[type(m).__name__ for m in messages],
+                        messages=serializedMessages,
+                        invocationParams=metadata.get("invocation_params"),
+                        message="LLM call started",
+                    )
+                except Exception as logErr:
+                    logger.warning("llm.call_started log failed: %r", logErr, exc_info=True)
 
             if eventKind == "on_chain_start" and shouldTerminateEarly:
                 # BUG-027/029: intakeNode has checkpointed — break before post-submission nodes
@@ -855,6 +896,42 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         reasoningBuffer += str(reasoning)
 
             elif eventKind == "on_chat_model_end":
+                try:
+                    endOutput = event.get("data", {}).get("output")
+                    endToolCalls = []
+                    if endOutput is not None:
+                        rawToolCalls = getattr(endOutput, "tool_calls", None) or []
+                        endToolCalls = [
+                            {"name": tc.get("name"), "args": tc.get("args"), "id": tc.get("id")}
+                            for tc in rawToolCalls
+                        ]
+                    responseContent = ""
+                    if endOutput is not None:
+                        rawContent = getattr(endOutput, "content", "")
+                        responseContent = rawContent if isinstance(rawContent, str) else str(rawContent)
+                    usageMetadata = getattr(endOutput, "usage_metadata", None) if endOutput is not None else None
+                    responseMetadata = getattr(endOutput, "response_metadata", {}) if endOutput is not None else {}
+                    finishReason = responseMetadata.get("finish_reason") if isinstance(responseMetadata, dict) else None
+                    logEvent(
+                        logger,
+                        "llm.call_completed",
+                        logCategory="llm",
+                        actorType="agent",
+                        agent="intake",
+                        claimId=graphInput.get("claimId"),
+                        threadId=graphInput.get("threadId"),
+                        responseContent=responseContent,
+                        reasoningContent=reasoningBuffer,
+                        toolCalls=endToolCalls,
+                        toolCallCount=len(endToolCalls),
+                        tokenUsage=usageMetadata,
+                        finishReason=finishReason,
+                        pendingToolCalls=pendingToolCalls,
+                        message="LLM call completed",
+                    )
+                except Exception as logErr:
+                    logger.warning("llm.call_completed log failed: %r", logErr, exc_info=True)
+
                 if pendingToolCalls > 0:
                     tokenBuffer = ""
                     reasoningBuffer = ""
@@ -1029,29 +1106,6 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     raw_data=f'<div class="text-xs text-outline mt-1">{summary}</div>',
                     event=SseEvent.STEP_CONTENT,
                 )
-
-                if toolName == "convertCurrency" and toolError:
-                    correctionMessage = _currencyCorrectionMessage(toolError)
-                    if correctionMessage:
-                        finalResponse = correctionMessage
-                        pendingToolCalls = 0
-                        logEvent(
-                            logger,
-                            "tool.blocking_user_correction_requested",
-                            level=logging.WARNING,
-                            logCategory="chat_history",
-                            actorType="agent",
-                            agent="intake",
-                            employeeId=employeeIdVar.get(None),
-                            claimId=graphInput.get("claimId"),
-                            draftClaimNumber=f"DRAFT-{graphInput.get('claimId', '')[:8]}",
-                            threadId=threadId,
-                            toolName=toolName,
-                            status="blocked",
-                            payload={"error": toolError, "finalResponse": correctionMessage},
-                            message="Blocking currency correction requested",
-                        )
-                        break
 
                 # Pathway: mark tool as completed
                 if toolName in TOOL_TO_STEP and not toolError:
@@ -1338,6 +1392,30 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     message="Error rendering final table update after advisor",
                 )
 
+        # PROBE A — Interrupt detection (resume-contract debug)
+        try:
+            logEvent(
+                logger,
+                "debug.interrupt_check",
+                level=logging.DEBUG,
+                logCategory="sse",
+                claimId=graphInput.get("claimId"),
+                threadId=graphInput.get("threadId"),
+                finalStateExists=finalState is not None,
+                finalStateNext=list(finalState.next) if finalState and finalState.next else None,
+                taskCount=len(finalState.tasks) if finalState else 0,
+                tasksWithInterrupts=[
+                    {
+                        "name": getattr(t, "name", None),
+                        "interruptCount": len(t.interrupts) if hasattr(t, "interrupts") and t.interrupts else 0,
+                    }
+                    for t in (finalState.tasks if finalState else [])
+                ],
+                message="Interrupt state check before extraction",
+            )
+        except Exception as probeErr:
+            logger.warning("debug.interrupt_check log failed: %r", probeErr, exc_info=True)
+
         # Check for interrupt via graph state
         try:
             if finalState and finalState.next:
@@ -1349,7 +1427,10 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             if isinstance(payload, dict)
                             else str(payload)
                         )
-                        request.session["awaiting_clarification"] = True
+                        # Note: no session mutation here. The checkpointer
+                        # already persisted the pending interrupt when
+                        # interrupt() fired; the next POST reads state via
+                        # isPausedAtInterrupt(graph.aget_state(...)).
                         yield ServerSentEvent(raw_data=question, event=SseEvent.INTERRUPT)
                         return
         except Exception as e:
