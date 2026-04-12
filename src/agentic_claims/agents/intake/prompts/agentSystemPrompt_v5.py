@@ -268,6 +268,6 @@ escalation fires, the turn closes.
 """
 
 # Re-exported as INTAKE_AGENT_SYSTEM_PROMPT for callers that import the default name.
-# Plan 13-06 will update agents/intake/node.py to import from agentSystemPrompt_v5
-# instead of agentSystemPrompt_v4_1. Until then, v4_1 remains active in node.py.
+# Plan 13-06 updated agents/intake/node.py to import from agentSystemPrompt_v5.
+# agentSystemPrompt_v4_1 is no longer imported anywhere in src/.
 INTAKE_AGENT_SYSTEM_PROMPT = INTAKE_AGENT_SYSTEM_PROMPT_V5
