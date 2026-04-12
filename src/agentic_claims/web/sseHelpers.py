@@ -982,7 +982,9 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                                 isAi=True,
                                 confidenceScores=None,
                                 violations=None,
-                                timestamp=datetime.now(ZoneInfo("Asia/Singapore")).strftime("%-I:%M %p"),
+                                timestamp=datetime.now(
+                                    ZoneInfo("Asia/Singapore")
+                                ).strftime("%-I:%M %p"),
                             )
                         except Exception:
                             midHtml = f'<div class="ai-message">{cleanedBuffer}</div>'

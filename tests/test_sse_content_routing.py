@@ -16,7 +16,6 @@ from agentic_claims.web.sseEvents import SseEvent
 from agentic_claims.web.sseHelpers import runGraph
 from agentic_claims.web.templating import templates
 
-
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -36,12 +35,18 @@ def _makeLlmEndOutput(content="", toolCalls=None, reasoningContent=None):
 
 def _makeLlmEndEvent(content="", toolCalls=None, reasoningContent=None):
     """Return a full event dict shaped like {'event': 'on_chat_model_end', 'data': {...}}."""
-    output = _makeLlmEndOutput(content=content, toolCalls=toolCalls, reasoningContent=reasoningContent)
+    output = _makeLlmEndOutput(
+        content=content, toolCalls=toolCalls, reasoningContent=reasoningContent
+    )
     return {"event": "on_chat_model_end", "data": {"output": output}}
 
 
 def _makeAskHumanToolCall():
-    return {"name": "askHuman", "args": {"question": "Do the details look correct?"}, "id": "call_1"}
+    return {
+        "name": "askHuman",
+        "args": {"question": "Do the details look correct?"},
+        "id": "call_1",
+    }
 
 
 def _makeMockGraph(events, stateNext=None, stateTasks=None):
@@ -244,7 +249,9 @@ async def test_reasoningContentStillRoutesToThinkingPanel():
 
     # The content must appear as a MESSAGE bubble
     messageEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
-    assert len(messageEvents) >= 1, "Expected MESSAGE bubble for content+tool_calls even with reasoning."
+    assert len(messageEvents) >= 1, (
+        "Expected MESSAGE bubble for content+tool_calls even with reasoning."
+    )
 
     messageHtml = " ".join(e.raw_data for e in messageEvents)
     assert "Kopitiam" in messageHtml, f"MESSAGE missing content. Got: {messageHtml[:200]}"
@@ -316,9 +323,12 @@ async def test_suppressedContentLogsEventForObservability():
             for call in mockLogEvent.call_args_list
             if len(call.args) >= 2 and call.args[1] == "sse.content_suppressed_as_reasoning"
         ]
+        allCallNames = [
+            c.args[1] for c in mockLogEvent.call_args_list if len(c.args) >= 2
+        ]
         assert len(suppCalls) >= 1, (
             f"Expected logEvent('sse.content_suppressed_as_reasoning') to be called. "
-            f"All logEvent calls: {[c.args[1] for c in mockLogEvent.call_args_list if len(c.args) >= 2]}"
+            f"All logEvent calls: {allCallNames}"
         )
 
         # Verify contentLength and preview kwargs
