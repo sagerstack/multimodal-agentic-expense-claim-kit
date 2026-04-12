@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 13 — Intake Agent Hybrid Routing + Bug Fixes (In progress)
-Plan: 1/9 plans complete
-Status: Plan 13-01 complete (KEYSTONE). Tool-contract hardening for convertCurrency: both MCP server and intake tool wrapper return {supported: bool} on every path. All 15 intake-tool tests pass.
-Last activity: 2026-04-12 — Completed 13-01-PLAN.md (tool-contract hardening)
+Plan: 2/9 plans complete (13-01 done, 13-03 done; 13-02 not yet executed)
+Status: Plan 13-03 complete. agentSystemPrompt_v5.py created — 8-section layered operating manual, all routing logic stripped, directive contract + verbatim escalation message present.
+Last activity: 2026-04-12 — Completed 13-03-PLAN.md (v5 system prompt)
 
 ```
 v2.0 Progress: [##################################] 33/38 plans
@@ -130,7 +130,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-12
-Stopped at: Completed Phase 13 Plan 01 — tool-contract hardening for convertCurrency (KEYSTONE plan).
+Stopped at: Completed Phase 13 Plan 03 — agentSystemPrompt_v5.py (layered operating manual, routing stripped).
 Resume file: None
 
 ### Roadmap Evolution
@@ -149,3 +149,6 @@ Phase 13 decisions (2026-04-12):
 - No secondary currency provider (Frankfurter → manual-rate askHuman is the two-tier chain, wired in Plan 06)
 - No currency caching (locked decision per 13-CONTEXT.md)
 - logEvent keyword is logCategory= (not category=) — confirmed from core/logging.py
+- v5 prompt: 8-section layered operating manual; all routing removed; Section 6 synthetic directive contract readies LLM for ROUTING DIRECTIVE SystemMessages from pre-model hook (Plan 05)
+- v5 confidence thresholds: High >=0.85, Medium 0.60-0.84, Low <0.60 (tightened from v4.1)
+- deep-research-report.md is upstream synthesis; systemprompt-chat-agent.md and technical.md are the authoritative cite-sites for implementation (intentional traceability model)
