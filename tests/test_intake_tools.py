@@ -222,6 +222,49 @@ async def testSubmitClaimReturnsClaimAndReceiptRecords():
         assert result["receipt"]["id"] == 456
 
 
+# ==================== Tool-contract: {supported} key Tests ====================
+
+
+@pytest.mark.asyncio
+async def test_convertCurrencyReturnsStructuredErrorOnUnsupportedCurrency():
+    """Bug 6 / Criterion 3: convertCurrency normalizes MCP 404 into {supported: false, ...}."""
+    with patch(
+        "agentic_claims.agents.intake.tools.convertCurrency.mcpCallTool",
+        new_callable=AsyncMock,
+    ) as mockMcp:
+        mockMcp.return_value = {"error": "Frankfurter API error: 404 Not Found"}
+        result = await convertCurrency.ainvoke(
+            {"amount": 100000.0, "fromCurrency": "VND", "toCurrency": "SGD"}
+        )
+
+    assert isinstance(result, dict), "tool must return a dict, never a string"
+    assert result.get("supported") is False
+    assert result.get("currency") == "VND"
+    assert "error" in result
+    # No pattern-matching on error string required — downstream reads result['supported']
+
+
+@pytest.mark.asyncio
+async def test_convertCurrencyReturnsStructuredSuccessShape():
+    """Success path also carries supported: true for explicit contract."""
+    with patch(
+        "agentic_claims.agents.intake.tools.convertCurrency.mcpCallTool",
+        new_callable=AsyncMock,
+    ) as mockMcp:
+        mockMcp.return_value = {
+            "originalAmount": 10.0,
+            "convertedAmount": 13.5,
+            "rate": 1.35,
+            "date": "2026-04-12",
+        }
+        result = await convertCurrency.ainvoke(
+            {"amount": 10.0, "fromCurrency": "USD", "toCurrency": "SGD"}
+        )
+
+    assert result.get("supported") is True
+    assert result.get("convertedAmount") == 13.5
+
+
 @pytest.mark.asyncio
 async def testSubmitClaimHandlesError():
     """Verify submitClaim surfaces MCP errors."""
