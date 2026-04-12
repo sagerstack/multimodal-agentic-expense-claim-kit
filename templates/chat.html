@@ -72,9 +72,9 @@
          hx-on::after-swap="document.getElementById('chatHistory').scrollTop = document.getElementById('chatHistory').scrollHeight"
          class="text-on-surface text-sm leading-relaxed max-w-2xl whitespace-pre-wrap empty:hidden"></div>
 
-    <!-- Hidden thinking-start trigger — clears prior turn's thinking content -->
+    <!-- Hidden thinking-start trigger — clears prior turn's thinking content AND stale interrupt prompt -->
     <div sse-swap="thinking-start" hx-swap="innerHTML"
-         hx-on::after-swap="document.getElementById('thinkingStepName').innerHTML = ''; document.getElementById('thinkingContent').innerHTML = ''; document.getElementById('thinkingSummary').innerHTML = ''"
+         hx-on::after-swap="document.getElementById('thinkingStepName').innerHTML = ''; document.getElementById('thinkingContent').innerHTML = ''; document.getElementById('thinkingSummary').innerHTML = ''; document.getElementById('interruptTarget').innerHTML = ''"
          class="hidden"></div>
 
     <!-- AI Messages (accumulator — frozen into flow on done) -->
@@ -86,10 +86,12 @@
     <div id="doneTarget" sse-swap="done" hx-swap="innerHTML"
          hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done'))" class="hidden"></div>
 
-    <!-- Interrupt target -->
+    <!-- Interrupt target — neutral agent-bubble styling (matches partials/message_bubble.html).
+         Rationale: askHuman/policy-exception prompts are routine agent questions, not errors.
+         Source: 13-DEBUG-display-regression.md "Related issues" §1. -->
     <div id="interruptTarget" sse-swap="interrupt" hx-swap="innerHTML"
          hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done'))"
-         class="max-w-2xl text-sm text-tertiary italic p-4 bg-tertiary/5 rounded-2xl border border-tertiary/10 empty:hidden"></div>
+         class="max-w-2xl text-sm text-on-surface p-4 bg-surface-container-low rounded-2xl border border-outline-variant/5 shadow-xl empty:hidden"></div>
 
     <!-- Error target -->
     <div id="errorTarget" sse-swap="error" hx-swap="innerHTML"
@@ -155,7 +157,7 @@
 </aside>
 </div>
 <!-- Bottom Submission Table -->
-<section class="w-full bg-surface-container-low border-t border-outline-variant/10 p-6 md:px-8 shrink-0 max-h-[35vh] overflow-y-auto">
+<section class="w-full bg-surface-container-low border-t border-outline-variant/10 p-6 md:px-8 shrink-0 overflow-y-auto" style="max-height: 24.5vh;">
   <div id="tableContent" sse-swap="table-update" hx-swap="innerHTML"
        class="max-w-[1440px] mx-auto">
     {% include "partials/submission_table.html" %}
