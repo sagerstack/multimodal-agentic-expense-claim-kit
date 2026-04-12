@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 13 — Intake Agent Hybrid Routing + Bug Fixes (Complete)
-Plan: 9/9 plans complete (13-01 through 13-09 done)
-Status: Phase 13 complete. Plan 13-09 cleanup delivered: PROBE A/D downgraded to DEBUG level per user directive (retained, not deleted — deviation from original plan); single graph.aget_state() per /chat/message request with auto-reset short-circuit. All 11 ROADMAP Phase 13 success criteria met (Criterion #7 reinterpreted as "probes no longer emit at default level"). 311 tests passing (pre-existing failures unchanged).
-Last activity: 2026-04-13 — Completed 13-09-PLAN.md (final plan in Phase 13)
+Phase: 13 — Intake Agent Hybrid Routing + Bug Fixes (gap closure in progress)
+Plan: 10/10 plans complete (13-01 through 13-10 done, gap closure plans ongoing)
+Status: Phase 13 gap closure. Plan 13-10 (Fix A) delivered: mid-stream MESSAGE bubble for AIMessage content+tool_calls via _isUserFacingProse gate. Extraction tables and policy summaries now route to chat channel instead of thinking panel. 324 tests passing, 7 pre-existing failures unchanged.
+Last activity: 2026-04-13 — Completed 13-10-PLAN.md (Fix A: SSE content routing)
 
 ```
 v2.0 Progress: [##################################] 33/38 plans
@@ -131,7 +131,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-13
-Stopped at: Completed Phase 13 Plan 09 — cleanup (PROBE A/D level downgrade + chat.py single-snapshot consolidation). Phase 13 complete (9/9 plans, all 11 ROADMAP success criteria met). 311 passing, pre-existing failures unchanged.
+Stopped at: Completed Phase 13 Plan 10 — Fix A (SSE content routing: mid-stream MESSAGE bubble for AIMessage content+tool_calls). 6 new tests green, 324 total passing, 7 pre-existing failures unchanged.
 Resume file: None
 
 ### Roadmap Evolution
