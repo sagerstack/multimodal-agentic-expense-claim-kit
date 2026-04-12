@@ -1,4 +1,13 @@
-"""Tests for Intake Agent ReAct loop."""
+"""Tests for Intake Agent ReAct loop.
+
+Phase 13 update (Plan 13-06): intakeNode now invokes the create_react_agent
+subgraph via _getIntakeSubgraph rather than calling getIntakeAgent directly.
+Tests that exercise intakeNode patch _getIntakeSubgraph to return a mock
+subgraph whose ainvoke returns controlled test data.
+
+Tests that verify getIntakeAgent itself (LLM construction, tool count, model
+config) are unchanged — getIntakeAgent remains a public factory.
+"""
 
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,11 +20,47 @@ from agentic_claims.agents.intake.node import getIntakeAgent, intakeNode
 from agentic_claims.core.state import ClaimState
 
 
+# ---------------------------------------------------------------------------
+# Helper: build a mock subgraph that returns a given ainvoke payload.
+# Patches both _getIntakeSubgraph and _buildLlmAndTools so no real
+# settings / HTTP clients are constructed during intakeNode execution.
+# ---------------------------------------------------------------------------
+
+def _mockSubgraph(ainvokeResult: dict) -> AsyncMock:
+    """Return an AsyncMock whose ainvoke returns ainvokeResult."""
+    mockSub = AsyncMock()
+    mockSub.ainvoke = AsyncMock(return_value=ainvokeResult)
+    return mockSub
+
+
+def _patchIntakeNode(ainvokeResult: dict):
+    """Context manager pair for patching intakeNode's subgraph path.
+
+    Returns a context manager that patches:
+      - _buildLlmAndTools → (MagicMock(), [])   (avoids real LLM construction)
+      - _getIntakeSubgraph → mock subgraph        (returns ainvokeResult)
+    """
+    import contextlib
+
+    @contextlib.contextmanager
+    def _ctx():
+        mockLlm = MagicMock()
+        mockSubgraph = _mockSubgraph(ainvokeResult)
+        with patch("agentic_claims.agents.intake.node._buildLlmAndTools", return_value=(mockLlm, [])):
+            with patch("agentic_claims.agents.intake.node._getIntakeSubgraph", return_value=mockSubgraph):
+                yield mockSubgraph
+
+    return _ctx()
+
+
+# ---------------------------------------------------------------------------
+# getIntakeAgent — factory-level tests (unchanged from pre-Phase-13)
+# ---------------------------------------------------------------------------
+
 def test_getIntakeAgentReturnsCompiledGraph():
     """Verify getIntakeAgent returns a compiled graph with ainvoke method."""
     agent = getIntakeAgent()
 
-    # Verify it has the ainvoke method (compiled graph signature)
     assert hasattr(agent, "ainvoke"), "Agent should have ainvoke method"
     assert callable(agent.ainvoke), "ainvoke should be callable"
 
@@ -23,24 +68,18 @@ def test_getIntakeAgentReturnsCompiledGraph():
 def test_intakeAgentHasSixTools():
     """Verify the ReAct agent has all 6 domain tools registered."""
     with patch("agentic_claims.agents.intake.node.create_react_agent") as mockCreateAgent:
-        # Mock the agent creation to capture arguments
         mockAgent = MagicMock()
         mockCreateAgent.return_value = mockAgent
 
-        # Call getIntakeAgent which will invoke create_react_agent
         getIntakeAgent()
 
-        # Verify create_react_agent was called
         assert mockCreateAgent.called, "create_react_agent should be called"
 
-        # Extract the tools argument
         callArgs = mockCreateAgent.call_args
         tools = callArgs.kwargs.get("tools", [])
 
-        # Verify 6 tools
         assert len(tools) == 6, f"Expected 6 tools, got {len(tools)}"
 
-        # Verify tool names
         toolNames = [tool.name for tool in tools]
         expectedTools = [
             "getClaimSchema",
@@ -57,83 +96,68 @@ def test_intakeAgentHasSixTools():
 def test_intakeAgentUsesOpenRouterModel():
     """Verify ChatOpenRouter is configured with OpenRouter API key."""
     with patch("agentic_claims.agents.intake.node.ChatOpenRouter") as mockChatOpenRouter:
-        # Mock ChatOpenRouter constructor
         mockLlm = MagicMock()
         mockChatOpenRouter.return_value = mockLlm
 
-        # Mock create_react_agent to avoid actual agent creation
         with patch("agentic_claims.agents.intake.node.create_react_agent") as mockCreateAgent:
             mockAgent = MagicMock()
             mockCreateAgent.return_value = mockAgent
 
-            # Call getIntakeAgent
             getIntakeAgent()
 
-            # Verify ChatOpenRouter was instantiated with OpenRouter config
             assert mockChatOpenRouter.called, "ChatOpenRouter should be instantiated"
             callArgs = mockChatOpenRouter.call_args
 
-            # Check that openrouter_api_key is set
             assert "openrouter_api_key" in callArgs.kwargs, "openrouter_api_key should be set"
-            # Verify base_url is NOT passed (ChatOpenRouter defaults to OpenRouter)
             assert "base_url" not in callArgs.kwargs, "base_url should not be passed to ChatOpenRouter"
 
+
+# ---------------------------------------------------------------------------
+# intakeNode — subgraph-path tests (Phase 13 update: patch _getIntakeSubgraph)
+# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_intakeNodeReturnsMessagesUpdate():
     """Verify intakeNode returns state dict with messages."""
-    # Mock the agent to avoid actual API calls
-    mockAgent = AsyncMock()
-    mockAgent.ainvoke = AsyncMock(
-        return_value={
-            "messages": [
-                HumanMessage(content="User message"),
-                AIMessage(content="Agent response"),
-            ]
-        }
-    )
+    agentMessages = [
+        HumanMessage(content="User message"),
+        AIMessage(content="Agent response"),
+    ]
+    ainvokeResult = {"messages": agentMessages}
 
-    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
-        # Create test state
+    with _patchIntakeNode(ainvokeResult) as mockSubgraph:
         state: ClaimState = {
             "claimId": "test-001",
             "status": "draft",
             "messages": [HumanMessage(content="User message")],
         }
 
-        # Call intakeNode
         result = await intakeNode(state, RunnableConfig())
 
-        # Verify result structure
         assert isinstance(result, dict), "Result should be a dict"
         assert "messages" in result, "Result should contain messages"
         assert isinstance(result["messages"], list), "Messages should be a list"
 
-        # Verify agent was invoked
-        mockAgent.ainvoke.assert_called_once()
+        mockSubgraph.ainvoke.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_intakeNodeSetsClaimSubmittedOnSuccessfulSubmitClaim():
     """Verify intakeNode sets claimSubmitted=True when submitClaim tool succeeds."""
     submitResult = json.dumps({"claim": {"id": 1}, "receipt": {"id": 2}})
-    mockAgent = AsyncMock()
-    mockAgent.ainvoke = AsyncMock(
-        return_value={
-            "messages": [
-                HumanMessage(content="Submit my claim"),
-                AIMessage(content="Submitting..."),
-                ToolMessage(
-                    content=submitResult,
-                    name="submitClaim",
-                    tool_call_id="call_123",
-                ),
-                AIMessage(content="Your claim has been submitted."),
-            ]
-        }
-    )
+    agentMessages = [
+        HumanMessage(content="Submit my claim"),
+        AIMessage(content="Submitting..."),
+        ToolMessage(
+            content=submitResult,
+            name="submitClaim",
+            tool_call_id="call_123",
+        ),
+        AIMessage(content="Your claim has been submitted."),
+    ]
+    ainvokeResult = {"messages": agentMessages}
 
-    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+    with _patchIntakeNode(ainvokeResult):
         state: ClaimState = {
             "claimId": "test-002",
             "status": "draft",
@@ -149,22 +173,18 @@ async def test_intakeNodeSetsClaimSubmittedOnSuccessfulSubmitClaim():
 async def test_intakeNodeDoesNotSetClaimSubmittedOnError():
     """Verify intakeNode does NOT set claimSubmitted when submitClaim returns error."""
     errorResult = json.dumps({"error": "Connection failed"})
-    mockAgent = AsyncMock()
-    mockAgent.ainvoke = AsyncMock(
-        return_value={
-            "messages": [
-                HumanMessage(content="Submit my claim"),
-                ToolMessage(
-                    content=errorResult,
-                    name="submitClaim",
-                    tool_call_id="call_456",
-                ),
-                AIMessage(content="Submission failed."),
-            ]
-        }
-    )
+    agentMessages = [
+        HumanMessage(content="Submit my claim"),
+        ToolMessage(
+            content=errorResult,
+            name="submitClaim",
+            tool_call_id="call_456",
+        ),
+        AIMessage(content="Submission failed."),
+    ]
+    ainvokeResult = {"messages": agentMessages}
 
-    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+    with _patchIntakeNode(ainvokeResult):
         state: ClaimState = {
             "claimId": "test-003",
             "status": "draft",
@@ -179,17 +199,13 @@ async def test_intakeNodeDoesNotSetClaimSubmittedOnError():
 @pytest.mark.asyncio
 async def test_intakeNodeClaimSubmittedNotSetWithoutSubmitClaim():
     """Verify claimSubmitted is not set when no submitClaim tool call in messages."""
-    mockAgent = AsyncMock()
-    mockAgent.ainvoke = AsyncMock(
-        return_value={
-            "messages": [
-                HumanMessage(content="What is the meal limit?"),
-                AIMessage(content="The meal limit is $50 per day."),
-            ]
-        }
-    )
+    agentMessages = [
+        HumanMessage(content="What is the meal limit?"),
+        AIMessage(content="The meal limit is $50 per day."),
+    ]
+    ainvokeResult = {"messages": agentMessages}
 
-    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+    with _patchIntakeNode(ainvokeResult):
         state: ClaimState = {
             "claimId": "test-004",
             "status": "draft",
@@ -208,23 +224,19 @@ async def test_intakeNodeFlushesAuditBufferAfterSubmission():
         "claim": {"id": 7, "claim_number": "CLAIM-007"},
         "receipt": {"id": 3},
     })
-    mockAgent = AsyncMock()
-    mockAgent.ainvoke = AsyncMock(
-        return_value={
-            "messages": [
-                ToolMessage(
-                    content=submitResult,
-                    name="submitClaim",
-                    tool_call_id="call_flush_test",
-                ),
-                AIMessage(content="Claim submitted."),
-            ]
-        }
-    )
+    agentMessages = [
+        ToolMessage(
+            content=submitResult,
+            name="submitClaim",
+            tool_call_id="call_flush_test",
+        ),
+        AIMessage(content="Claim submitted."),
+    ]
+    ainvokeResult = {"messages": agentMessages}
 
     mockFlushSteps = AsyncMock()
 
-    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+    with _patchIntakeNode(ainvokeResult):
         with patch("agentic_claims.agents.intake.node.flushSteps", mockFlushSteps):
             state: ClaimState = {
                 "claimId": "session-uuid-001",
@@ -247,24 +259,20 @@ async def test_intakeNodeWritesClaimSubmittedAuditEntry():
         "claim": {"id": 9, "claim_number": "CLAIM-009"},
         "receipt": {"id": 5},
     })
-    mockAgent = AsyncMock()
-    mockAgent.ainvoke = AsyncMock(
-        return_value={
-            "messages": [
-                ToolMessage(
-                    content=submitResult,
-                    name="submitClaim",
-                    tool_call_id="call_audit_test",
-                ),
-                AIMessage(content="Claim submitted."),
-            ]
-        }
-    )
+    agentMessages = [
+        ToolMessage(
+            content=submitResult,
+            name="submitClaim",
+            tool_call_id="call_audit_test",
+        ),
+        AIMessage(content="Claim submitted."),
+    ]
+    ainvokeResult = {"messages": agentMessages}
 
     mockFlushSteps = AsyncMock()
     mockLogIntakeStep = AsyncMock()
 
-    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+    with _patchIntakeNode(ainvokeResult):
         with patch("agentic_claims.agents.intake.node.flushSteps", mockFlushSteps):
             with patch("agentic_claims.agents.intake.node.logIntakeStep", mockLogIntakeStep):
                 state: ClaimState = {
@@ -291,23 +299,19 @@ async def test_intakeNodeWritesIntakeFindingsToState():
         },
         "receipt": {"id": 6},
     })
-    mockAgent = AsyncMock()
-    mockAgent.ainvoke = AsyncMock(
-        return_value={
-            "messages": [
-                ToolMessage(
-                    content=submitResult,
-                    name="submitClaim",
-                    tool_call_id="call_findings_test",
-                ),
-                AIMessage(content="Claim submitted."),
-            ]
-        }
-    )
+    agentMessages = [
+        ToolMessage(
+            content=submitResult,
+            name="submitClaim",
+            tool_call_id="call_findings_test",
+        ),
+        AIMessage(content="Claim submitted."),
+    ]
+    ainvokeResult = {"messages": agentMessages}
 
     mockFlushSteps = AsyncMock()
 
-    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+    with _patchIntakeNode(ainvokeResult):
         with patch("agentic_claims.agents.intake.node.flushSteps", mockFlushSteps):
             state: ClaimState = {
                 "claimId": "session-uuid-003",
@@ -328,23 +332,19 @@ async def test_intakeNodeBuffersPolicyCheckFromSearchPoliciesResult():
             {"section": "Meals", "category": "meals", "score": 0.9}
         ]
     })
-    mockAgent = AsyncMock()
-    mockAgent.ainvoke = AsyncMock(
-        return_value={
-            "messages": [
-                ToolMessage(
-                    content=policyResult,
-                    name="searchPolicies",
-                    tool_call_id="call_policy_test",
-                ),
-                AIMessage(content="Policy checked."),
-            ]
-        }
-    )
+    agentMessages = [
+        ToolMessage(
+            content=policyResult,
+            name="searchPolicies",
+            tool_call_id="call_policy_test",
+        ),
+        AIMessage(content="Policy checked."),
+    ]
+    ainvokeResult = {"messages": agentMessages}
 
     mockBufferStep = MagicMock()
 
-    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+    with _patchIntakeNode(ainvokeResult):
         with patch("agentic_claims.agents.intake.node.bufferStep", mockBufferStep):
             state: ClaimState = {
                 "claimId": "session-uuid-policy",
@@ -373,24 +373,20 @@ async def test_intakeNodeBuffersReceiptUploadedAndAiExtractionFromExtractReceipt
         "confidence": {"merchant": 0.95},
         "imagePath": "uploads/test-session.jpg",
     })
-    mockAgent = AsyncMock()
-    mockAgent.ainvoke = AsyncMock(
-        return_value={
-            "messages": [
-                ToolMessage(
-                    content=extractResult,
-                    name="extractReceiptFields",
-                    tool_call_id="call_extract_test",
-                ),
-                AIMessage(content="Extracted receipt."),
-            ]
-        }
-    )
+    agentMessages = [
+        ToolMessage(
+            content=extractResult,
+            name="extractReceiptFields",
+            tool_call_id="call_extract_test",
+        ),
+        AIMessage(content="Extracted receipt."),
+    ]
+    ainvokeResult = {"messages": agentMessages}
 
     bufferedCalls = []
     mockBufferStep = MagicMock(side_effect=lambda **kwargs: bufferedCalls.append(kwargs))
 
-    with patch("agentic_claims.agents.intake.node.getIntakeAgent", return_value=mockAgent):
+    with _patchIntakeNode(ainvokeResult):
         with patch("agentic_claims.agents.intake.node.bufferStep", mockBufferStep):
             state: ClaimState = {
                 "claimId": "session-uuid-extract",
