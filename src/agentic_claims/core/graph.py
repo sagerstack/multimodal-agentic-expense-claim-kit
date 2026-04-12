@@ -11,7 +11,8 @@ from agentic_claims.agents.advisor.node import advisorNode
 from agentic_claims.agents.compliance.node import complianceNode
 from agentic_claims.agents.debug_llm_node import debugLlmNode
 from agentic_claims.agents.fraud.node import fraudNode
-from agentic_claims.agents.intake.node import intakeNode
+from agentic_claims.agents.intake.node import intakeNode, postIntakeRouter, preIntakeValidator
+from agentic_claims.agents.intake.nodes.humanEscalation import humanEscalationNode
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.logging import logEvent
@@ -86,13 +87,23 @@ async def markAiReviewedNode(state: ClaimState) -> dict:
 
 
 def buildGraph() -> StateGraph:
-    """Build the StateGraph with 4 nodes and parallel fan-out topology.
+    """Build the StateGraph with Phase 13 wrapper-graph topology.
 
-    Graph topology:
-        START -> intake -> [compliance || fraud] -> advisor -> END
+    Graph topology (Phase 13):
+        START -> preIntakeValidator -> intake -> postIntakeRouter
+          ├─ humanEscalation -> END   (escalation: validatorEscalate OR askHumanCount > 3)
+          └─ evaluatorGate
+               ├─ submitted -> postSubmission -> [compliance || fraud || debugLlm]
+               │                              -> markAiReviewed -> advisor -> END
+               └─ pending -> END
 
-    The parallel fan-out means compliance and fraud run in the same superstep
-    after intake. Advisor waits for both to complete (fan-in).
+    Phase 13 notes:
+    - preIntakeValidator increments turnIndex, runs postToolFlagSetter + submitClaimGuard
+    - postIntakeRouter is the conditional edge after intake (replaces the old direct
+      conditional edge from intake to evaluatorGate)
+    - evaluatorGate is unchanged — it remains the submitted/pending router
+    - humanEscalation is terminal: its edge goes directly to END
+    - AsyncPostgresSaver is the sole checkpointer on the outer compile (no secondary)
 
     Returns:
         Uncompiled StateGraph builder
@@ -100,23 +111,57 @@ def buildGraph() -> StateGraph:
     builder = StateGraph(ClaimState)
 
     # Add agent nodes
+    builder.add_node("preIntakeValidator", preIntakeValidator)
     builder.add_node("intake", intakeNode)
+    builder.add_node("humanEscalation", humanEscalationNode)
     builder.add_node("compliance", complianceNode)
     builder.add_node("fraud", fraudNode)
     builder.add_node("debugLlm", debugLlmNode)
     builder.add_node("markAiReviewed", markAiReviewedNode)
     builder.add_node("advisor", advisorNode)
 
-    # Wire the graph with Evaluator Gate
-    # START -> intake
-    builder.add_edge(START, "intake")
+    # START -> preIntakeValidator -> intake
+    builder.add_edge(START, "preIntakeValidator")
+    builder.add_edge("preIntakeValidator", "intake")
 
-    # Evaluator Gate: intake -> (submitted) -> postSubmission OR (pending) -> END
-    # Use intermediate postSubmission node for fan-out to compliance and fraud
+    # Phase 13 conditional edge from intake:
+    #   postIntakeRouter decides humanEscalation vs. evaluatorGate path
+    # evaluatorGate is still a conditional function — "continue" resolves
+    # to evaluatorGate as a *node-level routing call* by using a lambda
+    # that runs evaluatorGate and maps its result to postSubmission/END.
+    #
+    # Implementation: use a combined conditional that:
+    #   1. Checks postIntakeRouter first (escalation takes precedence)
+    #   2. Falls through to evaluatorGate for the non-escalation branch
+    #   The "continue" branch from postIntakeRouter invokes evaluatorGate
+    #   inline so we keep a single add_conditional_edges call.
     builder.add_node("postSubmission", lambda state: state)  # Pass-through node
+
+    def _intakeConditionalRouter(state: ClaimState) -> str:
+        """Combined router: escalation check → evaluator gate.
+
+        Escalation takes precedence over submitted/pending routing.
+        postIntakeRouter returns 'humanEscalation' or 'continue'.
+        When 'continue', evaluatorGate decides submitted/pending.
+        """
+        branch = postIntakeRouter(state)
+        if branch == "humanEscalation":
+            return "humanEscalation"
+        # continue path: delegate to evaluatorGate
+        return evaluatorGate(state)  # returns "submitted" or "pending"
+
     builder.add_conditional_edges(
-        "intake", evaluatorGate, {"submitted": "postSubmission", "pending": END}
+        "intake",
+        _intakeConditionalRouter,
+        {
+            "humanEscalation": "humanEscalation",
+            "submitted": "postSubmission",
+            "pending": END,
+        },
     )
+
+    # humanEscalation is terminal
+    builder.add_edge("humanEscalation", END)
 
     # Fan-out from postSubmission to compliance, fraud, and debug (parallel)
     builder.add_edge("postSubmission", "compliance")

@@ -157,8 +157,12 @@ async def test_complianceAndFraudRunInParallel():
         # Flatten to get all node names in execution order
         allNodes = [node for nodeList in updates for node in nodeList]
 
-        # Verify intake runs first
-        assert allNodes[0] == "intake", "Intake should run first"
+        # Phase 13: preIntakeValidator runs first, then intake
+        assert allNodes[0] == "preIntakeValidator", "preIntakeValidator should run first (Phase 13)"
+        assert "intake" in allNodes, "intake should execute"
+        intakeIdx = allNodes.index("intake")
+        preValidatorIdx = allNodes.index("preIntakeValidator")
+        assert preValidatorIdx < intakeIdx, "preIntakeValidator must precede intake"
 
         # Find positions of compliance and fraud
         complianceIdx = allNodes.index("compliance")
