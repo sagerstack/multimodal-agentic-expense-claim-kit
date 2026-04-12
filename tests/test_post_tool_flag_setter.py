@@ -232,3 +232,113 @@ async def testPostToolFlagSetterEmitsLogEventOnUnsupportedCurrency():
         await postToolFlagSetter(state)
         callArgs = [call.args[1] for call in mockLog.call_args_list]
         assert "intake.hook.post_tool.flag_set" in callArgs
+
+
+# ---------------------------------------------------------------------------
+# F1: clarificationPending clear-on-askHuman (Plan 13-12 gap closure)
+# Source: 13-DEBUG-policy-exception-loop.md F1; 13-DEBUG-display-regression.md Fix C
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_postToolFlagSetterClearsClarificationPendingOnAskHumanResume():
+    """F1: When an askHuman ToolMessage lands in the trailing run AND
+    clarificationPending is True, the hook must write clarificationPending=False.
+
+    Source: 13-DEBUG-policy-exception-loop.md F1 (H1 root cause fix).
+    Source: 13-DEBUG-display-regression.md "Fix C" (consolidated here).
+    """
+    state = {
+        "messages": [
+            # Prior AIMessage with askHuman tool_call omitted (only trailing tool run matters)
+            ToolMessage(
+                content="User says: rate is 1 VND = 0.00005 SGD",
+                tool_call_id="call_ask_1",
+                name="askHuman",
+            ),
+        ],
+        "claimId": "c1",
+        "threadId": "t1",
+        "askHumanCount": 0,
+        "clarificationPending": True,   # set earlier by a convertCurrency unsupported turn
+        "unsupportedCurrencies": {"VND"},
+    }
+    result = await postToolFlagSetter(state)
+
+    assert result.get("clarificationPending") is False, (
+        "askHuman ToolMessage must resolve the pending clarification flag. "
+        f"Got: {result}"
+    )
+    assert result.get("askHumanCount") == 1  # existing behavior preserved
+
+
+@pytest.mark.asyncio
+async def test_postToolFlagSetterDoesNotClearClarificationOnConvertCurrencyRetry():
+    """F1 edge: convertCurrency retry should NOT clear a pending clarification.
+    Only askHuman (a user answer) clears it. convertCurrency resetting the flag
+    would create a false 'resolved' state when it's actually another unsupported hit.
+    """
+    state = {
+        "messages": [
+            ToolMessage(
+                content='{"supported": false, "currency": "IDR"}',
+                tool_call_id="call_conv_2",
+                name="convertCurrency",
+            ),
+        ],
+        "claimId": "c1",
+        "threadId": "t1",
+        "askHumanCount": 0,
+        "clarificationPending": True,
+        "unsupportedCurrencies": {"VND"},
+    }
+    result = await postToolFlagSetter(state)
+    # New unsupported currency detected — flag stays True (or is re-set True).
+    assert result.get("clarificationPending") is True
+    assert "IDR" in result.get("unsupportedCurrencies", set())
+
+
+@pytest.mark.asyncio
+async def test_postToolFlagSetterClearClarificationIdempotent():
+    """Running the clear-case twice produces the same output (idempotency contract)."""
+    state = {
+        "messages": [
+            ToolMessage(
+                content="justification text",
+                tool_call_id="call_ask_2",
+                name="askHuman",
+            ),
+        ],
+        "claimId": "c1",
+        "threadId": "t1",
+        "askHumanCount": 2,
+        "clarificationPending": True,
+        "unsupportedCurrencies": set(),
+    }
+    r1 = await postToolFlagSetter(state)
+    r2 = await postToolFlagSetter(state)
+    assert r1.get("clarificationPending") == r2.get("clarificationPending") is False
+
+
+@pytest.mark.asyncio
+async def test_postToolFlagSetterAskHumanNoOpWhenAlreadyClear():
+    """If clarificationPending is already False and an askHuman ToolMessage lands,
+    the clear is a no-op (don't add clarificationPending key to updates just to write False)."""
+    state = {
+        "messages": [
+            ToolMessage(
+                content="ok",
+                tool_call_id="call_ask_3",
+                name="askHuman",
+            ),
+        ],
+        "claimId": "c1",
+        "threadId": "t1",
+        "askHumanCount": 0,
+        "clarificationPending": False,   # already clear
+        "unsupportedCurrencies": set(),
+    }
+    result = await postToolFlagSetter(state)
+    # Either the key is absent, or it is False. Both are semantically identical for
+    # last-write-wins bool, but the minimal-update contract prefers absence.
+    assert result.get("clarificationPending", False) is False
