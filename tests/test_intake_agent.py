@@ -405,3 +405,307 @@ async def test_intakeNodeBuffersReceiptUploadedAndAiExtractionFromExtractReceipt
 
     aiStep = next(c for c in bufferedCalls if c["action"] == "ai_extraction")
     assert aiStep["details"]["merchant"] == "TestMart"
+
+
+# ---------------------------------------------------------------------------
+# Phase 13: preIntakeValidator — outer pre-node tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_preIntakeValidatorIncrementsTurnIndex():
+    """preIntakeValidator increments turnIndex by 1 and resets validatorRetryCount to 0."""
+    from agentic_claims.agents.intake.node import preIntakeValidator
+
+    state = {"claimId": "c1", "threadId": "t1", "turnIndex": 2, "messages": []}
+    result = await preIntakeValidator(state)
+
+    assert result.get("turnIndex") == 3
+    # Reset validatorRetryCount at each turn start
+    assert result.get("validatorRetryCount") == 0
+
+
+@pytest.mark.asyncio
+async def test_preIntakeValidatorStartsAtOneWhenTurnIndexAbsent():
+    """preIntakeValidator initialises turnIndex to 1 when not present in state."""
+    from agentic_claims.agents.intake.node import preIntakeValidator
+
+    state = {"claimId": "c2", "threadId": "t2", "messages": []}
+    result = await preIntakeValidator(state)
+
+    assert result.get("turnIndex") == 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 13: postIntakeRouter — conditional edge tests
+# ---------------------------------------------------------------------------
+
+
+def test_postIntakeRouterEscalatesOnValidatorEscalate():
+    """validatorEscalate=True → postIntakeRouter returns 'humanEscalation'."""
+    from agentic_claims.agents.intake.node import postIntakeRouter
+
+    state = {"validatorEscalate": True, "askHumanCount": 0}
+    assert postIntakeRouter(state) == "humanEscalation"
+
+
+def test_postIntakeRouterEscalatesOnAskHumanCountExceeded():
+    """askHumanCount > 3 (e.g. 4) → postIntakeRouter returns 'humanEscalation'."""
+    from agentic_claims.agents.intake.node import postIntakeRouter
+
+    state = {"validatorEscalate": False, "askHumanCount": 4}
+    assert postIntakeRouter(state) == "humanEscalation"
+
+
+def test_postIntakeRouterDoesNotEscalateAtExactlyThreeAskHuman():
+    """Boundary: askHumanCount == 3 is strictly NOT an escalation (> 3 only)."""
+    from agentic_claims.agents.intake.node import postIntakeRouter
+
+    state = {"validatorEscalate": False, "askHumanCount": 3}
+    assert postIntakeRouter(state) == "continue"
+
+
+def test_postIntakeRouterContinuesOnNormalState():
+    """No escalation signals → postIntakeRouter returns 'continue'."""
+    from agentic_claims.agents.intake.node import postIntakeRouter
+
+    state = {"validatorEscalate": False, "askHumanCount": 1}
+    assert postIntakeRouter(state) == "continue"
+
+
+def test_postIntakeRouterValidatorEscalateTakesPrecedence():
+    """validatorEscalate=True takes precedence over low askHumanCount."""
+    from agentic_claims.agents.intake.node import postIntakeRouter
+
+    state = {"validatorEscalate": True, "askHumanCount": 0}
+    assert postIntakeRouter(state) == "humanEscalation"
+
+
+# ---------------------------------------------------------------------------
+# Phase 13: buildIntakeSubgraph — wiring smoke test
+# ---------------------------------------------------------------------------
+
+
+def test_buildIntakeSubgraphUsesV5PromptAndNoCheckpointer():
+    """buildIntakeSubgraph wires v5 prompt, checkpointer=None, version='v2', and both hooks."""
+    from unittest.mock import MagicMock, patch
+
+    from agentic_claims.agents.intake.node import buildIntakeSubgraph
+
+    mockLlm = MagicMock()
+    mockTools = []
+    with patch("agentic_claims.agents.intake.node.create_react_agent") as mockFactory:
+        mockFactory.return_value = MagicMock()
+        buildIntakeSubgraph(mockLlm, mockTools)
+
+        assert mockFactory.called
+        kwargs = mockFactory.call_args.kwargs
+        # Outer graph owns checkpointer — inner subgraph must have None
+        assert kwargs.get("checkpointer") is None
+        # v2 required for post_model_hook support
+        assert kwargs.get("version") == "v2"
+        # v5 prompt (routing stripped)
+        from agentic_claims.agents.intake.prompts.agentSystemPrompt_v5 import (
+            INTAKE_AGENT_SYSTEM_PROMPT_V5,
+        )
+        assert kwargs.get("prompt") is INTAKE_AGENT_SYSTEM_PROMPT_V5
+        # Hooks wired
+        assert kwargs.get("pre_model_hook") is not None
+        assert kwargs.get("post_model_hook") is not None
+
+
+# ---------------------------------------------------------------------------
+# Phase 13: _mergeSubgraphResult — pure function tests
+# ---------------------------------------------------------------------------
+
+
+def test_mergeSubgraphResultPropagatesAllPhase13Flags():
+    """All five Phase 13 flag fields are copied from subgraph result to merged output."""
+    from agentic_claims.agents.intake.node import _mergeSubgraphResult
+
+    state = {"messages": [], "askHumanCount": 0}
+    result = {
+        "messages": [],
+        "validatorEscalate": True,
+        "clarificationPending": True,
+        "validatorRetryCount": 2,
+        "askHumanCount": 4,
+        "unsupportedCurrencies": {"VND"},
+    }
+    merged = _mergeSubgraphResult(state, result)
+
+    assert merged.get("validatorEscalate") is True
+    assert merged.get("clarificationPending") is True
+    assert merged.get("validatorRetryCount") == 2
+    assert merged.get("askHumanCount") == 4
+    assert merged.get("unsupportedCurrencies") == {"VND"}
+
+
+def test_mergeSubgraphResultOmitsAbsentKeys():
+    """Keys absent from subgraph result must be absent from merged (no defaulting)."""
+    from agentic_claims.agents.intake.node import _mergeSubgraphResult
+
+    state = {"messages": [], "askHumanCount": 0, "validatorEscalate": False}
+    result = {"messages": []}
+    merged = _mergeSubgraphResult(state, result)
+
+    # Phase 13 flag keys not in result must not appear in merged
+    assert "validatorEscalate" not in merged
+    assert "clarificationPending" not in merged
+    assert "askHumanCount" not in merged
+    assert "unsupportedCurrencies" not in merged
+
+
+def test_mergeSubgraphResultMessagesAreDeltaOnly():
+    """Messages in merged are only NEW messages (delta from prior count), not the full list."""
+    from agentic_claims.agents.intake.node import _mergeSubgraphResult
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    priorMessages = [HumanMessage(content="Upload receipt")]
+    newMessage = AIMessage(content="Got it")
+    state = {"messages": priorMessages}
+    result = {"messages": priorMessages + [newMessage]}
+
+    merged = _mergeSubgraphResult(state, result)
+
+    # Only the new AIMessage should appear — not the prior HumanMessage
+    assert merged.get("messages") == [newMessage]
+
+
+# ---------------------------------------------------------------------------
+# Phase 13: end-to-end integration — flag propagation through _mergeSubgraphResult
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_preIntakeValidatorThroughIntakeNodeThroughPostIntakeRouterPropagatesFlags():
+    """Integration: preIntakeValidator → intakeNode (mocked subgraph) → postIntakeRouter.
+
+    Verifies that flags set by the mocked subgraph result flow through
+    _mergeSubgraphResult and are visible to the outer postIntakeRouter.
+    """
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from agentic_claims.agents.intake.node import (
+        intakeNode,
+        postIntakeRouter,
+        preIntakeValidator,
+    )
+
+    # Subgraph returns validatorEscalate=True to trigger escalation path
+    mockedSubgraphResult = {
+        "messages": [],
+        "validatorEscalate": True,
+        "clarificationPending": True,
+        "askHumanCount": 2,
+    }
+
+    mockSubgraph = MagicMock()
+    mockSubgraph.ainvoke = AsyncMock(return_value=mockedSubgraphResult)
+
+    initialState = {
+        "claimId": "c-int-1",
+        "threadId": "t-int-1",
+        "messages": [],
+        "turnIndex": 0,
+        "askHumanCount": 0,
+        "unsupportedCurrencies": set(),
+        "status": "draft",
+    }
+
+    # Step 1: preIntakeValidator
+    preUpdates = await preIntakeValidator(initialState)
+    stateAfterPre = {**initialState, **preUpdates}
+
+    # Step 2: intakeNode with mocked subgraph — patch both LLM construction and
+    # subgraph singleton so no real settings/HTTP clients are needed
+    with (
+        patch("agentic_claims.agents.intake.node._buildLlmAndTools", return_value=(MagicMock(), [])),
+        patch("agentic_claims.agents.intake.node._getIntakeSubgraph", return_value=mockSubgraph),
+    ):
+        intakeUpdates = await intakeNode(stateAfterPre, RunnableConfig())
+
+    stateAfterIntake = {**stateAfterPre, **intakeUpdates}
+
+    # Step 3: flags set by subgraph must be visible in the merged outer state
+    assert stateAfterIntake.get("validatorEscalate") is True, (
+        f"validatorEscalate must propagate through _mergeSubgraphResult. "
+        f"intakeUpdates keys: {list(intakeUpdates.keys())}"
+    )
+    assert stateAfterIntake.get("clarificationPending") is True
+    # askHumanCount must be >= 2 (subgraph set 2; postToolFlagSetter may increment further)
+    assert stateAfterIntake.get("askHumanCount", 0) >= 2
+
+    # Step 4: postIntakeRouter routes to humanEscalation on validatorEscalate
+    branch = postIntakeRouter(stateAfterIntake)
+    assert branch == "humanEscalation"
+
+
+# ---------------------------------------------------------------------------
+# Phase 13: humanEscalationNode — MCP call unit test
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_humanEscalationNodeCallsUpdateClaimStatusMcp():
+    """humanEscalationNode calls updateClaimStatus MCP with correct URL and argument shape.
+
+    Verifies Bug 4 / Warning 4 fix: the URL is read from settings.db_mcp_url
+    (not hardcoded), and the MCP arguments carry claimId=dbClaimId,
+    newStatus='escalated', actor='intake_agent'.
+    """
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from agentic_claims.agents.intake.nodes.humanEscalation import humanEscalationNode
+
+    mockDbMcpUrl = "http://mcp-db:8000/mcp/"
+    mockSettings = MagicMock()
+    mockSettings.db_mcp_url = mockDbMcpUrl
+
+    state = {
+        "claimId": "c-esc-1",
+        "threadId": "t-esc-1",
+        "dbClaimId": 42,
+        "status": "draft",
+        "validatorEscalate": True,
+        "askHumanCount": 1,
+        "unsupportedCurrencies": {"VND"},
+        "messages": [],
+        "intakeFindings": {},
+    }
+
+    with (
+        patch(
+            "agentic_claims.agents.intake.nodes.humanEscalation.getSettings",
+            return_value=mockSettings,
+        ),
+        patch(
+            "agentic_claims.agents.intake.nodes.humanEscalation.mcpCallTool",
+            new=AsyncMock(return_value={"ok": True}),
+        ) as mockMcp,
+    ):
+        result = await humanEscalationNode(state)
+
+    # MCP called exactly once
+    assert mockMcp.call_count == 1
+    callKwargs = mockMcp.call_args.kwargs
+    # URL comes from settings.db_mcp_url (not hardcoded)
+    assert callKwargs.get("serverUrl") == mockDbMcpUrl
+    assert callKwargs.get("toolName") == "updateClaimStatus"
+    args = callKwargs.get("arguments", {})
+    assert args.get("claimId") == 42  # dbClaimId passed through
+    assert args.get("newStatus") == "escalated"
+    assert args.get("actor") == "intake_agent"
+
+    # Terminal state fields
+    assert result.get("status") == "escalated"
+    assert result.get("claimSubmitted") is False
+    # Terminal AIMessage contains the non-negotiable template
+    assert any(
+        "couldn't complete this automatically" in getattr(m, "content", "")
+        for m in result.get("messages", [])
+    )
+    # escalationMetadata merged into intakeFindings
+    findings = result.get("intakeFindings", {})
+    assert "escalationMetadata" in findings
+    assert findings["escalationMetadata"].get("askHumanCount") == 1
