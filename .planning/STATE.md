@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Milestone v2.0 — Phase 11 complete, Phase 8.1, 10, and 12 remain
+**Current focus:** Milestone v2.0 — Phase 11 complete, Phase 8.1, 10, 12, and 13 remain
 
 ## Current Position
 
-Phase: 12 — deepeval/RAGAS Evaluation Suite (COMPLETE — awaiting checkpoint verification)
-Plan: 4/4 plans complete
-Status: Plan 12-04 complete. All eval modules built: scoring, capture runner (claude-code-sdk), run_eval.py orchestrator. Full pipeline wired.
-Last activity: 2026-04-11 — Completed 12-04-PLAN.md (orchestrator, scoring, capture runner)
+Phase: 13 — Intake Agent Hybrid Routing + Bug Fixes (In progress)
+Plan: 1/9 plans complete
+Status: Plan 13-01 complete (KEYSTONE). Tool-contract hardening for convertCurrency: both MCP server and intake tool wrapper return {supported: bool} on every path. All 15 intake-tool tests pass.
+Last activity: 2026-04-12 — Completed 13-01-PLAN.md (tool-contract hardening)
 
 ```
 v2.0 Progress: [##################################] 33/38 plans
@@ -129,8 +129,8 @@ From research (see .planning/research/PITFALLS.md):
 
 ## Session Continuity
 
-Last session: 2026-04-11
-Stopped at: Completed Phase 12 Plan 04 — orchestrator, scoring module, capture runner. Checkpoint pending (human verification of live pipeline run).
+Last session: 2026-04-12
+Stopped at: Completed Phase 13 Plan 01 — tool-contract hardening for convertCurrency (KEYSTONE plan).
 Resume file: None
 
 ### Roadmap Evolution
@@ -141,3 +141,11 @@ Resume file: None
 - Phase 6 completed: 2026-04-01 (3 plans, 3 waves)
 - Phase 7 completed: 2026-04-02 (3 plans, 3 waves, 36 new tests, browser UAT passed)
 - Phase 11 completed: 2026-04-11 (4 plans, 2 waves, 18/18 must-haves verified)
+- Phase 13 added: Intake Agent Hybrid Routing + Bug Fixes — align intake agent with docs/deep-research-*.md (hybrid code-enforced routing + prompt-driven conversation); closes 6 open intake-layer bugs (2, 3, 4, 5, 6, 7) as symptoms of the misalignment (2026-04-12)
+
+Phase 13 decisions (2026-04-12):
+- convertCurrency structured contract: two-layer normalisation — MCP server (source of truth) + intake tool wrapper (defence-in-depth for legacy shapes)
+- rate-is-None guard in MCP server returns {supported: False} (not just HTTP 404)
+- No secondary currency provider (Frankfurter → manual-rate askHuman is the two-tier chain, wired in Plan 06)
+- No currency caching (locked decision per 13-CONTEXT.md)
+- logEvent keyword is logCategory= (not category=) — confirmed from core/logging.py
