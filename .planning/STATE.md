@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 13 — Intake Agent Hybrid Routing + Bug Fixes (In progress)
-Plan: 6/9 plans complete (13-01 through 13-06 done)
-Status: Plan 13-06 complete. Keystone wiring: buildIntakeSubgraph (v5 + hooks + checkpointer=None), _mergeSubgraphResult whitelist, preIntakeValidator, postIntakeRouter → humanEscalation. 14 tests updated, 261 passing.
-Last activity: 2026-04-12 — Completed 13-06-PLAN.md (wrapper graph wiring)
+Plan: 7/9 plans complete (13-01 through 13-07 done)
+Status: Plan 13-07 complete. Unit test suite: test_intake_hooks.py (18 tests, all four hook modules), test_intake_agent.py extended (+13 tests, boundary/integration/MCP). 311 passing.
+Last activity: 2026-04-12 — Completed 13-07-PLAN.md (hook and router unit tests)
 
 ```
 v2.0 Progress: [##################################] 33/38 plans
@@ -130,7 +130,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-12
-Stopped at: Completed Phase 13 Plan 06 — wrapper graph wiring (buildIntakeSubgraph, _mergeSubgraphResult, preIntakeValidator, postIntakeRouter, humanEscalation wired into main graph). 261 passing, 14 tests updated.
+Stopped at: Completed Phase 13 Plan 07 — hook and router unit tests. test_intake_hooks.py (18 tests), test_intake_agent.py +13 tests (boundary, integration, MCP call). 311 passing, 5 pre-existing failures.
 Resume file: None
 
 ### Roadmap Evolution
