@@ -77,6 +77,26 @@ def _stripThinkingTags(text: str) -> str:
     return cleaned.strip()
 
 
+def _isUserFacingProse(text: str) -> bool:
+    """Decide whether cleaned content should render as a chat bubble vs thinking entry.
+
+    Gate: length >= 40 chars OR contains markdown structure markers (table pipes,
+    headings, bullets, multi-line content). Short acknowledgements ("Ok.", "Sure.")
+    fall through to the reasoning panel (existing behaviour preserved).
+    """
+    if not text:
+        return False
+    stripped = text.strip()
+    if len(stripped) >= 40:
+        return True
+    # Markdown structure heuristics: table row, heading, bullet, multi-line
+    if "|" in stripped or stripped.startswith(("# ", "## ", "### ", "- ", "* ")):
+        return True
+    if "\n" in stripped:
+        return True
+    return False
+
+
 def _formatElapsed(elapsed: float) -> str:
     """Format elapsed seconds into a human-readable duration string."""
     if elapsed >= 60:
@@ -941,14 +961,65 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 hasToolCalls = output and hasattr(output, "tool_calls") and output.tool_calls
 
                 if hasToolCalls:
-                    cleanedBuffer = _stripToolCallJson(tokenBuffer.strip())
-                    if cleanedBuffer:
-                        thinkingEntries.append(
-                            {
-                                "type": "reasoning",
-                                "content": cleanedBuffer,
-                            }
+                    # Use tokenBuffer when streaming populated it; fall back to
+                    # output.content for models that only emit content on the end event.
+                    rawContent = tokenBuffer.strip() or (
+                        getattr(output, "content", "") if output is not None else ""
+                    )
+                    cleanedBuffer = _stripToolCallJson(rawContent)
+                    cleanedBuffer = _stripThinkingTags(cleanedBuffer)
+
+                    # Fix A (UAT Gap 1): emit user-facing prose as a chat bubble BEFORE
+                    # appending to thinkingEntries. Per v5 prompt, content preceding a
+                    # tool_call is normal user-addressed text (extraction table, policy
+                    # summary) — not internal reasoning. Reasoning models' private thinking
+                    # already flows through reasoningBuffer via additional_kwargs.reasoning_content.
+                    if _isUserFacingProse(cleanedBuffer):
+                        try:
+                            template = templates.get_template("partials/message_bubble.html")
+                            midHtml = template.render(
+                                content=cleanedBuffer,
+                                isAi=True,
+                                confidenceScores=None,
+                                violations=None,
+                                timestamp=datetime.now(ZoneInfo("Asia/Singapore")).strftime("%-I:%M %p"),
+                            )
+                        except Exception:
+                            midHtml = f'<div class="ai-message">{cleanedBuffer}</div>'
+                        yield ServerSentEvent(raw_data=midHtml, event=SseEvent.MESSAGE)
+                        logEvent(
+                            logger,
+                            "sse.mid_stream_bubble_emitted",
+                            logCategory="sse",
+                            claimId=graphInput.get("claimId"),
+                            threadId=graphInput.get("threadId"),
+                            contentLength=len(cleanedBuffer),
+                            toolCallCount=len(output.tool_calls),
                         )
+                    else:
+                        # Trivial filler or empty after strip: preserve existing
+                        # thinking-entry behaviour.
+                        if cleanedBuffer:
+                            thinkingEntries.append(
+                                {
+                                    "type": "reasoning",
+                                    "content": cleanedBuffer,
+                                }
+                            )
+                            # Post-ship telemetry: track false-negatives of the prose gate.
+                            # If users report missing content, query logs for this event to
+                            # tune _isUserFacingProse (40-char / markdown-marker heuristic).
+                            logEvent(
+                                logger,
+                                "sse.content_suppressed_as_reasoning",
+                                logCategory="sse",
+                                claimId=graphInput.get("claimId"),
+                                threadId=graphInput.get("threadId"),
+                                contentLength=len(cleanedBuffer),
+                                preview=cleanedBuffer[:80],
+                                toolCallCount=len(output.tool_calls),
+                            )
+
                     if reasoningBuffer.strip():
                         thinkingEntries.append(
                             {
@@ -957,7 +1028,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             }
                         )
                     # Show brief reasoning summary in thinking panel
-                    reasoningText = reasoningBuffer.strip() or cleanedBuffer or ""
+                    reasoningText = reasoningBuffer.strip() or ""
                     if reasoningText:
                         preview = reasoningText[:120].replace("\n", " ").strip()
                         if len(reasoningText) > 120:

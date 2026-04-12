@@ -217,15 +217,27 @@ async def test_reasoningContentStillRoutesToThinkingPanel():
     """Private reasoning_content must flow to thinking panel; content flows to bubble.
 
     RED: fails because no MESSAGE bubble is emitted for content+tool_calls.
-    After fix: MESSAGE has the prose, STEP_CONTENT has the reasoning preview.
+    After fix: MESSAGE has the prose; private reasoning (when streamed) goes to thinking panel.
+
+    Note: reasoningBuffer is populated from on_chat_model_stream chunks (L905-916), not
+    from the end event's output.additional_kwargs. To exercise STEP_CONTENT we include a
+    stream chunk with reasoning_content in additional_kwargs.
     """
     reasoning = "internal chain-of-thought about the extraction"
+    reasoningChunk = MagicMock()
+    reasoningChunk.content = ""
+    reasoningChunk.additional_kwargs = {"reasoning_content": reasoning}
+    reasoningChunk.response_metadata = {}
+
     events = [
+        # Stream chunk populates reasoningBuffer
+        {"event": "on_chat_model_stream", "data": {"chunk": reasoningChunk}},
+        # End event: markdown table content + tool_call
         _makeLlmEndEvent(
             content=MARKDOWN_TABLE,
             toolCalls=[_makeAskHumanToolCall()],
             reasoningContent=reasoning,
-        )
+        ),
     ]
     graph = _makeMockGraph(events)
     collected = await _collectEvents(graph)
@@ -242,7 +254,7 @@ async def test_reasoningContentStillRoutesToThinkingPanel():
         f"Private reasoning_content leaked into chat bubble: {reasoning[:50]}"
     )
 
-    # A STEP_CONTENT event should carry the reasoning preview
+    # A STEP_CONTENT event should carry the reasoning preview (emitted from reasoningBuffer)
     stepContent = [e for e in collected if e.event == SseEvent.STEP_CONTENT]
     assert len(stepContent) >= 1, "Expected STEP_CONTENT event with reasoning preview."
 
