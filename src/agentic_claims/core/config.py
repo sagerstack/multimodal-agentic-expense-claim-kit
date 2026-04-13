@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     openrouter_llm_max_tokens: int = Field(..., description="Max tokens for LLM response generation")
     openrouter_llm_temperature: float = Field(..., description="LLM temperature (lower for reasoning models)")
     openrouter_timeout: int = Field(..., description="LLM call timeout in seconds")
+    intake_agent_mode: str = Field(
+        default="legacy",
+        description="Intake agent mode selector: 'legacy' or 'gpt'",
+    )
 
     # Qdrant configuration
     qdrant_host: str = Field(..., description="Qdrant host")

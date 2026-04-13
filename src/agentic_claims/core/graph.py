@@ -10,6 +10,7 @@ from psycopg_pool import AsyncConnectionPool
 from agentic_claims.agents.advisor.node import advisorNode
 from agentic_claims.agents.compliance.node import complianceNode
 from agentic_claims.agents.debug_llm_node import debugLlmNode
+from agentic_claims.agents.intake_gpt.node import intakeGptNode
 from agentic_claims.agents.fraud.node import fraudNode
 from agentic_claims.agents.intake.node import intakeNode, postIntakeRouter, preIntakeValidator
 from agentic_claims.agents.intake.nodes.humanEscalation import humanEscalationNode
@@ -109,10 +110,14 @@ def buildGraph() -> StateGraph:
         Uncompiled StateGraph builder
     """
     builder = StateGraph(ClaimState)
+    settings = getSettings()
+    intakeNodeImpl = (
+        intakeGptNode if settings.intake_agent_mode.lower() == "gpt" else intakeNode
+    )
 
     # Add agent nodes
     builder.add_node("preIntakeValidator", preIntakeValidator)
-    builder.add_node("intake", intakeNode)
+    builder.add_node("intake", intakeNodeImpl)
     builder.add_node("humanEscalation", humanEscalationNode)
     builder.add_node("compliance", complianceNode)
     builder.add_node("fraud", fraudNode)

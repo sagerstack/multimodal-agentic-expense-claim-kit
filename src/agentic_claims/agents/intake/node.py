@@ -37,7 +37,7 @@ from agentic_claims.agents.intake.extractionContext import extractedReceiptVar
 from agentic_claims.agents.intake.hooks import postModelHook, preModelHook
 from agentic_claims.agents.intake.hooks.postToolFlagSetter import postToolFlagSetter
 from agentic_claims.agents.intake.hooks.submitClaimGuard import submitClaimGuard
-from agentic_claims.agents.intake.prompts.agentSystemPrompt_v5 import INTAKE_AGENT_SYSTEM_PROMPT_V5
+from agentic_claims.agents.intake.prompts.agentSystemPrompt_v6 import INTAKE_AGENT_SYSTEM_PROMPT_V6
 from agentic_claims.agents.intake.tools.askHuman import askHuman
 from agentic_claims.agents.intake.tools.convertCurrency import convertCurrency
 from agentic_claims.agents.intake.tools.extractReceiptFields import extractReceiptFields
@@ -79,6 +79,14 @@ class IntakeSubgraphState(TypedDict):
     validatorRetryCount: NotRequired[int]
     validatorEscalate: NotRequired[bool]
     askHumanCount: NotRequired[int]
+    # Phase 1 confirmation gate + submission state. preModelHook reads these
+    # to decide whether to inject the "ask for confirmation" directive.
+    # Without them on this schema LangGraph filters the keys out of the
+    # subgraph state, so the directive never fires across turns.
+    # Source: CLAIM-022 regression (Vietnamese receipt) — phase1ConfirmationPending
+    # was set in outer state but never reached preModelHook inside the subgraph.
+    phase1ConfirmationPending: NotRequired[bool]
+    claimSubmitted: NotRequired[bool]
     # Read-only correlation fields (hooks read, outer graph writes)
     claimId: NotRequired[str]
     threadId: NotRequired[str]
@@ -102,7 +110,7 @@ def buildIntakeSubgraph(llm, tools):
     return create_react_agent(
         model=llm,
         tools=tools,
-        prompt=INTAKE_AGENT_SYSTEM_PROMPT_V5,
+        prompt=INTAKE_AGENT_SYSTEM_PROMPT_V6,
         state_schema=IntakeSubgraphState,
         pre_model_hook=preModelHook,
         post_model_hook=postModelHook,
@@ -191,7 +199,7 @@ def getIntakeAgent(useFallback: bool = False):
     agent = create_react_agent(
         model=llm,
         tools=tools,
-        prompt=INTAKE_AGENT_SYSTEM_PROMPT_V5,
+        prompt=INTAKE_AGENT_SYSTEM_PROMPT_V6,
     )
 
     return agent
@@ -494,7 +502,11 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
     llm, tools = _buildLlmAndTools(useFallback=False)
     subgraph = _getIntakeSubgraph(llm, tools)
 
-    # Build subgraph input: pass Phase 13 flag fields + messages + correlation ids
+    # Build subgraph input: pass Phase 13 flag fields + messages + correlation ids.
+    # phase1ConfirmationPending MUST be passed so preModelHook (running inside the
+    # subgraph) can inject the confirmation directive on every turn until the
+    # user confirms. Source: CLAIM-022 regression — flag was set in outer state
+    # but never reached the subgraph, so the directive never fired.
     subgraphInput = {
         "messages": state.get("messages", []),
         "claimId": claimId,
@@ -505,6 +517,8 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
         "validatorRetryCount": state.get("validatorRetryCount", 0),
         "validatorEscalate": state.get("validatorEscalate", False),
         "unsupportedCurrencies": state.get("unsupportedCurrencies") or set(),
+        "phase1ConfirmationPending": state.get("phase1ConfirmationPending", False),
+        "claimSubmitted": state.get("claimSubmitted", False),
     }
 
     logEvent(
@@ -550,8 +564,13 @@ async def intakeNode(state: ClaimState, config: RunnableConfig) -> dict:
 
     # Run post-subgraph hooks on the virtual "post-turn" state so the outer
     # postIntakeRouter sees flags set by THIS turn's tools.
+    # scanMode="full-delta": the merged["messages"] suffix is *this turn's delta*
+    # only, so a full scan is turn-scoped. The trailing scan in the default
+    # (preIntakeValidator) path misses tools followed by an AIMessage, which
+    # qwen3 emits routinely (e.g. JSON content after extractReceiptFields).
+    # Source: 13-DEBUG-phase1-skip.md Issue 2 (CLAIM-022 regression).
     postSubgraphState = {**state, **merged}
-    flagUpdates = await postToolFlagSetter(postSubgraphState)
+    flagUpdates = await postToolFlagSetter(postSubgraphState, scanMode="full-delta")
     merged.update(flagUpdates)
 
     guardUpdates = await submitClaimGuard(postSubgraphState)

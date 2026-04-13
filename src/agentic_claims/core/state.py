@@ -5,6 +5,8 @@ from typing import Annotated, Optional, TypedDict
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 
+from agentic_claims.agents.intake_gpt.state import IntakeGptState
+
 
 def _unionSet(existing: set | None, update: set | None) -> set:
     """Reducer for Annotated set fields: merges two sets by union.
@@ -57,6 +59,7 @@ class ClaimState(TypedDict):
     fraudFindings: Optional[dict]  # Structured fraud verdict from fraud agent
     advisorDecision: Optional[str]  # One of "auto_approve" | "return_to_claimant" | "escalate_to_reviewer"
     dbClaimId: Optional[int]  # Integer DB primary key from submitClaim, used by post-submission agents
+    intakeGpt: Optional[IntakeGptState]  # Nested state for the intake-gpt replacement path
 
     # Phase 13: routing / loop-bound / validator state (source: 13-RESEARCH.md §3)
     askHumanCount: int  # loop-bound counter; incremented per askHuman interrupt
@@ -65,3 +68,10 @@ class ClaimState(TypedDict):
     validatorRetryCount: int  # soft-rewrite attempts this turn
     validatorEscalate: bool  # postModelHook → outer router signal
     turnIndex: int  # per-turn correlation counter for log events
+
+    # Phase 1 confirmation gate (Issue 2, screenshot #6):
+    # Set when extractReceiptFields returns; cleared when the user answers the
+    # step-9 confirmation askHuman ("Do the details above look correct?").
+    # While True, preModelHook injects a directive forcing the model's next tool
+    # call to be askHuman — preventing the jump straight to searchPolicies.
+    phase1ConfirmationPending: bool

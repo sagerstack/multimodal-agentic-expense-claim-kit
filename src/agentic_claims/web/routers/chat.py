@@ -20,7 +20,7 @@ from agentic_claims.web.imagePathContext import imagePathVar
 from agentic_claims.web.interruptDetection import isPausedAtInterrupt
 from agentic_claims.web.session import getSessionIds
 from agentic_claims.web.sessionQueues import (
-    _QUEUE_WAKE_SENTINEL,
+    QueueRotationSignal,
     getOrCreateQueue,
     popQueue,
     removeQueue,
@@ -98,19 +98,34 @@ async def postMessage(
             # Reset session: new thread_id, new claim_id, clear old resources
             oldClaimId = claimId
             oldThreadId = threadId
+            oldDraftClaimId = request.session.get("draft_claim_id")
             if oldClaimId:
                 clearImage(oldClaimId)
-            # Plan 13-13 fix: pop the OLD queue and wake its blocked consumer
-            # BEFORE rotating the session thread_id. Without the sentinel push,
-            # the SSE streamChat generator would remain blocked on the
-            # orphaned queue's get() while POSTs go to the newly created NEW
-            # queue, stranding all post-auto-reset messages.
-            # Source: 13-DEBUG-post-reset-stuck.md.
+            # Preserve the just-closed conversation pointers for export. The
+            # orphaned thread still exists in the checkpointer; exportChat
+            # reads these to reconstruct the conversation post-rotation.
+            request.session["last_closed_thread_id"] = oldThreadId
+            request.session["last_closed_claim_id"] = oldClaimId
+            request.session["last_closed_draft_claim_id"] = oldDraftClaimId
+            # Generate new IDs FIRST so the rotation signal carries the new
+            # threadId in-band. The SSE consumer cannot rely on
+            # request.session for the rotated thread_id — its session dict
+            # is frozen from the cookie snapshot at SSE connection time.
+            newThreadId = str(uuid.uuid4())
+            request.session["thread_id"] = newThreadId
+            request.session["claim_id"] = str(uuid.uuid4())
+            request.session.pop("draft_created", None)
+            request.session.pop("draft_claim_id", None)
+            # Pop the OLD queue and post a QueueRotationSignal carrying the
+            # newThreadId. The SSE streamChat generator will consume it,
+            # rebind to the new queue, and continue — without ever reading
+            # request.session.
+            # Source: 13-DEBUG-sse-session-stale.md (superseding 13-DEBUG-post-reset-stuck.md).
             if oldThreadId:
                 oldQueue = popQueue(oldThreadId)
                 if oldQueue is not None:
                     try:
-                        oldQueue.put_nowait(_QUEUE_WAKE_SENTINEL)
+                        oldQueue.put_nowait(QueueRotationSignal(newThreadId=newThreadId))
                     except asyncio.QueueFull:
                         # Queue is at maxsize; consumer will wake on its own
                         # when it drains. Log and continue — do not block the
@@ -120,15 +135,10 @@ async def postMessage(
                             "sse.auto_reset_sentinel_queue_full",
                             logCategory="sse",
                             threadId=oldThreadId,
-                            message="Old queue full on auto_reset; sentinel skipped",
+                            message="Old queue full on auto_reset; rotation signal skipped",
                         )
-            # Generate new IDs
-            request.session["thread_id"] = str(uuid.uuid4())
-            request.session["claim_id"] = str(uuid.uuid4())
-            request.session.pop("draft_created", None)
-            request.session.pop("draft_claim_id", None)
             # Update local vars for rest of handler
-            threadId = request.session["thread_id"]
+            threadId = newThreadId
             claimId = request.session["claim_id"]
             draftClaimNumber = f"DRAFT-{claimId[:8]}"
             autoResetFired = True
@@ -264,41 +274,16 @@ async def postMessage(
     }
 
     if awaitingClarification:
-        graphInput["resumeData"] = {"response": message, "action": "confirm"}
+        intakeAgentMode = getSettings().intake_agent_mode.lower()
+        if intakeAgentMode == "gpt":
+            graphInput["resumeData"] = message
+        else:
+            graphInput["resumeData"] = {"response": message, "action": "confirm"}
 
     queue = getOrCreateQueue(threadId)
     await queue.put(graphInput)
 
     return Response(status_code=204)
-
-
-def _reResolveSessionBindings(
-    request,
-    currentThreadId: str,
-    currentQueue: asyncio.Queue,
-) -> tuple[str, asyncio.Queue]:
-    """Re-read `request.session['thread_id']`; if rotated, bind to the new queue.
-
-    Called on every iteration of the streamChat outer loop so the generator
-    never holds a stale reference to a queue that has been popped from
-    `_queues`. Source: 13-DEBUG-post-reset-stuck.md Fix Option 1.
-
-    Returns a (threadId, queue) pair — the caller overwrites its locals.
-    """
-    sessionIds = getSessionIds(request)
-    latestThreadId = sessionIds["threadId"]
-    if latestThreadId == currentThreadId:
-        return currentThreadId, currentQueue
-    newQueue = getOrCreateQueue(latestThreadId)
-    logEvent(
-        logger,
-        "sse.stream_rebind",
-        logCategory="sse",
-        oldThreadId=currentThreadId,
-        newThreadId=latestThreadId,
-        message="streamChat rebound to new threadId after session rotation",
-    )
-    return latestThreadId, newQueue
 
 
 @router.get("/chat/stream", response_class=EventSourceResponse)
@@ -313,31 +298,35 @@ async def streamChat(request: Request):
         if await request.is_disconnected():
             break
 
-        # Plan 13-13 fix: re-resolve bindings every iteration so
-        # post-auto_reset rotation reaches this consumer.
-        # Source: 13-DEBUG-post-reset-stuck.md.
-        threadId, queue = _reResolveSessionBindings(request, threadId, queue)
-
         try:
             graphInput = await asyncio.wait_for(queue.get(), timeout=30.0)
         except asyncio.TimeoutError:
             yield ServerSentEvent(comment="ping")
             continue
 
-        # Sentinel: the old queue was told to wake up because the session
-        # thread rotated. Drop it and loop to re-resolve bindings. Do NOT
-        # yield an SSE event.
-        # Source: 13-DEBUG-post-reset-stuck.md Fix Option 1 + Option 4.
-        if graphInput is _QUEUE_WAKE_SENTINEL:
+        # Rotation signal from POST auto_reset. The signal carries the new
+        # threadId in-band so the stream can rebind without reading
+        # request.session (which is frozen at SSE connection time). Do NOT
+        # yield an SSE event. Source: 13-DEBUG-sse-session-stale.md.
+        if isinstance(graphInput, QueueRotationSignal):
+            oldThreadId = threadId
+            threadId = graphInput.newThreadId
+            queue = getOrCreateQueue(threadId)
             logEvent(
                 logger,
-                "sse.stream_wake_sentinel",
+                "sse.stream_rebind_in_band",
                 logCategory="sse",
-                threadId=threadId,
-                message="streamChat woke from auto_reset sentinel",
+                oldThreadId=oldThreadId,
+                newThreadId=threadId,
+                message="streamChat rebound via in-band rotation signal",
             )
             continue
 
+        # Use graphInput as the authoritative source of the turn's identity.
+        # sessionIds was captured at stream start and is stale after any
+        # auto_reset rotation. The POST handler always writes the current
+        # threadId/claimId into graphInput.
+        turnClaimId = graphInput.get("claimId")
         logEvent(
             logger,
             "agent.turn_queued",
@@ -346,8 +335,8 @@ async def streamChat(request: Request):
             employeeId=request.session.get("employee_id"),
             username=request.session.get("username"),
             agent="intake",
-            claimId=sessionIds["claimId"],
-            draftClaimNumber=f"DRAFT-{sessionIds['claimId'][:8]}",
+            claimId=turnClaimId,
+            draftClaimNumber=f"DRAFT-{turnClaimId[:8]}" if turnClaimId else None,
             threadId=graphInput.get("threadId"),
             status="queued",
             payload={"graphInput": graphInput},
@@ -356,7 +345,7 @@ async def streamChat(request: Request):
 
         try:
             employeeIdVar.set(request.session.get("employee_id"))
-            imagePathVar.set(getImagePath(sessionIds["claimId"]))
+            imagePathVar.set(getImagePath(turnClaimId))
 
             async for sseEvent in runGraph(graph, graphInput, request, templates):
                 yield sseEvent
@@ -369,8 +358,8 @@ async def streamChat(request: Request):
                 employeeId=request.session.get("employee_id"),
                 username=request.session.get("username"),
                 agent="intake",
-                claimId=sessionIds["claimId"],
-                draftClaimNumber=f"DRAFT-{sessionIds['claimId'][:8]}",
+                claimId=turnClaimId,
+                draftClaimNumber=f"DRAFT-{turnClaimId[:8]}" if turnClaimId else None,
                 threadId=graphInput.get("threadId"),
                 status="completed",
                 message="Agent turn stream completed",
@@ -381,7 +370,7 @@ async def streamChat(request: Request):
                 "sse.stream_error",
                 level=logging.ERROR,
                 logCategory="sse",
-                claimId=sessionIds.get("claimId"),
+                claimId=turnClaimId,
                 error=str(e),
                 message="SSE stream error",
             )
@@ -428,11 +417,18 @@ async def resetChat(request: Request):
     """Clear session state, remove queue, redirect to /."""
     oldClaimId = request.session.get("claim_id")
     oldThreadId = request.session.get("thread_id")
+    oldDraftClaimId = request.session.get("draft_claim_id")
 
     if oldClaimId:
         clearImage(oldClaimId)
     if oldThreadId:
         removeQueue(oldThreadId)
+
+    # Preserve the just-closed conversation pointers so the user can still
+    # export it after a manual reset (e.g. after escalation + "New Claim").
+    request.session["last_closed_thread_id"] = oldThreadId
+    request.session["last_closed_claim_id"] = oldClaimId
+    request.session["last_closed_draft_claim_id"] = oldDraftClaimId
 
     request.session["thread_id"] = str(uuid.uuid4())
     request.session["claim_id"] = str(uuid.uuid4())
@@ -454,6 +450,170 @@ async def resetChat(request: Request):
     )
 
     return Response(status_code=204, headers={"HX-Redirect": "/"})
+
+
+@router.get("/chat/export")
+async def exportChat(request: Request, scope: str = "auto"):
+    """Export a conversation as a markdown file download.
+
+    Scope selection:
+      - scope="current" (explicit): always read the current session thread
+      - scope="last-closed" (explicit): read last_closed_thread_id from session
+      - scope="auto" (default): prefer current if it has turns; otherwise
+        fall back to last-closed. Matches the "just submitted/escalated,
+        export this claim" UX after session auto-reset.
+
+    The LangGraph checkpointer persists by thread_id, so prior threads
+    remain readable even after session rotation (chat.auto_reset).
+    """
+    from datetime import datetime, timezone
+
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+    sessionIds = getSessionIds(request)
+    currentThreadId = sessionIds["threadId"]
+    currentClaimId = sessionIds["claimId"]
+    lastClosedThreadId = request.session.get("last_closed_thread_id")
+    lastClosedClaimId = request.session.get("last_closed_claim_id")
+
+    graph = request.app.state.graph
+
+    async def _readMessages(tid: str | None):
+        if not tid:
+            return None
+        try:
+            snap = await graph.aget_state({"configurable": {"thread_id": tid}})
+        except Exception as e:  # noqa: BLE001
+            logEvent(
+                logger,
+                "chat.export_failed",
+                level=logging.WARNING,
+                logCategory="chat_history",
+                threadId=tid,
+                error=str(e)[:200],
+                message="Chat export failed: aget_state error",
+            )
+            return None
+        return (snap.values or {}).get("messages", []) if snap else []
+
+    if scope == "last-closed":
+        threadId, claimId = lastClosedThreadId, lastClosedClaimId
+        messages = await _readMessages(threadId)
+    elif scope == "current":
+        threadId, claimId = currentThreadId, currentClaimId
+        messages = await _readMessages(threadId)
+    else:
+        # auto: try current first; fall back to last-closed if current is empty
+        threadId, claimId = currentThreadId, currentClaimId
+        messages = await _readMessages(threadId)
+        currentIsEmpty = not any(
+            isinstance(m, (HumanMessage, AIMessage)) and (getattr(m, "content", "") or getattr(m, "tool_calls", None))
+            for m in (messages or [])
+        )
+        if currentIsEmpty and lastClosedThreadId:
+            threadId, claimId = lastClosedThreadId, lastClosedClaimId
+            messages = await _readMessages(threadId)
+
+    if messages is None:
+        return Response(status_code=500, content="Failed to read conversation state")
+
+    exportedAt = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    lines: list[str] = [
+        "# Expense Claim Conversation",
+        "",
+        f"- **Exported:** {exportedAt}",
+        f"- **Claim ID:** `{claimId}`",
+        f"- **Thread ID:** `{threadId}`",
+        "",
+        "---",
+        "",
+    ]
+
+    turnCount = 0
+    for msg in messages:
+        content = getattr(msg, "content", None)
+        if isinstance(msg, HumanMessage):
+            turnCount += 1
+            text = content if isinstance(content, str) else str(content or "")
+            lines.append("## User")
+            lines.append("")
+            lines.append(text.strip() or "_(empty)_")
+            lines.append("")
+        elif isinstance(msg, AIMessage):
+            text = content if isinstance(content, str) else ""
+            toolCalls = getattr(msg, "tool_calls", None) or []
+            # Surface askHuman questions as assistant prose (the user sees them
+            # as chat messages, not as tool-call metadata). Other tool calls
+            # render in a compact "Tool calls:" block for auditability.
+            askHumanQuestions: list[str] = []
+            otherCalls: list[dict] = []
+            for call in toolCalls:
+                if isinstance(call, dict) and call.get("name") == "askHuman":
+                    question = (call.get("args") or {}).get("question", "")
+                    if question:
+                        askHumanQuestions.append(str(question).strip())
+                elif isinstance(call, dict):
+                    otherCalls.append(call)
+            if not text.strip() and not toolCalls:
+                continue
+            turnCount += 1
+            lines.append("## Assistant")
+            lines.append("")
+            if text.strip():
+                lines.append(text.strip())
+                lines.append("")
+            for q in askHumanQuestions:
+                lines.append(q)
+                lines.append("")
+            if otherCalls:
+                lines.append("**Tool calls:**")
+                lines.append("")
+                for call in otherCalls:
+                    name = call.get("name", "?")
+                    args = call.get("args", {})
+                    lines.append(f"- `{name}` — `{args}`")
+                lines.append("")
+        elif isinstance(msg, ToolMessage):
+            # Surface askHuman answers as user turns — they carry the user's
+            # reply to an interrupt-triggered question. Dropping them loses the
+            # majority of user content in the typical flow (only 1-2 messages
+            # arrive as HumanMessage; everything else is an askHuman resume).
+            # Source: CLAIM-022 export showed only the initial greeting + upload.
+            if getattr(msg, "name", None) != "askHuman":
+                continue
+            text = content if isinstance(content, str) else str(content or "")
+            if not text.strip():
+                continue
+            turnCount += 1
+            lines.append("## User")
+            lines.append("")
+            lines.append(text.strip())
+            lines.append("")
+
+    if turnCount == 0:
+        lines.append("_(No conversation yet.)_")
+        lines.append("")
+
+    markdown = "\n".join(lines)
+    filename = f"claim-{claimId[:8]}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.md"
+
+    logEvent(
+        logger,
+        "chat.exported",
+        logCategory="chat_history",
+        actorType="user",
+        claimId=claimId,
+        threadId=threadId,
+        turnCount=turnCount,
+        bytes=len(markdown.encode("utf-8")),
+        message="Chat exported to markdown",
+    )
+
+    return Response(
+        content=markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 async def fetchClaimsForTable(employeeId: str | None = None) -> list[dict]:

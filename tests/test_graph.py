@@ -9,6 +9,14 @@ from agentic_claims.core.graph import buildGraph
 from agentic_claims.core.state import ClaimState
 
 
+@pytest.fixture(autouse=True)
+def _defaultIntakeModeLegacy():
+    """Keep existing graph tests deterministic regardless of local .env mode."""
+    mockSettings = type("Settings", (), {"intake_agent_mode": "legacy"})()
+    with patch("agentic_claims.core.graph.getSettings", return_value=mockSettings):
+        yield
+
+
 async def _mockMarkAiReviewedNode(state: ClaimState) -> dict:
     """Mock markAiReviewedNode that skips DB call."""
     return {"status": "ai_reviewed"}
@@ -74,6 +82,49 @@ async def test_pendingClaimEndsAfterIntake():
         assert "Compliance Check" not in allContent, "Compliance should NOT run"
         assert "Fraud Check" not in allContent, "Fraud should NOT run"
         assert "Advisor Decision" not in allContent, "Advisor should NOT run"
+
+
+@pytest.mark.asyncio
+async def test_graphUsesIntakeGptNodeWhenModeIsGpt():
+    """Feature flag should switch the intake node implementation."""
+
+    async def mockIntakeGptNode(state: ClaimState) -> dict:
+        return {
+            "messages": [AIMessage(content="intake-gpt active")],
+            "intakeGpt": {
+                "workflow": {
+                    "goal": "assist_claimant",
+                    "currentStep": "plain_chat",
+                    "readyForSubmission": False,
+                    "status": "active",
+                },
+                "slots": {},
+                "pendingInterrupt": None,
+                "lastUserTurn": {"message": "hello", "hasImage": False},
+                "lastResolution": None,
+                "toolTrace": {},
+                "protocolGuardCount": 0,
+            },
+        }
+
+    mockSettings = type("Settings", (), {"intake_agent_mode": "gpt"})()
+
+    with (
+        patch("agentic_claims.core.graph.getSettings", return_value=mockSettings),
+        patch("agentic_claims.core.graph.intakeGptNode", mockIntakeGptNode),
+    ):
+        graph = buildGraph().compile()
+        result = await graph.ainvoke(
+            {
+                "claimId": "test-gpt-mode",
+                "status": "draft",
+                "messages": [HumanMessage(content="hello")],
+                "claimSubmitted": False,
+            }
+        )
+
+    assert any(msg.content == "intake-gpt active" for msg in result["messages"])
+    assert result["intakeGpt"]["workflow"]["currentStep"] == "plain_chat"
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,12 @@ import httpx
 from langchain_openrouter import ChatOpenRouter
 
 
-def buildAgentLlm(settings, temperature: float = 0.1, useFallback: bool = False) -> ChatOpenRouter:
+def buildAgentLlm(
+    settings,
+    temperature: float = 0.1,
+    useFallback: bool = False,
+    reasoning: dict | None = None,
+) -> ChatOpenRouter:
     """Instantiate ChatOpenRouter for an agent node.
 
     Applies SSL bypass for Zscaler corporate proxy and selects primary or
@@ -14,6 +19,7 @@ def buildAgentLlm(settings, temperature: float = 0.1, useFallback: bool = False)
         settings: Application Settings instance
         temperature: LLM temperature (default 0.1 for deterministic agent output)
         useFallback: If True, use fallback model instead of primary
+        reasoning: Optional OpenRouter reasoning config
 
     Returns:
         Configured ChatOpenRouter instance
@@ -29,6 +35,7 @@ def buildAgentLlm(settings, temperature: float = 0.1, useFallback: bool = False)
         temperature=temperature,
         max_retries=settings.openrouter_max_retries,
         max_tokens=settings.openrouter_llm_max_tokens,
+        reasoning=reasoning,
     )
 
     # Bypass SSL verification (Zscaler corporate proxy workaround)

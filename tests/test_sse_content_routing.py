@@ -89,6 +89,13 @@ def _baseGraphInput():
     }
 
 
+def _makeSettings(*, intakeAgentMode="legacy", enableResponseStreaming=False):
+    settings = MagicMock()
+    settings.intake_agent_mode = intakeAgentMode
+    settings.enable_response_streaming = enableResponseStreaming
+    return settings
+
+
 async def _collectEvents(graph, graphInput=None, request=None):
     events = []
     async for event in runGraph(
@@ -341,3 +348,575 @@ async def test_suppressedContentLogsEventForObservability():
         assert "Ok." in preview, (
             f"preview should contain 'Ok.'. Got: {preview!r}"
         )
+
+
+@pytest.mark.asyncio
+async def test_llmCompletionLogsReasoningSummaryMetadataForIntakeGpt():
+    """LLM completion log should capture reasoning-summary presence and length."""
+    reasoning = "concise reasoning summary"
+    reasoningChunk = MagicMock()
+    reasoningChunk.content = ""
+    reasoningChunk.additional_kwargs = {"reasoning_content": reasoning}
+    reasoningChunk.response_metadata = {}
+
+    events = [
+        {"event": "on_chat_model_stream", "data": {"chunk": reasoningChunk}},
+        _makeLlmEndEvent(content="Hello there", toolCalls=[]),
+    ]
+    graph = _makeMockGraph(events)
+
+    with (
+        patch("agentic_claims.web.sseHelpers.logEvent") as mockLogEvent,
+        patch(
+            "agentic_claims.web.sseHelpers.getSettings",
+            return_value=_makeSettings(intakeAgentMode="gpt"),
+        ),
+    ):
+        await _collectEvents(graph)
+
+    completedCalls = [
+        call
+        for call in mockLogEvent.call_args_list
+        if len(call.args) >= 2 and call.args[1] == "llm.call_completed"
+    ]
+    assert completedCalls, "Expected llm.call_completed log event."
+
+    completedKwargs = completedCalls[0].kwargs
+    assert completedKwargs.get("agent") == "intake-gpt"
+    assert completedKwargs.get("hasReasoningSummary") is True
+    assert completedKwargs.get("reasoningLength") == len(reasoning)
+    assert completedKwargs.get("reasoningContent") == reasoning
+
+
+@pytest.mark.asyncio
+async def test_fallbackThinkingSummaryLogsExplicitEventForIntakeGpt():
+    """Direct no-tool turns should emit an explicit fallback-thinking log event."""
+    events = [
+        {"event": "on_chat_model_stream", "data": {"chunk": MagicMock(
+            content="Hello there", additional_kwargs={}, response_metadata={}
+        )}},
+        _makeLlmEndEvent(content="Hello there", toolCalls=[]),
+    ]
+    graph = _makeMockGraph(events)
+
+    with (
+        patch("agentic_claims.web.sseHelpers.logEvent") as mockLogEvent,
+        patch(
+            "agentic_claims.web.sseHelpers.getSettings",
+            return_value=_makeSettings(intakeAgentMode="gpt"),
+        ),
+    ):
+        await _collectEvents(graph)
+
+    fallbackCalls = [
+        call
+        for call in mockLogEvent.call_args_list
+        if len(call.args) >= 2 and call.args[1] == "sse.fallback_thinking_summary_emitted"
+    ]
+    assert fallbackCalls, "Expected fallback thinking summary log event."
+
+    fallbackKwargs = fallbackCalls[0].kwargs
+    assert fallbackKwargs.get("agent") == "intake-gpt"
+    assert fallbackKwargs.get("usedFallbackThinkingSummary") is True
+    assert fallbackKwargs.get("hasReasoningSummary") is False
+    assert fallbackKwargs.get("summary") == "Responding directly without tool calls."
+
+
+@pytest.mark.asyncio
+async def test_receiptUploadTranscriptRendersTableNotJsonLeak():
+    """Receipt-upload transcript should show the table + interrupt, never the raw payload."""
+
+    class FakeInterrupt:
+        def __init__(self, value):
+            self.value = value
+
+    class FakeTask:
+        def __init__(self, interrupts):
+            self.interrupts = interrupts
+
+    fencedJson = (
+        "```json\n"
+        "{\n"
+        '  "fields": {\n'
+        '    "merchant": "DIG.",\n'
+        '    "date": "2024-05-28",\n'
+        '    "totalAmount": 16.2,\n'
+        '    "currency": "USD"\n'
+        "  },\n"
+        '  "confidence": {\n'
+        '    "merchant": 0.95,\n'
+        '    "date": 0.92,\n'
+        '    "totalAmount": 0.98,\n'
+        '    "currency": 0.99\n'
+        "  }\n"
+        "}\n"
+        "```"
+    )
+    interruptPayload = {
+        "contextMessage": (
+            "| Field | Value | Confidence |\n"
+            "|---|---|---|\n"
+            "| Merchant | DIG. | High |\n"
+            "| Date | 2024-05-28 | High |\n"
+            "| Total | USD 16.20 | High |\n"
+            "| Currency | USD | High |\n"
+            "\n\nTotal: USD 16.2 → SGD 20.64 (rate: 1.2739)"
+        ),
+        "question": "Does the extracted receipt information look correct?",
+    }
+    events = [
+        _makeLlmEndEvent(
+            content="",
+            toolCalls=[
+                {
+                    "name": "extractReceiptFields",
+                    "args": {"claimId": "claim-tx-001"},
+                    "id": "call_extract",
+                }
+            ],
+        ),
+        {
+            "event": "on_tool_start",
+            "name": "extractReceiptFields",
+            "data": {"input": {"claimId": "claim-tx-001"}},
+        },
+        _makeLlmEndEvent(content=fencedJson, toolCalls=[]),
+    ]
+    graph = _makeMockGraph(
+        events,
+        stateNext=["intake"],
+        stateTasks=[FakeTask((FakeInterrupt(interruptPayload),))],
+    )
+    graphInput = {
+        "threadId": "thread-tx-001",
+        "claimId": "claim-tx-001",
+        "message": "",
+        "hasImage": True,
+        "isResume": False,
+    }
+
+    collected = await _collectEvents(graph, graphInput=graphInput)
+
+    messageEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
+    messageHtml = " ".join(e.raw_data for e in messageEvents)
+    interruptEvents = [e for e in collected if e.event == SseEvent.INTERRUPT]
+
+    assert "| Field | Value | Confidence |" in messageHtml
+    assert "DIG." in messageHtml
+    assert "Does the extracted receipt information look correct?" == interruptEvents[-1].raw_data
+    assert "```json" not in messageHtml
+    assert '"fields"' not in messageHtml
+    assert '"confidence"' not in messageHtml
+
+
+@pytest.mark.asyncio
+async def test_requestHumanInputDoesNotLeakIntoThinkingPanel():
+    """Structured intake-gpt interrupt tool should be suppressed like askHuman."""
+    events = [
+        {"event": "on_tool_start", "name": "requestHumanInput", "data": {"input": {}}},
+        {
+            "event": "on_tool_end",
+            "name": "requestHumanInput",
+            "data": {"output": {"response": "yes"}},
+        },
+    ]
+    graph = _makeMockGraph(events)
+    collected = await _collectEvents(graph)
+
+    stepNames = [e.raw_data for e in collected if e.event == SseEvent.STEP_NAME]
+    stepContents = [e.raw_data for e in collected if e.event == SseEvent.STEP_CONTENT]
+
+    assert "Waiting for your input..." not in stepNames
+    assert not any("Asked for clarification" in content for content in stepContents)
+
+
+@pytest.mark.asyncio
+async def test_contentDuringPendingToolCallsEmitsBubble():
+    """Regression: Qwen3-class models split content+tool_call across separate
+    on_chat_model_end events. When the prose-only end event fires while a
+    prior tool is still counted as pending, the content must still emit a
+    MESSAGE bubble — not be silently dropped by the pendingToolCalls>0 guard.
+
+    Reproduces the bug where the extraction table never appeared in chat
+    before the askHuman question (see 13-DEBUG-extraction-bubble-dropped).
+    """
+    events = [
+        # Prior tool fires → pendingToolCalls becomes 1
+        {
+            "event": "on_tool_start",
+            "name": "extractReceiptFields",
+            "data": {"input": {}},
+        },
+        # Model emits user-facing prose WITHOUT tool_calls while pending > 0
+        _makeLlmEndEvent(content=MARKDOWN_TABLE, toolCalls=[]),
+    ]
+    graph = _makeMockGraph(events)
+    collected = await _collectEvents(graph)
+
+    messageEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
+    assert len(messageEvents) >= 1, (
+        f"Content during pendingToolCalls>0 must emit MESSAGE bubble. "
+        f"Events yielded: {[e.event for e in collected]}"
+    )
+    messageHtml = " ".join(e.raw_data for e in messageEvents)
+    assert "Kopitiam" in messageHtml, (
+        f"MESSAGE bubble missing table content. Got: {messageHtml[:300]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_fencedJsonDuringPendingToolCallsDoesNotEmitBubble():
+    """A fenced JSON payload during pendingToolCalls>0 must not render as chat."""
+    fencedJson = (
+        "```json\n"
+        "{\n"
+        '  "fields": {\n'
+        '    "merchant": "DIG."\n'
+        "  },\n"
+        '  "confidence": {\n'
+        '    "merchant": 0.95\n'
+        "  }\n"
+        "}\n"
+        "```"
+    )
+    events = [
+        {
+            "event": "on_tool_start",
+            "name": "extractReceiptFields",
+            "data": {"input": {}},
+        },
+        _makeLlmEndEvent(content=fencedJson, toolCalls=[]),
+    ]
+    graph = _makeMockGraph(events)
+    collected = await _collectEvents(graph)
+
+    messageEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
+    assert len(messageEvents) == 0, (
+        f"Fenced JSON during pendingToolCalls>0 must not emit MESSAGE bubble. Got: {messageEvents}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_shortFillerDuringPendingToolCallsNotPromoted():
+    """Counterpart to the above: short filler ('Ok.') during pendingToolCalls>0
+    must NOT produce a bubble. Preserves the existing reasoning-panel behaviour
+    for trivial acknowledgements.
+    """
+    events = [
+        {
+            "event": "on_tool_start",
+            "name": "extractReceiptFields",
+            "data": {"input": {}},
+        },
+        _makeLlmEndEvent(content="Ok.", toolCalls=[]),
+    ]
+    graph = _makeMockGraph(events)
+    collected = await _collectEvents(graph)
+
+    messageEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
+    okMessages = [e.raw_data for e in messageEvents if "Ok." in e.raw_data]
+    assert len(okMessages) == 0, (
+        f"Short filler during pending must not emit a bubble. Got: {okMessages}"
+    )
+
+
+# ── Bug 1 (screenshot #7): raw JSON root content must not render as a bubble ──
+# Source: 13-DEBUG-raw-json-bubble.md (CLAIM-018). `_stripToolCallJson` only
+# strips ```json fenced blocks; qwen3 frequently emits bare JSON payloads
+# while pendingToolCalls>0 which previously passed `_isUserFacingProse`
+# (length >= 40 → True) and rendered as a raw dict in the main chat.
+
+
+def test_isUserFacingProseRejectsJsonRootObject():
+    """A bare JSON object (no ```json fence) must route to thinking, not bubble."""
+    from agentic_claims.web.sseHelpers import _isUserFacingProse
+
+    rawJson = '{"name": "searchPolicies", "arguments": {"query": "meals", "limit": 5}}'
+    assert _isUserFacingProse(rawJson) is False, (
+        "JSON-root content must NOT render as chat bubble"
+    )
+
+
+def test_isUserFacingProseRejectsJsonRootArray():
+    """A bare JSON array also routes to thinking."""
+    from agentic_claims.web.sseHelpers import _isUserFacingProse
+
+    rawJson = '[{"name": "searchPolicies", "arguments": {}}]'
+    assert _isUserFacingProse(rawJson) is False
+
+
+def test_isUserFacingProseAllowsSentenceContainingBraces():
+    """A real sentence that happens to contain '{' mid-line must still bubble.
+    Only root-level JSON (parses cleanly) is rejected — inline braces are fine.
+    """
+    from agentic_claims.web.sseHelpers import _isUserFacingProse
+
+    sentence = "The merchant field is {{MERCHANT}} — please confirm it matches."
+    assert _isUserFacingProse(sentence) is True
+
+
+def test_isUserFacingProseAllowsMarkdownTableWithPipes():
+    """Regression guard: the markdown-table branch must still fire for
+    well-formed extraction tables (not accidentally caught by the JSON check)."""
+    from agentic_claims.web.sseHelpers import _isUserFacingProse
+
+    table = "| Field | Value | Confidence |\n|---|---|---|\n| Merchant | X | High |"
+    assert _isUserFacingProse(table) is True
+
+
+def test_looksLikeJsonRootNegativeCases():
+    """_looksLikeJsonRoot must not false-positive on non-JSON content."""
+    from agentic_claims.web.sseHelpers import _looksLikeJsonRoot
+
+    assert _looksLikeJsonRoot("") is False
+    assert _looksLikeJsonRoot("Ready to submit this claim?") is False
+    assert _looksLikeJsonRoot("{broken json") is False  # unparseable
+    assert _looksLikeJsonRoot("Please review { the details } carefully.") is False
+
+
+def test_isUserFacingProseRejectsPrettyPrintedPayloadLeak():
+    """Pretty-printed object-like payloads must not route to the chat bubble."""
+    from agentic_claims.web.sseHelpers import _isUserFacingProse
+
+    payload = '{\n  "fields": {\n    "merchant": "DIG."\n  },\n  "confidence": {\n    "merchant": 0.95\n  }\n}'
+    assert _isUserFacingProse(payload) is False
+
+
+# ── Bug 1 follow-up (CLAIM-020): JSON prefix + trailing prose ────────────────
+# Original fix rejected content that parsed fully as JSON. CLAIM-020 showed the
+# model emits `{json dump}\n\nAnalysis Complete\n| table |...` — JSON prefix
+# with trailing prose. _stripToolCallJson now consumes the JSON prefix via
+# raw_decode so the prose survives and the JSON dump doesn't reach the bubble.
+
+
+def test_stripToolCallJsonRemovesLeadingJsonObject():
+    """`{"fields": {...}}\\nAnalysis Complete\\n...` → only the prose remains."""
+    from agentic_claims.web.sseHelpers import _stripToolCallJson
+
+    payload = (
+        '{"fields": {"merchant": "X", "totalAmount": 727.09}, '
+        '"confidence": {"merchant": 0.95}}\n\n'
+        "Analysis Complete\n| Field | Value |"
+    )
+    cleaned = _stripToolCallJson(payload)
+    assert "fields" not in cleaned
+    assert "confidence" not in cleaned
+    assert "Analysis Complete" in cleaned
+    assert "| Field | Value |" in cleaned
+
+
+def test_stripToolCallJsonPreservesBareProse():
+    """Prose that doesn't start with { or [ passes through unchanged."""
+    from agentic_claims.web.sseHelpers import _stripToolCallJson
+
+    prose = "Policy check: Your meals expense is within the per-person cap."
+    assert _stripToolCallJson(prose) == prose
+
+
+def test_stripToolCallJsonHandlesPureJsonDump():
+    """If the whole content is JSON, return empty (no prose to keep)."""
+    from agentic_claims.web.sseHelpers import _stripToolCallJson
+
+    payload = '{"fields": {"merchant": "X"}}'
+    assert _stripToolCallJson(payload) == ""
+
+
+def test_stripToolCallJsonHandlesPureFencedJsonDump():
+    """A fenced JSON payload with no trailing prose should strip to empty."""
+    from agentic_claims.web.sseHelpers import _stripToolCallJson
+
+    payload = '```json\n{\n  "fields": {"merchant": "DIG."},\n  "confidence": {"merchant": 0.95}\n}\n```'
+    assert _stripToolCallJson(payload) == ""
+
+
+# ── Issue A (CLAIM-020): askHuman(...) prose leak stripping ──────────────────
+
+
+def test_stripToolCallExpressionsRemovesAskHumanLeak():
+    """The literal `askHuman("...")` leaked in the analysis bubble must be
+    stripped. Structured tool_calls still go through LangGraph intact — only
+    the prose copy is removed."""
+    from agentic_claims.web.sseHelpers import _stripToolCallExpressions
+
+    text = (
+        "Analysis Complete\n"
+        "| Field | Value |\n"
+        "| Merchant | X |\n\n"
+        'askHuman("Do the details above look correct? Let me know if anything needs correcting.")'
+    )
+    cleaned = _stripToolCallExpressions(text)
+    assert "askHuman" not in cleaned
+    assert "Do the details above look correct" not in cleaned
+    assert "Analysis Complete" in cleaned
+    assert "| Merchant | X |" in cleaned
+
+
+def test_stripToolCallExpressionsHandlesMultipleTools():
+    """Multiple tool-call expressions on different lines all get stripped."""
+    from agentic_claims.web.sseHelpers import _stripToolCallExpressions
+
+    text = (
+        'Step 1: askHuman("rate?")\n'
+        "Step 2: something\n"
+        'Step 3: submitClaim(claimData={"x": 1}, receiptData={})'
+    )
+    cleaned = _stripToolCallExpressions(text)
+    assert "askHuman" not in cleaned
+    assert "submitClaim" not in cleaned
+    assert "rate?" not in cleaned
+    assert "Step 2: something" in cleaned
+
+
+def test_stripToolCallExpressionsHandlesNestedParens():
+    """Nested parens inside the call args don't confuse the depth scanner."""
+    from agentic_claims.web.sseHelpers import _stripToolCallExpressions
+
+    text = 'Summary.\n\naskHuman("Rate (to SGD) please?")\nTail prose.'
+    cleaned = _stripToolCallExpressions(text)
+    assert "askHuman" not in cleaned
+    assert "Summary." in cleaned
+    assert "Tail prose." in cleaned
+
+
+def test_stripToolCallExpressionsLeavesUnrelatedTextAlone():
+    """Prose mentioning 'ask' in plain language (not as a call) survives."""
+    from agentic_claims.web.sseHelpers import _stripToolCallExpressions
+
+    text = "I will ask you to confirm the details shortly."
+    assert _stripToolCallExpressions(text) == text
+
+
+@pytest.mark.asyncio
+async def test_structuredInterruptPayloadEmitsContextBubbleBeforeInterrupt():
+    """Structured interrupt payload should render context in chat and question in interrupt."""
+
+    class FakeInterrupt:
+        def __init__(self, value):
+            self.value = value
+
+    class FakeTask:
+        def __init__(self, interrupts):
+            self.interrupts = interrupts
+
+    payload = {
+        "contextMessage": "Policy summary complete. I need one more input.",
+        "question": "Please confirm whether you want to proceed.",
+    }
+    graph = _makeMockGraph(
+        events=[],
+        stateNext=["intake"],
+        stateTasks=[FakeTask((FakeInterrupt(payload),))],
+    )
+
+    collected = await _collectEvents(graph)
+
+    messageEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
+    interruptEvents = [e for e in collected if e.event == SseEvent.INTERRUPT]
+
+    assert messageEvents, "Expected a MESSAGE bubble for contextMessage"
+    assert interruptEvents, "Expected an INTERRUPT event for question"
+    assert "Policy summary complete" in " ".join(e.raw_data for e in messageEvents)
+    assert interruptEvents[-1].raw_data == "Please confirm whether you want to proceed."
+
+
+@pytest.mark.asyncio
+async def test_intakeGptFieldConfirmationSuppressesDuplicateProseBubble():
+    """If intake-gpt emits prose alongside requestHumanInput(field_confirmation),
+    the prose must be suppressed so only the structured interrupt payload renders.
+    """
+
+    class FakeInterrupt:
+        def __init__(self, value):
+            self.value = value
+
+    class FakeTask:
+        def __init__(self, interrupts):
+            self.interrupts = interrupts
+
+    duplicateProse = (
+        "I've extracted the following details from your receipt:\n\n"
+        "Merchant: SERVUS GERMAN BURGER GRILL\n"
+        "Date: 2025-03-27\n"
+        "Total Amount: SGD 727.09\n"
+        "Please confirm if this information is accurate."
+    )
+    fieldConfirmationCall = {
+        "name": "requestHumanInput",
+        "args": {
+            "kind": "field_confirmation",
+            "blockingStep": "field_confirmation",
+            "question": "Do the extracted receipt details look correct to you?",
+            "contextMessage": (
+                "| Field | Value | Confidence |\n"
+                "|---|---|---|\n"
+                "| Merchant | SERVUS GERMAN BURGER GRILL | High |"
+            ),
+        },
+        "id": "call_field_confirmation",
+    }
+    payload = {
+        "kind": "field_confirmation",
+        "contextMessage": fieldConfirmationCall["args"]["contextMessage"],
+        "question": fieldConfirmationCall["args"]["question"],
+    }
+    graph = _makeMockGraph(
+        events=[_makeLlmEndEvent(content=duplicateProse, toolCalls=[fieldConfirmationCall])],
+        stateNext=["intake"],
+        stateTasks=[FakeTask((FakeInterrupt(payload),))],
+    )
+    graphInput = dict(_baseGraphInput())
+    graphInput["hasImage"] = True
+
+    with patch("agentic_claims.web.sseHelpers.getSettings", return_value=_makeSettings(intakeAgentMode="gpt")):
+        collected = await _collectEvents(graph, graphInput=graphInput)
+
+    messageEvents = [e.raw_data for e in collected if e.event == SseEvent.MESSAGE]
+    interruptEvents = [e.raw_data for e in collected if e.event == SseEvent.INTERRUPT]
+
+    assert any("| Merchant | SERVUS GERMAN BURGER GRILL | High |" in html for html in messageEvents)
+    assert all("I've extracted the following details from your receipt" not in html for html in messageEvents)
+    assert interruptEvents[-1] == "Do the extracted receipt details look correct to you?"
+
+
+@pytest.mark.asyncio
+async def test_plainDirectResponseEmitsFallbackThinkingSummary():
+    """Direct no-tool turns should not leave the Thinking panel body empty."""
+    events = [
+        _makeLlmEndEvent(content="Hello! How can I assist you today?"),
+    ]
+    graph = _makeMockGraph(events)
+    collected = await _collectEvents(graph)
+
+    stepContentEvents = [e for e in collected if e.event == SseEvent.STEP_CONTENT]
+    assert stepContentEvents, "Expected at least one STEP_CONTENT event for direct reply"
+    assert any(
+        "Responding directly without tool calls." in e.raw_data for e in stepContentEvents
+    ), "Fallback direct-response thinking summary should be emitted"
+
+
+@pytest.mark.asyncio
+async def test_finalResponseStructuredPayloadIsSuppressed():
+    """Final fallback render must not emit a raw structured payload bubble."""
+    payload = '{\n  "fields": {\n    "merchant": "DIG."\n  },\n  "confidence": {\n    "merchant": 0.95\n  }\n}'
+    events = [
+        {"event": "on_chat_model_stream", "data": {"chunk": MagicMock(
+            content=payload, additional_kwargs={}, response_metadata={}
+        )}},
+        _makeLlmEndEvent(content=payload, toolCalls=[]),
+    ]
+    graph = _makeMockGraph(events)
+
+    with patch("agentic_claims.web.sseHelpers.logEvent") as mockLogEvent:
+        collected = await _collectEvents(graph)
+
+    messageEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
+    assert not messageEvents, (
+        f"Structured payload leak must not render as a MESSAGE bubble. Got: {messageEvents}"
+    )
+
+    suppressionCalls = [
+        call
+        for call in mockLogEvent.call_args_list
+        if len(call.args) >= 2 and call.args[1] == "sse.final_response_suppressed_as_payload"
+    ]
+    assert suppressionCalls, "Expected structured-payload suppression log event."

@@ -1,28 +1,34 @@
 """Per-session asyncio.Queue dict for decoupling POST from SSE GET.
 
 Phase 13 (Plan 13-13): added `popQueue` returning the removed Queue so that
-callers (specifically `postMessage` on auto_reset) can push a wake sentinel
+callers (specifically `postMessage` on auto_reset) can push a wake signal
 onto the old queue before dropping the last reference — unblocking a
 consumer that was `await queue.get()`-ing on the now-orphaned queue.
 
-Sources:
-  - 13-DEBUG-post-reset-stuck.md (root cause: queue orphaning across
-    threadId rotation)
-  - 13-DEBUG-post-reset-stuck.md "Proposed fix outline" Option 1 + Option 4
-
-TODO(post-13): Option 3 (session-indexed queues) is a more invasive refactor
-that eliminates the rotation race entirely. Adopt if Option 1+4 proves flaky
-under concurrent load.
+Post-13 gap (2026-04-13): replaced opaque sentinel with
+`QueueRotationSignal`, which carries the new threadId in-band. This closes
+the stale-session bug where SSE's frozen `request.session` could never learn
+the rotated threadId from a cookie update.
 """
 
 import asyncio
-from typing import Any
+from dataclasses import dataclass
 
 _queues: dict[str, asyncio.Queue] = {}
 
-# Module-level singleton used to wake a blocked streamChat consumer without
-# yielding a client-visible SSE event. Compared via `is`, not by value.
-_QUEUE_WAKE_SENTINEL: Any = object()
+
+@dataclass(frozen=True)
+class QueueRotationSignal:
+    """In-band wake signal carrying the new threadId after session auto-reset.
+
+    Placed on the OLD (popped) queue by the POST handler immediately before
+    rotation. The streamChat consumer dequeues it, reads `newThreadId`
+    directly, and rebinds to the new queue. This avoids depending on
+    `request.session` on the long-lived SSE request, which is populated from
+    the cookie at connection time and never refreshed.
+    """
+
+    newThreadId: str
 
 
 def getOrCreateQueue(threadId: str) -> asyncio.Queue:
@@ -35,9 +41,9 @@ def getOrCreateQueue(threadId: str) -> asyncio.Queue:
 def popQueue(threadId: str) -> asyncio.Queue | None:
     """Remove queue for threadId and return the Queue instance (or None).
 
-    The caller may push `_QUEUE_WAKE_SENTINEL` onto the returned Queue to
-    unblock a consumer that is awaiting `queue.get()` against this
-    now-orphaned instance, then drop the reference.
+    The caller may push a `QueueRotationSignal` onto the returned Queue to
+    unblock and rebind a consumer that is awaiting `queue.get()` against
+    this now-orphaned instance, then drop the reference.
     """
     return _queues.pop(threadId, None)
 

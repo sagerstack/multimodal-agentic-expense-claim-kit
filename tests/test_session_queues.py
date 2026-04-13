@@ -1,22 +1,28 @@
-"""Unit tests for sessionQueues helpers (Plan 13-13 gap closure)."""
+"""Unit tests for sessionQueues helpers (Plan 13-13 + SSE session-stale gap)."""
 
 import asyncio
 
 import pytest
 
 from agentic_claims.web.sessionQueues import (
-    _QUEUE_WAKE_SENTINEL,
+    QueueRotationSignal,
     getOrCreateQueue,
     popQueue,
     removeQueue,
 )
 
 
-def test_sentinelIsSingleton():
-    """Sentinel compares by identity (is), not by value."""
-    assert _QUEUE_WAKE_SENTINEL is _QUEUE_WAKE_SENTINEL
-    # Comparing a freshly built object() to the sentinel must be False.
-    assert _QUEUE_WAKE_SENTINEL is not object()
+def test_rotationSignalCarriesNewThreadId():
+    """QueueRotationSignal must expose the new threadId for in-band rebind."""
+    signal = QueueRotationSignal(newThreadId="thread-new-123")
+    assert signal.newThreadId == "thread-new-123"
+
+
+def test_rotationSignalIsFrozen():
+    """Frozen dataclass — tampering with newThreadId must fail."""
+    signal = QueueRotationSignal(newThreadId="a")
+    with pytest.raises((AttributeError, Exception)):
+        signal.newThreadId = "b"  # type: ignore[misc]
 
 
 @pytest.mark.asyncio
@@ -30,8 +36,8 @@ async def test_popQueueReturnsRemovedQueue():
 
 
 @pytest.mark.asyncio
-async def test_popQueueAllowsSentinelPush():
-    """Caller can push sentinel onto the popped queue to wake a blocked consumer."""
+async def test_popQueueAllowsRotationSignalPush():
+    """Caller pushes a QueueRotationSignal onto the popped queue to wake + rebind the consumer."""
     q = getOrCreateQueue("thread-B")
 
     async def consumer():
@@ -42,15 +48,15 @@ async def test_popQueueAllowsSentinelPush():
 
     popped = popQueue("thread-B")
     assert popped is q
-    await popped.put(_QUEUE_WAKE_SENTINEL)
+    await popped.put(QueueRotationSignal(newThreadId="thread-B-new"))
     result = await asyncio.wait_for(consumerTask, timeout=1.0)
-    assert result is _QUEUE_WAKE_SENTINEL
+    assert isinstance(result, QueueRotationSignal)
+    assert result.newThreadId == "thread-B-new"
 
 
 def test_removeQueueStillWorksAsNoOpWrapper():
     """removeQueue is a backward-compat wrapper over popQueue (discards return)."""
     getOrCreateQueue("thread-C")
-    # Should not raise, should clear the entry.
     removeQueue("thread-C")
     assert popQueue("thread-C") is None
 

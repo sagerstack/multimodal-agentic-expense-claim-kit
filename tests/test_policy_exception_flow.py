@@ -27,18 +27,20 @@ from agentic_claims.agents.intake.hooks.preModelHook import preModelHook
 
 @pytest.mark.asyncio
 async def test_postJustificationTurnClearsPendingAndAdvances():
-    """After user replies to justification askHuman, the next preModelHook call
-    must NOT inject the 'ROUTING DIRECTIVE: A clarification is pending' message.
+    """After user replies to justification askHuman:
+      - F1: postToolFlagSetter must clear clarificationPending (unchanged)
+      - D1': preModelHook MUST still inject the askHuman directive because
+        the last ToolMessage is askHuman and claimSubmitted=False.
 
-    Traces the state machine: previous turn set clarificationPending=True (VND
-    unsupported); user supplied manual rate (askHuman resolved); later user
-    replies to policy-exception justification (another askHuman) — at this point
-    the pending directive must be gone so the LLM is free to emit submitClaim.
+    Updated for D1' (screenshot #5 fix): the directive's purpose is to prevent
+    plain-text questions — it does NOT block submitClaim, so its presence on
+    the post-justification turn is safe. Without D1', prose re-asks after
+    askHuman resume (Phase 1 meta-questions, etc.) fly under the radar.
+
+    Source: 13-DEBUG-policy-exception-loop.md D1' (screenshot #5).
     """
-    # Simulate end of justification turn: trailing ToolMessage is the askHuman result
     state = {
         "messages": [
-            # Older turns condensed — we care about the trailing tool run
             AIMessage(
                 content="Policy check: This exceeds the lunch cap of SGD 20.00.",
                 tool_calls=[
@@ -58,6 +60,7 @@ async def test_postJustificationTurnClearsPendingAndAdvances():
         "unsupportedCurrencies": {"VND"},
         "validatorRetryCount": 0,
         "validatorEscalate": False,
+        "claimSubmitted": False,
     }
 
     flagUpdates = await postToolFlagSetter(state)
@@ -66,20 +69,55 @@ async def test_postJustificationTurnClearsPendingAndAdvances():
         f"Got flagUpdates={flagUpdates}"
     )
 
-    # Apply the update (simulate LangGraph merge) then invoke preModelHook
     merged = {**state, **flagUpdates}
     preHookResult = await preModelHook(merged)
     injectedMessages = preHookResult.get("llm_input_messages", [])
 
-    # The directive we DO NOT want to see in the next LLM call
-    forbiddenSubstring = "A clarification is pending"
-    for msg in injectedMessages:
-        msgText = getattr(msg, "content", "")
-        assert forbiddenSubstring not in msgText, (
-            "preModelHook must not inject clarification-pending directive after "
-            "the pending state has been resolved. "
-            f"Offending message: {msgText!r}"
-        )
+    # D1': directive MUST fire — askHuman is last tool, claim not submitted.
+    clarificationDirectives = [
+        m for m in injectedMessages
+        if "A clarification is pending" in getattr(m, "content", "")
+    ]
+    assert len(clarificationDirectives) == 1, (
+        "D1': preModelHook must inject askHuman directive after askHuman resume "
+        "when claim is not yet submitted. "
+        f"Got {len(clarificationDirectives)} directives."
+    )
+
+
+@pytest.mark.asyncio
+async def test_postSubmissionAskHumanDoesNotInjectDirective():
+    """Symmetric to above: once the claim is submitted, the D1' trigger must
+    NOT fire for the post-submission 'Submit another receipt?' askHuman.
+    The intake flow is over; injecting the directive would waste tokens and
+    could mislead the model about the claim's state."""
+    state = {
+        "messages": [
+            AIMessage(
+                content="Claim CLAIM-001 submitted successfully.",
+                tool_calls=[
+                    {"name": "askHuman", "args": {"question": "Submit another?"}, "id": "call_s"}
+                ],
+            ),
+            ToolMessage(
+                content='{"response": "no"}',
+                tool_call_id="call_s",
+                name="askHuman",
+            ),
+        ],
+        "claimId": "c1",
+        "threadId": "t1",
+        "askHumanCount": 3,
+        "clarificationPending": False,
+        "unsupportedCurrencies": set(),
+        "claimSubmitted": True,
+    }
+    preHookResult = await preModelHook(state)
+    clarificationDirectives = [
+        m for m in preHookResult.get("llm_input_messages", [])
+        if "A clarification is pending" in getattr(m, "content", "")
+    ]
+    assert len(clarificationDirectives) == 0
 
 
 @pytest.mark.asyncio

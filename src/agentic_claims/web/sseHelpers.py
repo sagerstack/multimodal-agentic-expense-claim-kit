@@ -42,6 +42,7 @@ TOOL_LABELS = {
     "convertCurrency": "Converting currency...",
     "submitClaim": "Submitting claim...",
     "askHuman": "Waiting for your input...",
+    "requestHumanInput": "Waiting for your input...",
 }
 
 # Plan 13-16 fix: completion-phase labels. Used as the fallback for
@@ -58,16 +59,129 @@ TOOL_COMPLETION_LABELS = {
     # Kept for defensive fallback; runGraph filters askHuman from emission
     # entirely, so this string should never actually reach the DOM.
     "askHuman": "Asked for clarification",
+    "requestHumanInput": "Asked for clarification",
 }
 
 
-def _stripToolCallJson(text: str) -> str:
-    """Strip raw tool call JSON that reasoning models include in text content.
+# BUG-013 guard pattern. Matches actual success phrasing only, so a refusal
+# that echoes a CLAIM-XXX number (e.g. "I can't retrieve CLAIM-010") does not
+# falsely trip the hallucinated-submit guard. Source: user-reported 2026-04-13
+# false positive on "can you load my previous claim CLAIM-010".
+_SUBMISSION_SUCCESS_PATTERN = re.compile(
+    r"(?:claim\s+CLAIM-\d+\s+(?:has been|is|was)\s+submitted"
+    r"|CLAIM-\d+\s+submitted\s+successfully"
+    r"|submitted\s+successfully"
+    r"|submission\s+(?:complete|successful))",
+    re.IGNORECASE,
+)
 
-    QwQ-32B and similar models output tool call specifications as text
-    alongside proper function calling. This removes trailing JSON blocks
-    matching {"name": "...", "arguments": {...}} patterns.
+
+_TOOL_NAMES_FOR_CALL_STRIP = (
+    "askHuman",
+    "submitClaim",
+    "searchPolicies",
+    "convertCurrency",
+    "extractReceiptFields",
+    "getClaimSchema",
+    "requestHumanInput",
+)
+
+
+def _stripToolCallExpressions(text: str) -> str:
+    """Remove python-style tool-call expressions (`askHuman("...")`) from prose.
+
+    qwen3 frequently narrates its next tool call by also emitting the call
+    syntax as plain text, e.g.:
+
+        Analysis Complete
+        | ...table... |
+
+        askHuman("Do the details above look correct?")
+
+    The structured tool_call goes through LangGraph correctly, but the prose
+    copy leaks into the user bubble. This stripper finds each known tool
+    name followed by `(` and removes up to the matching `)` with a simple
+    depth counter (handles nested parens and quoted parens inside strings).
+
+    Source: CLAIM-020 screenshot — "askHuman(...)" leak in two bubbles.
     """
+    if not text:
+        return text
+    for toolName in _TOOL_NAMES_FOR_CALL_STRIP:
+        while True:
+            idx = text.find(toolName + "(")
+            if idx == -1:
+                break
+            start = idx
+            depth = 0
+            inString = False
+            stringChar = ""
+            end = -1
+            scan = idx + len(toolName)
+            while scan < len(text):
+                ch = text[scan]
+                if inString:
+                    if ch == "\\" and scan + 1 < len(text):
+                        scan += 2
+                        continue
+                    if ch == stringChar:
+                        inString = False
+                elif ch in ("'", '"'):
+                    inString = True
+                    stringChar = ch
+                elif ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    depth -= 1
+                    if depth == 0:
+                        end = scan
+                        break
+                scan += 1
+            if end == -1:
+                break
+            text = (text[:start] + text[end + 1:]).replace("  ", " ")
+    lines = [ln.rstrip() for ln in text.splitlines()]
+    return "\n".join(ln for ln in lines if ln or True).strip()
+
+
+def _stripToolCallJson(text: str) -> str:
+    """Strip raw tool call JSON / leading JSON-root dumps from text content.
+
+    Three strip paths, evaluated in order:
+
+    0. Leading fenced JSON block (````json ... ````) emitted by qwen-style
+       models while a tool call is pending. Consume the fenced block and keep
+       any trailing prose.
+    1. Leading JSON object/array dump (qwen3 frequently leaks the raw tool
+       result as the opening of its content, followed by the analysis prose
+       — e.g. `{"fields": {...}, "confidence": {...}}\\n\\nAnalysis Complete...`).
+       Uses `json.JSONDecoder.raw_decode` to consume exactly the JSON prefix
+       and keep the trailing prose.
+    2. Trailing `{"name": ...}` tool-call specifications (QwQ-32B style —
+       kept for back-compat with older reasoning models).
+    """
+    stripped = text.lstrip()
+    fencedMatch = re.match(r"^```(?:json)?\s*\n([\s\S]*?)\n```", stripped)
+    if fencedMatch:
+        remaining = stripped[fencedMatch.end() :].lstrip()
+        if remaining:
+            return remaining
+        fencedBody = fencedMatch.group(1).strip()
+        if _looksLikeStructuredPayloadLeak(fencedBody):
+            return ""
+
+    stripped = text.lstrip()
+    if stripped and stripped[0] in "{[":
+        try:
+            decoder = json.JSONDecoder()
+            _, endIdx = decoder.raw_decode(stripped)
+            remaining = stripped[endIdx:].lstrip()
+            if remaining:
+                return remaining
+            return ""
+        except (ValueError, TypeError):
+            pass
+
     idx = text.find('{"name":')
     if idx == -1:
         idx = text.find('{"name" :')
@@ -93,16 +207,66 @@ def _stripThinkingTags(text: str) -> str:
     return cleaned.strip()
 
 
+def _looksLikeJsonRoot(text: str) -> bool:
+    """Return True if text appears to be a raw JSON object or array payload.
+
+    Guards the mid-stream bubble emission against leaking tool-call payloads
+    that were not wrapped in a ```json fence (qwen3 frequently emits bare
+    JSON while `pendingToolCalls > 0`). We parse defensively — only reject
+    when the body parses cleanly as JSON, so a sentence that happens to
+    contain '{' or '[' mid-line is not suppressed.
+
+    Source: 13-DEBUG-raw-json-bubble.md (screenshot #7, CLAIM-018).
+    """
+    if not text:
+        return False
+    stripped = text.strip()
+    if not stripped or stripped[0] not in "{[":
+        return False
+    try:
+        json.loads(stripped)
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
+def _looksLikeStructuredPayloadLeak(text: str) -> bool:
+    """Return True if text resembles a leaked structured payload.
+
+    This covers two cases:
+    - valid JSON roots (`_looksLikeJsonRoot`)
+    - pretty-printed object-like dumps that start with `{`/`[` but are not
+      strictly valid JSON after markdown rendering or model mutation
+    """
+    if not text:
+        return False
+    stripped = text.strip()
+    if not stripped or stripped[0] not in "{[":
+        return False
+    if _looksLikeJsonRoot(stripped):
+        return True
+    keyValueHits = len(re.findall(r'"\w[\w\s]*"\s*:', stripped))
+    lineCount = stripped.count("\n") + 1
+    return keyValueHits >= 2 and lineCount >= 3
+
+
 def _isUserFacingProse(text: str) -> bool:
     """Decide whether cleaned content should render as a chat bubble vs thinking entry.
 
     Gate: length >= 40 chars OR contains markdown structure markers (table pipes,
     headings, bullets, multi-line content). Short acknowledgements ("Ok.", "Sure.")
     fall through to the reasoning panel (existing behaviour preserved).
+
+    Bug 1 fix (2026-04-13): reject content that parses as a JSON root object
+    or array. `_stripToolCallJson` only strips ```json fences; bare JSON from
+    qwen3 passes through and historically rendered as a raw dict in the main
+    chat. The JSON-root check kills that failure class before bubble emission.
     """
     if not text:
         return False
     stripped = text.strip()
+    if _looksLikeStructuredPayloadLeak(stripped):
+        return False
     if len(stripped) >= 40:
         return True
     # Markdown structure heuristics: table row, heading, bullet, multi-line
@@ -180,6 +344,21 @@ def _summarizeToolOutput(toolName: str, toolOutput) -> str:
 
     except Exception:
         return TOOL_COMPLETION_LABELS.get(toolName, "Step complete")
+
+
+def _isFieldConfirmationToolCall(toolCalls) -> bool:
+    """Return True when a tool-call list contains requestHumanInput(field_confirmation)."""
+    if not toolCalls:
+        return False
+    for toolCall in toolCalls:
+        if not isinstance(toolCall, dict):
+            continue
+        if toolCall.get("name") != "requestHumanInput":
+            continue
+        args = toolCall.get("args") or {}
+        if isinstance(args, dict) and str(args.get("kind") or "") == "field_confirmation":
+            return True
+    return False
 
 
 TOOL_TO_STEP = {
@@ -372,7 +551,9 @@ async def _getFallbackMessage(graph, config: dict) -> str:
                 and hasattr(msg, "content")
                 and msg.content
             ):
-                return _stripThinkingTags(_stripToolCallJson(str(msg.content)))
+                return _stripToolCallExpressions(
+                    _stripThinkingTags(_stripToolCallJson(str(msg.content)))
+                )
     except Exception as e:
         logEvent(
             logger,
@@ -721,12 +902,13 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     iteration to break on client disconnect.
     """
     settings = getSettings()
+    activeAgentName = "intake-gpt" if settings.intake_agent_mode.lower() == "gpt" else "intake"
     logEvent(
         logger,
         "agent.turn_started",
         logCategory="agent",
         actorType="agent",
-        agent="intake",
+        agent=activeAgentName,
         employeeId=employeeIdVar.get(None),
         claimId=graphInput.get("claimId"),
         draftClaimNumber=f"DRAFT-{graphInput.get('claimId', '')[:8]}",
@@ -752,6 +934,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     claimSubmittedFlag = False
     # BUG-026: after submitClaim, capture the final response then break early
     shouldTerminateEarly = False
+    usedFallbackThinkingSummary = False
 
     # Decision Pathway state
     pathwayActiveTools: set = set()
@@ -905,7 +1088,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         "llm.call_started",
                         logCategory="llm",
                         actorType="agent",
-                        agent="intake",
+                        agent=activeAgentName,
                         claimId=graphInput.get("claimId"),
                         threadId=graphInput.get("threadId"),
                         model=metadata.get("ls_model_name"),
@@ -958,6 +1141,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             elif eventKind == "on_chat_model_end":
                 try:
                     endOutput = event.get("data", {}).get("output")
+                    strippedReasoningSummary = reasoningBuffer.strip()
                     endToolCalls = []
                     if endOutput is not None:
                         rawToolCalls = getattr(endOutput, "tool_calls", None) or []
@@ -977,11 +1161,13 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         "llm.call_completed",
                         logCategory="llm",
                         actorType="agent",
-                        agent="intake",
+                        agent=activeAgentName,
                         claimId=graphInput.get("claimId"),
                         threadId=graphInput.get("threadId"),
                         responseContent=responseContent,
-                        reasoningContent=reasoningBuffer,
+                        reasoningContent=strippedReasoningSummary,
+                        hasReasoningSummary=bool(strippedReasoningSummary),
+                        reasoningLength=len(strippedReasoningSummary),
                         toolCalls=endToolCalls,
                         toolCallCount=len(endToolCalls),
                         tokenUsage=usageMetadata,
@@ -993,6 +1179,52 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     logger.warning("llm.call_completed log failed: %r", logErr, exc_info=True)
 
                 if pendingToolCalls > 0:
+                    # Qwen3-class models split prose and tool_call across two
+                    # on_chat_model_end events. When the prose event fires
+                    # while a prior tool is still counted as pending, the
+                    # user-facing content (e.g., extraction table) would be
+                    # silently dropped. Route it through the same bubble gate
+                    # used in the hasToolCalls branch below before resetting.
+                    pendingOutput = event.get("data", {}).get("output")
+                    rawPendingContent = tokenBuffer.strip() or (
+                        getattr(pendingOutput, "content", "")
+                        if pendingOutput is not None
+                        else ""
+                    )
+                    cleanedPending = _stripToolCallJson(rawPendingContent)
+                    cleanedPending = _stripThinkingTags(cleanedPending)
+                    cleanedPending = _stripToolCallExpressions(cleanedPending)
+                    if _isUserFacingProse(cleanedPending):
+                        try:
+                            template = templates.get_template(
+                                "partials/message_bubble.html"
+                            )
+                            pendingHtml = template.render(
+                                content=cleanedPending,
+                                isAi=True,
+                                confidenceScores=None,
+                                violations=None,
+                                timestamp=datetime.now(
+                                    ZoneInfo("Asia/Singapore")
+                                ).strftime("%-I:%M %p"),
+                            )
+                        except Exception:
+                            pendingHtml = (
+                                f'<div class="ai-message">{cleanedPending}</div>'
+                            )
+                        yield ServerSentEvent(
+                            raw_data=pendingHtml, event=SseEvent.MESSAGE
+                        )
+                        logEvent(
+                            logger,
+                            "sse.mid_stream_bubble_emitted",
+                            logCategory="sse",
+                            claimId=graphInput.get("claimId"),
+                            threadId=graphInput.get("threadId"),
+                            contentLength=len(cleanedPending),
+                            pendingToolCalls=pendingToolCalls,
+                            context="emitted_during_pending_tool_calls",
+                        )
                     tokenBuffer = ""
                     reasoningBuffer = ""
                     continue
@@ -1001,6 +1233,10 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 hasToolCalls = output and hasattr(output, "tool_calls") and output.tool_calls
 
                 if hasToolCalls:
+                    suppressMidStreamBubble = (
+                        activeAgentName == "intake-gpt"
+                        and _isFieldConfirmationToolCall(output.tool_calls)
+                    )
                     # Use tokenBuffer when streaming populated it; fall back to
                     # output.content for models that only emit content on the end event.
                     rawContent = tokenBuffer.strip() or (
@@ -1008,13 +1244,14 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     )
                     cleanedBuffer = _stripToolCallJson(rawContent)
                     cleanedBuffer = _stripThinkingTags(cleanedBuffer)
+                    cleanedBuffer = _stripToolCallExpressions(cleanedBuffer)
 
                     # Fix A (UAT Gap 1): emit user-facing prose as a chat bubble BEFORE
                     # appending to thinkingEntries. Per v5 prompt, content preceding a
                     # tool_call is normal user-addressed text (extraction table, policy
                     # summary) — not internal reasoning. Reasoning models' private thinking
                     # already flows through reasoningBuffer via additional_kwargs.reasoning_content.
-                    if _isUserFacingProse(cleanedBuffer):
+                    if _isUserFacingProse(cleanedBuffer) and not suppressMidStreamBubble:
                         try:
                             template = templates.get_template("partials/message_bubble.html")
                             midHtml = template.render(
@@ -1037,6 +1274,18 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             threadId=graphInput.get("threadId"),
                             contentLength=len(cleanedBuffer),
                             toolCallCount=len(output.tool_calls),
+                        )
+                    elif _isUserFacingProse(cleanedBuffer) and suppressMidStreamBubble:
+                        logEvent(
+                            logger,
+                            "sse.intake_gpt_field_confirmation_prose_suppressed",
+                            logCategory="sse",
+                            claimId=graphInput.get("claimId"),
+                            threadId=graphInput.get("threadId"),
+                            contentLength=len(cleanedBuffer),
+                            preview=cleanedBuffer[:120],
+                            toolCallCount=len(output.tool_calls),
+                            message="Suppressed mid-stream prose because intake-gpt field confirmation will render from interrupt payload",
                         )
                     else:
                         # Trivial filler or empty after strip: preserve existing
@@ -1088,6 +1337,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     tokenBuffer = ""
                     reasoningBuffer = ""
                 else:
+                    emittedThinkingSummary = False
                     if reasoningBuffer.strip():
                         thinkingEntries.append(
                             {
@@ -1109,16 +1359,56 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             ),
                             event=SseEvent.STEP_CONTENT,
                         )
+                        emittedThinkingSummary = True
                     yield ServerSentEvent(
                         raw_data="Preparing response...", event=SseEvent.STEP_NAME
                     )
+                    if not emittedThinkingSummary and not hadAnyToolCall:
+                        directSummary = "Responding directly without tool calls."
+                        usedFallbackThinkingSummary = True
+                        thinkingEntries.append(
+                            {
+                                "type": "reasoning_summary",
+                                "content": directSummary,
+                            }
+                        )
+                        yield ServerSentEvent(
+                            raw_data=(
+                                f'<div class="text-xs text-outline/50 italic mt-1">{directSummary}</div>'
+                            ),
+                            event=SseEvent.STEP_CONTENT,
+                        )
+                        logEvent(
+                            logger,
+                            "sse.fallback_thinking_summary_emitted",
+                            logCategory="sse",
+                            actorType="agent",
+                            agent=activeAgentName,
+                            claimId=graphInput.get("claimId"),
+                            threadId=graphInput.get("threadId"),
+                            summary=directSummary,
+                            hasReasoningSummary=False,
+                            usedFallbackThinkingSummary=usedFallbackThinkingSummary,
+                            message="Fallback Thinking summary emitted",
+                        )
                     # BUG-016: only capture the first non-empty finalResponse. The
                     # intake agent's confirmation message is the first non-tool
                     # on_chat_model_end. Post-submission agents (compliance, fraud,
                     # advisor) emit subsequent on_chat_model_end events that must
                     # not overwrite the intake agent's clean submission response.
                     if not finalResponse:
-                        finalResponse = _stripToolCallJson(tokenBuffer)
+                        cleanedFinalResponse = _stripToolCallJson(tokenBuffer)
+                        if not cleanedFinalResponse and _looksLikeStructuredPayloadLeak(tokenBuffer):
+                            logEvent(
+                                logger,
+                                "sse.final_response_suppressed_as_payload",
+                                logCategory="sse",
+                                claimId=graphInput.get("claimId"),
+                                threadId=threadId,
+                                preview=tokenBuffer[:120],
+                                message="Suppressed final response that looked like a structured payload leak",
+                            )
+                        finalResponse = cleanedFinalResponse
                     tokenBuffer = ""
                     reasoningBuffer = ""
 
@@ -1140,7 +1430,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     "tool.start",
                     logCategory="agent",
                     actorType="agent",
-                    agent="intake",
+                    agent=activeAgentName,
                     employeeId=employeeIdVar.get(None),
                     claimId=graphInput.get("claimId"),
                     draftClaimNumber=f"DRAFT-{graphInput.get('claimId', '')[:8]}",
@@ -1155,7 +1445,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 # entirely while preserving bookkeeping (pendingToolCalls above,
                 # plus the askHumanFired signal for _calcProgressPct).
                 # Source: 13-DEBUG-tool-name-leak.md.
-                if toolName == "askHuman":
+                if toolName in {"askHuman", "requestHumanInput"}:
                     askHumanFired = True
                     continue
                 label = TOOL_LABELS.get(toolName, f"Running {toolName}...")
@@ -1201,7 +1491,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     level=logging.WARNING if toolError else logging.INFO,
                     logCategory="agent",
                     actorType="agent",
-                    agent="intake",
+                    agent=activeAgentName,
                     employeeId=employeeIdVar.get(None),
                     claimId=graphInput.get("claimId"),
                     draftClaimNumber=f"DRAFT-{graphInput.get('claimId', '')[:8]}",
@@ -1217,7 +1507,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 # append. The INTERRUPT channel (see line ~1507) owns the
                 # user-visible surface. Pending-call bookkeeping still runs.
                 # Source: 13-DEBUG-tool-name-leak.md section 4 Option C.
-                if toolName == "askHuman":
+                if toolName in {"askHuman", "requestHumanInput"}:
                     pendingToolCalls = max(0, pendingToolCalls - 1)
                     continue
                 summary = _summarizeToolOutput(toolName, toolOutput)
@@ -1279,13 +1569,19 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 if toolName == "extractReceiptFields":
                     details = _extractExtractionDetails(toolOutput)
                     if details:
+                        # amountStr may be "₫ 510000.0", "€ 50.00", "SGD 12.34", etc.
+                        # Strip to digits + decimal point to get a float-safe value —
+                        # previously only "SGD "/"USD " prefixes were handled, causing
+                        # float() to raise on other currency symbols and fall back to
+                        # emitting the raw tool result as content. Source: CLAIM-022.
+                        rawAmount = details.get("amount", "--")
+                        numericMatch = re.search(r"[\d.]+", str(rawAmount))
+                        totalAmountValue = numericMatch.group(0) if numericMatch else "--"
                         tableClaims.append(
                             {
                                 "merchant": details.get("merchant", "Processing..."),
                                 "receipt_date": details.get("date", "--"),
-                                "total_amount": details.get("amount", "--")
-                                .replace("SGD ", "")
-                                .replace("USD ", ""),
+                                "total_amount": totalAmountValue,
                                 "currency": "SGD",
                                 "status": "processing",
                                 "created_at": datetime.now(ZoneInfo("Asia/Singapore")).strftime(
@@ -1555,6 +1851,29 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 for task in finalState.tasks:
                     if hasattr(task, "interrupts") and task.interrupts:
                         payload = task.interrupts[0].value
+                        if isinstance(payload, dict):
+                            contextMessage = str(payload.get("contextMessage", "") or "").strip()
+                            if contextMessage:
+                                try:
+                                    template = templates.get_template(
+                                        "partials/message_bubble.html"
+                                    )
+                                    contextHtml = template.render(
+                                        content=contextMessage,
+                                        isAi=True,
+                                        confidenceScores=None,
+                                        violations=None,
+                                        timestamp=datetime.now(
+                                            ZoneInfo("Asia/Singapore")
+                                        ).strftime("%-I:%M %p"),
+                                    )
+                                except Exception:
+                                    contextHtml = (
+                                        f'<div class="ai-message">{contextMessage}</div>'
+                                    )
+                                yield ServerSentEvent(
+                                    raw_data=contextHtml, event=SseEvent.MESSAGE
+                                )
                         question = (
                             payload.get("question", str(payload))
                             if isinstance(payload, dict)
@@ -1580,9 +1899,13 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     # Extract final response text
     finalText = ""
     if finalResponse and finalResponse.strip():
-        finalText = _stripThinkingTags(finalResponse).strip()
+        finalText = _stripToolCallExpressions(
+            _stripThinkingTags(_stripToolCallJson(finalResponse))
+        ).strip()
     if not finalText and tokenBuffer.strip():
-        finalText = _stripThinkingTags(_stripToolCallJson(tokenBuffer)).strip()
+        finalText = _stripToolCallExpressions(
+            _stripThinkingTags(_stripToolCallJson(tokenBuffer))
+        ).strip()
     if not finalText:
         # Use already-fetched state if available, otherwise fetch
         if graphStateValues:
@@ -1594,14 +1917,19 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     and hasattr(msg, "content")
                     and msg.content
                 ):
-                    finalText = _stripThinkingTags(_stripToolCallJson(str(msg.content)))
+                    finalText = _stripToolCallExpressions(
+                        _stripThinkingTags(_stripToolCallJson(str(msg.content)))
+                    )
                     break
         if not finalText:
             finalText = await _getFallbackMessage(graph, config)
 
     # BUG-013: Detect hallucinated claim submission (second layer — message)
+    # Guard must only fire on actual success phrasing. Mere echo of a CLAIM-XXX
+    # number in a refusal is a false positive (e.g., user asks "load CLAIM-010"
+    # and the LLM replies "I can't retrieve CLAIM-010").
     if finalText:
-        submittedInText = "submitted" in finalText.lower() or "CLAIM-" in finalText
+        submittedInText = bool(_SUBMISSION_SUCCESS_PATTERN.search(finalText))
         submitCallMade = any(
             e.get("name") == "submitClaim" for e in thinkingEntries if e.get("type") == "tool"
         )
@@ -1635,6 +1963,18 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             return
 
     if finalText:
+        if _looksLikeStructuredPayloadLeak(finalText):
+            logEvent(
+                logger,
+                "sse.final_response_suppressed_as_payload",
+                logCategory="sse",
+                claimId=graphInput.get("claimId"),
+                threadId=threadId,
+                preview=finalText[:120],
+                message="Suppressed final response that looked like a structured payload leak",
+            )
+            finalText = ""
+    if finalText:
         confidenceScores = _extractConfidenceScores(thinkingEntries)
         violations = _extractViolations(thinkingEntries)
         try:
@@ -1654,7 +1994,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             "assistant.chat_message_rendered",
             logCategory="chat_history",
             actorType="agent",
-            agent="intake",
+            agent=activeAgentName,
             employeeId=employeeIdVar.get(None),
             claimId=graphInput.get("claimId"),
             draftClaimNumber=f"DRAFT-{graphInput.get('claimId', '')[:8]}",

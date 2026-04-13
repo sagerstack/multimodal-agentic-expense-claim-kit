@@ -486,8 +486,8 @@ def test_postIntakeRouterValidatorEscalateTakesPrecedence():
 # ---------------------------------------------------------------------------
 
 
-def test_buildIntakeSubgraphUsesV5PromptAndNoCheckpointer():
-    """buildIntakeSubgraph wires v5 prompt, checkpointer=None, version='v2', and both hooks."""
+def test_buildIntakeSubgraphUsesV6PromptAndNoCheckpointer():
+    """buildIntakeSubgraph wires v6 prompt, checkpointer=None, version='v2', and both hooks."""
     from unittest.mock import MagicMock, patch
 
     from agentic_claims.agents.intake.node import buildIntakeSubgraph
@@ -504,11 +504,11 @@ def test_buildIntakeSubgraphUsesV5PromptAndNoCheckpointer():
         assert kwargs.get("checkpointer") is None
         # v2 required for post_model_hook support
         assert kwargs.get("version") == "v2"
-        # v5 prompt (routing stripped)
-        from agentic_claims.agents.intake.prompts.agentSystemPrompt_v5 import (
-            INTAKE_AGENT_SYSTEM_PROMPT_V5,
+        # v6 prompt (chain-of-compare policy gate; cleaned of deep-research cites)
+        from agentic_claims.agents.intake.prompts.agentSystemPrompt_v6 import (
+            INTAKE_AGENT_SYSTEM_PROMPT_V6,
         )
-        assert kwargs.get("prompt") is INTAKE_AGENT_SYSTEM_PROMPT_V5
+        assert kwargs.get("prompt") is INTAKE_AGENT_SYSTEM_PROMPT_V6
         # Hooks wired
         assert kwargs.get("pre_model_hook") is not None
         assert kwargs.get("post_model_hook") is not None

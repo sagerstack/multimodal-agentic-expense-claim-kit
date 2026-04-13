@@ -482,7 +482,7 @@ async def reviewDecisionApi(
 
     # HTMX redirect response
     response = Response(status_code=204)
-    response.headers["HX-Redirect"] = "/dashboard"
+    response.headers["HX-Redirect"] = "/manage"
     return response
 
 

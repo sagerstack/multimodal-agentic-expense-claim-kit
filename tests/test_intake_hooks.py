@@ -107,6 +107,101 @@ async def test_preModelHookNeverWritesStateDotMessages():
     )
 
 
+# ── preModelHook D1': askHuman tail + not submitted triggers directive ──────
+# Source: 13-DEBUG-policy-exception-loop.md D1'; fixes screenshot #5 prose re-ask
+# after askHuman resume. F1 clears clarificationPending, so drift detection
+# must also fire when the last ToolMessage is askHuman and claimSubmitted=False.
+
+
+@pytest.mark.asyncio
+async def test_preModelHookInjectsDirectiveWhenAskHumanIsLastToolMessageAndNotSubmitted():
+    """After an askHuman resumes (F1 cleared clarificationPending), the next
+    turn must still receive the 'must use askHuman' directive — otherwise the
+    model can emit a prose re-ask with no routing safety net."""
+    state = {
+        "messages": [
+            HumanMessage(content="Upload receipt"),
+            AIMessage(content="", tool_calls=[{"name": "askHuman", "args": {"question": "Do the details look correct?"}, "id": "c1"}]),
+            ToolMessage(content='{"response": "is this a valid receipt"}', tool_call_id="c1", name="askHuman"),
+        ],
+        "unsupportedCurrencies": set(),
+        "clarificationPending": False,  # F1 cleared it
+        "claimSubmitted": False,
+    }
+    result = await preModelHook(state)
+
+    systemDirectives = [m for m in result["llm_input_messages"] if isinstance(m, SystemMessage)]
+    assert len(systemDirectives) == 1, (
+        f"D1': must inject askHuman directive after askHuman resume. "
+        f"Got {len(systemDirectives)} directives."
+    )
+    assert "askHuman" in systemDirectives[0].content
+
+
+@pytest.mark.asyncio
+async def test_preModelHookNoDirectiveWhenAskHumanTailButClaimSubmitted():
+    """Once the claim is submitted, post-submission askHuman follow-ups
+    ('Submit another receipt?') don't need the safety directive — the intake
+    flow is over. Prevents false-positive rewrites after submission."""
+    state = {
+        "messages": [
+            AIMessage(content="Claim submitted", tool_calls=[{"name": "askHuman", "args": {"question": "Submit another?"}, "id": "c2"}]),
+            ToolMessage(content='{"response": "no"}', tool_call_id="c2", name="askHuman"),
+        ],
+        "unsupportedCurrencies": set(),
+        "clarificationPending": False,
+        "claimSubmitted": True,
+    }
+    result = await preModelHook(state)
+
+    systemDirectives = [m for m in result["llm_input_messages"] if isinstance(m, SystemMessage)]
+    assert len(systemDirectives) == 0, (
+        "claimSubmitted=True → D1' trigger must not fire"
+    )
+
+
+@pytest.mark.asyncio
+async def test_preModelHookNoDirectiveWhenLastToolMessageIsNotAskHuman():
+    """Trailing non-askHuman ToolMessages (e.g. extractReceiptFields) do not
+    trigger D1'. Only askHuman resumes do."""
+    state = {
+        "messages": [
+            AIMessage(content="", tool_calls=[{"name": "extractReceiptFields", "args": {}, "id": "c3"}]),
+            ToolMessage(content='{"fields": {}}', tool_call_id="c3", name="extractReceiptFields"),
+        ],
+        "unsupportedCurrencies": set(),
+        "clarificationPending": False,
+        "claimSubmitted": False,
+    }
+    result = await preModelHook(state)
+
+    systemDirectives = [m for m in result["llm_input_messages"] if isinstance(m, SystemMessage)]
+    assert len(systemDirectives) == 0
+
+
+@pytest.mark.asyncio
+async def test_preModelHookDoesNotDoubleInjectWhenBothTriggersActive():
+    """When clarificationPending=True AND the tail is askHuman + not submitted,
+    only ONE clarification directive is emitted (deduped — both triggers share
+    the same directive text)."""
+    state = {
+        "messages": [
+            AIMessage(content="", tool_calls=[{"name": "askHuman", "args": {"question": "rate?"}, "id": "c4"}]),
+            ToolMessage(content='{"response": "1.27"}', tool_call_id="c4", name="askHuman"),
+        ],
+        "unsupportedCurrencies": set(),
+        "clarificationPending": True,
+        "claimSubmitted": False,
+    }
+    result = await preModelHook(state)
+
+    systemDirectives = [m for m in result["llm_input_messages"] if isinstance(m, SystemMessage)]
+    clarificationDirectives = [d for d in systemDirectives if "clarification" in d.content.lower() or "askHuman" in d.content]
+    assert len(clarificationDirectives) == 1, (
+        f"Duplicate clarification directives: got {len(clarificationDirectives)}"
+    )
+
+
 # ── postModelHook ───────────────────────────────────────────────────────────
 
 
@@ -323,3 +418,71 @@ async def test_submitClaimGuardNoOpOnNonSubmissionContent():
     result = await submitClaimGuard(state)
 
     assert result == {}
+
+
+# ── preModelHook Phase 1 confirmation gate (Issue 2) ────────────────────────
+# Source: 13-DEBUG-phase1-skip.md. After extractReceiptFields, the model must
+# emit askHuman("Do the details look correct?") before calling searchPolicies.
+# CLAIM-018 showed the model jumping straight from a manual-rate askHuman
+# resume to searchPolicies. preModelHook injects a directive while the flag
+# is True to force the step-9 confirmation.
+
+
+@pytest.mark.asyncio
+async def test_preModelHookInjectsPhase1ConfirmationDirectiveWhenFlagSet():
+    """phase1ConfirmationPending=True + claim not submitted → directive injected
+    telling the model its next tool call must be askHuman (not searchPolicies)."""
+    state = {
+        "messages": [HumanMessage(content="Process receipt")],
+        "unsupportedCurrencies": set(),
+        "clarificationPending": False,
+        "phase1ConfirmationPending": True,
+        "claimSubmitted": False,
+    }
+    result = await preModelHook(state)
+
+    systemDirectives = [m for m in result["llm_input_messages"] if isinstance(m, SystemMessage)]
+    phase1Directives = [
+        d for d in systemDirectives if "Phase 1 confirmation" in d.content
+    ]
+    assert len(phase1Directives) == 1, (
+        f"Expected one Phase 1 confirmation directive, got {len(phase1Directives)}"
+    )
+    assert "searchPolicies" in phase1Directives[0].content, (
+        "Directive must name searchPolicies as the forbidden next action"
+    )
+
+
+@pytest.mark.asyncio
+async def test_preModelHookNoPhase1DirectiveWhenFlagFalse():
+    """phase1ConfirmationPending=False → no Phase 1 directive."""
+    state = {
+        "messages": [HumanMessage(content="x")],
+        "unsupportedCurrencies": set(),
+        "clarificationPending": False,
+        "phase1ConfirmationPending": False,
+        "claimSubmitted": False,
+    }
+    result = await preModelHook(state)
+
+    systemDirectives = [m for m in result["llm_input_messages"] if isinstance(m, SystemMessage)]
+    phase1Directives = [d for d in systemDirectives if "Phase 1 confirmation" in d.content]
+    assert len(phase1Directives) == 0
+
+
+@pytest.mark.asyncio
+async def test_preModelHookNoPhase1DirectiveWhenClaimSubmitted():
+    """Even if the flag is stale-True post-submission, the directive must not
+    fire — Phase 1 is over, confirmation is moot."""
+    state = {
+        "messages": [AIMessage(content="Claim submitted")],
+        "unsupportedCurrencies": set(),
+        "clarificationPending": False,
+        "phase1ConfirmationPending": True,
+        "claimSubmitted": True,
+    }
+    result = await preModelHook(state)
+
+    systemDirectives = [m for m in result["llm_input_messages"] if isinstance(m, SystemMessage)]
+    phase1Directives = [d for d in systemDirectives if "Phase 1 confirmation" in d.content]
+    assert len(phase1Directives) == 0
