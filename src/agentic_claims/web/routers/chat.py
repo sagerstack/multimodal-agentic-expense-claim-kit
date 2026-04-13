@@ -19,7 +19,12 @@ from agentic_claims.web.employeeIdContext import employeeIdVar
 from agentic_claims.web.imagePathContext import imagePathVar
 from agentic_claims.web.interruptDetection import isPausedAtInterrupt
 from agentic_claims.web.session import getSessionIds
-from agentic_claims.web.sessionQueues import getOrCreateQueue, removeQueue
+from agentic_claims.web.sessionQueues import (
+    _QUEUE_WAKE_SENTINEL,
+    getOrCreateQueue,
+    popQueue,
+    removeQueue,
+)
 from agentic_claims.web.sseHelpers import runGraph, runPostSubmissionAgents
 from agentic_claims.web.templating import templates
 
@@ -95,8 +100,28 @@ async def postMessage(
             oldThreadId = threadId
             if oldClaimId:
                 clearImage(oldClaimId)
+            # Plan 13-13 fix: pop the OLD queue and wake its blocked consumer
+            # BEFORE rotating the session thread_id. Without the sentinel push,
+            # the SSE streamChat generator would remain blocked on the
+            # orphaned queue's get() while POSTs go to the newly created NEW
+            # queue, stranding all post-auto-reset messages.
+            # Source: 13-DEBUG-post-reset-stuck.md.
             if oldThreadId:
-                removeQueue(oldThreadId)
+                oldQueue = popQueue(oldThreadId)
+                if oldQueue is not None:
+                    try:
+                        oldQueue.put_nowait(_QUEUE_WAKE_SENTINEL)
+                    except asyncio.QueueFull:
+                        # Queue is at maxsize; consumer will wake on its own
+                        # when it drains. Log and continue — do not block the
+                        # POST path.
+                        logEvent(
+                            logger,
+                            "sse.auto_reset_sentinel_queue_full",
+                            logCategory="sse",
+                            threadId=oldThreadId,
+                            message="Old queue full on auto_reset; sentinel skipped",
+                        )
             # Generate new IDs
             request.session["thread_id"] = str(uuid.uuid4())
             request.session["claim_id"] = str(uuid.uuid4())
@@ -247,6 +272,35 @@ async def postMessage(
     return Response(status_code=204)
 
 
+def _reResolveSessionBindings(
+    request,
+    currentThreadId: str,
+    currentQueue: asyncio.Queue,
+) -> tuple[str, asyncio.Queue]:
+    """Re-read `request.session['thread_id']`; if rotated, bind to the new queue.
+
+    Called on every iteration of the streamChat outer loop so the generator
+    never holds a stale reference to a queue that has been popped from
+    `_queues`. Source: 13-DEBUG-post-reset-stuck.md Fix Option 1.
+
+    Returns a (threadId, queue) pair — the caller overwrites its locals.
+    """
+    sessionIds = getSessionIds(request)
+    latestThreadId = sessionIds["threadId"]
+    if latestThreadId == currentThreadId:
+        return currentThreadId, currentQueue
+    newQueue = getOrCreateQueue(latestThreadId)
+    logEvent(
+        logger,
+        "sse.stream_rebind",
+        logCategory="sse",
+        oldThreadId=currentThreadId,
+        newThreadId=latestThreadId,
+        message="streamChat rebound to new threadId after session rotation",
+    )
+    return latestThreadId, newQueue
+
+
 @router.get("/chat/stream", response_class=EventSourceResponse)
 async def streamChat(request: Request):
     """SSE endpoint that reads from per-session queue and streams graph events."""
@@ -258,10 +312,30 @@ async def streamChat(request: Request):
     while True:
         if await request.is_disconnected():
             break
+
+        # Plan 13-13 fix: re-resolve bindings every iteration so
+        # post-auto_reset rotation reaches this consumer.
+        # Source: 13-DEBUG-post-reset-stuck.md.
+        threadId, queue = _reResolveSessionBindings(request, threadId, queue)
+
         try:
             graphInput = await asyncio.wait_for(queue.get(), timeout=30.0)
         except asyncio.TimeoutError:
             yield ServerSentEvent(comment="ping")
+            continue
+
+        # Sentinel: the old queue was told to wake up because the session
+        # thread rotated. Drop it and loop to re-resolve bindings. Do NOT
+        # yield an SSE event.
+        # Source: 13-DEBUG-post-reset-stuck.md Fix Option 1 + Option 4.
+        if graphInput is _QUEUE_WAKE_SENTINEL:
+            logEvent(
+                logger,
+                "sse.stream_wake_sentinel",
+                logCategory="sse",
+                threadId=threadId,
+                message="streamChat woke from auto_reset sentinel",
+            )
             continue
 
         logEvent(
