@@ -44,6 +44,22 @@ TOOL_LABELS = {
     "askHuman": "Waiting for your input...",
 }
 
+# Plan 13-16 fix: completion-phase labels. Used as the fallback for
+# _summarizeToolOutput so no raw internal tool name reaches the DOM, and as
+# a defensive map for any future tool added without a dedicated branch.
+# Convention: when a new tool is added to TOOL_LABELS, add a matching entry
+# here. Source: 13-DEBUG-tool-name-leak.md sections 3 + 5.
+TOOL_COMPLETION_LABELS = {
+    "getClaimSchema": "Claim schema loaded",
+    "extractReceiptFields": "Receipt read",
+    "searchPolicies": "Policy check complete",
+    "convertCurrency": "Currency converted",
+    "submitClaim": "Claim submitted",
+    # Kept for defensive fallback; runGraph filters askHuman from emission
+    # entirely, so this string should never actually reach the DOM.
+    "askHuman": "Asked for clarification",
+}
+
 
 def _stripToolCallJson(text: str) -> str:
     """Strip raw tool call JSON that reasoning models include in text content.
@@ -124,7 +140,7 @@ def _summarizeToolOutput(toolName: str, toolOutput) -> str:
             data = toolOutput
 
         if not isinstance(data, dict):
-            return f"Completed {toolName}"
+            return TOOL_COMPLETION_LABELS.get(toolName, "Step complete")
 
         if "error" in data:
             return f"Error: {data['error']}"
@@ -160,10 +176,10 @@ def _summarizeToolOutput(toolName: str, toolOutput) -> str:
             claimId = data.get("claim", {}).get("id", "")
             return f"Claim submitted successfully (ID: {claimId})"
 
-        return f"Completed {toolName}"
+        return TOOL_COMPLETION_LABELS.get(toolName, "Step complete")
 
     except Exception:
-        return f"Completed {toolName}"
+        return TOOL_COMPLETION_LABELS.get(toolName, "Step complete")
 
 
 TOOL_TO_STEP = {
@@ -369,12 +385,22 @@ async def _getFallbackMessage(graph, config: dict) -> str:
     return ""
 
 
-def _calcProgressPct(thinkingEntries: list, graphState: dict | None) -> int:
+def _calcProgressPct(
+    thinkingEntries: list,
+    graphState: dict | None,
+    *,
+    askHumanFired: bool = False,
+) -> int:
     """Calculate progress from tool milestones.
     extractReceiptFields completed -> 33%
     searchPolicies completed -> 50%
     User confirmed (ready for submission) -> 66%
     submitClaim completed -> 100%
+
+    Plan 13-16: askHumanFired is the runGraph-supplied substitute for the
+    former `"askHuman" in completedTools` check, since askHuman is now
+    filtered from thinkingEntries. The legacy check is retained for callers
+    that still inject askHuman entries directly (e.g. unit tests).
     """
     completedTools = set()
     for e in thinkingEntries:
@@ -391,7 +417,11 @@ def _calcProgressPct(thinkingEntries: list, graphState: dict | None) -> int:
 
     if "submitClaim" in completedTools:
         return 100
-    if "askHuman" in completedTools or "convertCurrency" in completedTools:
+    if (
+        askHumanFired
+        or "askHuman" in completedTools
+        or "convertCurrency" in completedTools
+    ):
         return 66
     if "searchPolicies" in completedTools:
         return 50
@@ -401,7 +431,11 @@ def _calcProgressPct(thinkingEntries: list, graphState: dict | None) -> int:
 
 
 def _extractSummaryData(
-    thinkingEntries: list, graphState: dict | None = None, claimId: str = ""
+    thinkingEntries: list,
+    graphState: dict | None = None,
+    claimId: str = "",
+    *,
+    askHumanFired: bool = False,
 ) -> dict | None:
     """Extract summary panel data from tool outputs and graph state.
 
@@ -516,7 +550,9 @@ def _extractSummaryData(
 
     displayAmount = f"SGD {convertedAmount}" if convertedAmount else f"{currency} {totalAmount}"
 
-    progressPct = _calcProgressPct(thinkingEntries, graphState)
+    progressPct = _calcProgressPct(
+        thinkingEntries, graphState, askHumanFired=askHumanFired
+    )
 
     return {
         "totalAmount": displayAmount,
@@ -707,6 +743,10 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     hadAnyToolCall = False
     toolStartTimes = {}
     turnStart = time.time()
+    # Plan 13-16: substitute local signal for the removed "askHuman" entry in
+    # thinkingEntries/completedTools. Set at on_tool_start, consumed by
+    # _calcProgressPct to preserve the 66% progress bump.
+    askHumanFired = False
     # BUG-016: once submitClaim completes, post-submission agent LLM events
     # must not overwrite the intake agent's clean submission response.
     claimSubmittedFlag = False
@@ -1110,6 +1150,14 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     payload={"input": event.get("data", {}).get("input")},
                     message="Intake tool started",
                 )
+                # Plan 13-16: askHuman uses the INTERRUPT channel (line ~1507),
+                # not the thinking panel. Skip STEP_NAME + pathway UI emission
+                # entirely while preserving bookkeeping (pendingToolCalls above,
+                # plus the askHumanFired signal for _calcProgressPct).
+                # Source: 13-DEBUG-tool-name-leak.md.
+                if toolName == "askHuman":
+                    askHumanFired = True
+                    continue
                 label = TOOL_LABELS.get(toolName, f"Running {toolName}...")
                 yield ServerSentEvent(raw_data=label, event=SseEvent.STEP_NAME)
 
@@ -1146,7 +1194,6 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 toolOutput = event.get("data", {}).get("output", "")
                 startTime = toolStartTimes.pop(toolName, None)
                 elapsed = time.time() - startTime if startTime else 0
-                summary = _summarizeToolOutput(toolName, toolOutput)
                 toolError = _toolOutputError(toolOutput)
                 logEvent(
                     logger,
@@ -1166,6 +1213,14 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     payload={"output": toolOutput, "error": toolError},
                     message="Intake tool failed" if toolError else "Intake tool completed",
                 )
+                # Plan 13-16: suppress askHuman UI emission + thinkingEntries
+                # append. The INTERRUPT channel (see line ~1507) owns the
+                # user-visible surface. Pending-call bookkeeping still runs.
+                # Source: 13-DEBUG-tool-name-leak.md section 4 Option C.
+                if toolName == "askHuman":
+                    pendingToolCalls = max(0, pendingToolCalls - 1)
+                    continue
+                summary = _summarizeToolOutput(toolName, toolOutput)
                 thinkingEntries.append(
                     {
                         "type": "tool",
@@ -1322,7 +1377,12 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
 
     # Summary panel update (uses graph state for cross-turn receipt data)
     claimId = graphInput.get("claimId", "")
-    summaryData = _extractSummaryData(thinkingEntries, graphState=graphStateValues, claimId=claimId)
+    summaryData = _extractSummaryData(
+        thinkingEntries,
+        graphState=graphStateValues,
+        claimId=claimId,
+        askHumanFired=askHumanFired,
+    )
     if summaryData:
         try:
             summaryTemplate = templates.get_template("partials/summary_panel.html")

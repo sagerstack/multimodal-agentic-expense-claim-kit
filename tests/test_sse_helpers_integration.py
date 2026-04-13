@@ -499,19 +499,26 @@ async def testAskHumanFilteredFromThinkingPanelButInterruptEmitted():
     stepContentEvents = [e for e in collected if e.event == SseEvent.STEP_CONTENT]
     interruptEvents = [e for e in collected if e.event == SseEvent.INTERRUPT]
 
-    # askHuman must be filtered from thinking panel — no emissions for this tool
-    for sne in stepNameEvents:
-        assert "askHuman" not in sne.raw_data
-        assert "Waiting for your input" not in sne.raw_data  # label also skipped
-    for sce in stepContentEvents:
-        assert "askHuman" not in sce.raw_data
-        assert "Asked for clarification" not in sce.raw_data  # label also skipped
-        assert "Completed askHuman" not in sce.raw_data  # raw-name fallback blocked
-
-    # The only tool fired in this test is askHuman — so zero STEP_NAME and
-    # zero STEP_CONTENT events should have been emitted.
-    assert len(stepNameEvents) == 0
-    assert len(stepContentEvents) == 0
+    # askHuman must be filtered from thinking panel — no emissions reference
+    # askHuman content. (Unrelated STEP_NAME events like "Preparing response..."
+    # emitted by the reasoning branch are allowed — they are not tool-scoped.)
+    askHumanStepNames = [
+        e for e in stepNameEvents
+        if "askHuman" in e.raw_data or "Waiting for your input" in e.raw_data
+    ]
+    askHumanStepContents = [
+        e for e in stepContentEvents
+        if "askHuman" in e.raw_data
+        or "Asked for clarification" in e.raw_data
+        or "Completed askHuman" in e.raw_data
+    ]
+    assert len(askHumanStepNames) == 0, (
+        f"askHuman leaked into STEP_NAME: {[e.raw_data for e in askHumanStepNames]}"
+    )
+    assert len(askHumanStepContents) == 0, (
+        f"askHuman leaked into STEP_CONTENT: "
+        f"{[e.raw_data for e in askHumanStepContents]}"
+    )
 
     # Interrupt IS emitted
     assert len(interruptEvents) == 1
