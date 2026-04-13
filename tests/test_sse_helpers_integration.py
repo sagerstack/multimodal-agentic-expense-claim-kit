@@ -466,3 +466,87 @@ async def testRunGraphSuppressesTokensAfterClaimSubmitted():
     tokenEvents = [e for e in collected if e.event == SseEvent.TOKEN]
     # "extra post-submission token" must not appear
     assert not any("extra post-submission" in e.raw_data for e in tokenEvents)
+
+
+# ── Plan 13-16: askHuman filter + tool-label hygiene ──
+
+
+@pytest.mark.asyncio
+async def testAskHumanFilteredFromThinkingPanelButInterruptEmitted():
+    """Gap 6 fix: askHuman tool events must NOT emit STEP_NAME / STEP_CONTENT.
+    The interrupt question still reaches #interruptTarget via the INTERRUPT event.
+
+    Source: 13-DEBUG-tool-name-leak.md section 4 Option C + section 6 verification.
+    """
+    events = [
+        {"event": "on_tool_start", "name": "askHuman",
+         "data": {"input": {"question": "Need clarification"}}},
+        {"event": "on_tool_end", "name": "askHuman",
+         "data": {"output": ""}},
+        {"event": "on_chat_model_end", "data": {"output": MagicMock(tool_calls=None)}},
+    ]
+
+    interruptTask = MagicMock()
+    interruptPayload = MagicMock()
+    interruptPayload.value = {"question": "Need clarification"}
+    interruptTask.interrupts = [interruptPayload]
+
+    graph = _makeMockGraph(events, stateNext=["intake"], stateTasks=[interruptTask])
+    request = _makeMockRequest()
+    collected = await _collectEvents(graph, _baseGraphInput(), request)
+
+    stepNameEvents = [e for e in collected if e.event == SseEvent.STEP_NAME]
+    stepContentEvents = [e for e in collected if e.event == SseEvent.STEP_CONTENT]
+    interruptEvents = [e for e in collected if e.event == SseEvent.INTERRUPT]
+
+    # askHuman must be filtered from thinking panel — no emissions for this tool
+    for sne in stepNameEvents:
+        assert "askHuman" not in sne.raw_data
+        assert "Waiting for your input" not in sne.raw_data  # label also skipped
+    for sce in stepContentEvents:
+        assert "askHuman" not in sce.raw_data
+        assert "Asked for clarification" not in sce.raw_data  # label also skipped
+        assert "Completed askHuman" not in sce.raw_data  # raw-name fallback blocked
+
+    # The only tool fired in this test is askHuman — so zero STEP_NAME and
+    # zero STEP_CONTENT events should have been emitted.
+    assert len(stepNameEvents) == 0
+    assert len(stepContentEvents) == 0
+
+    # Interrupt IS emitted
+    assert len(interruptEvents) == 1
+    assert "Need clarification" in interruptEvents[0].raw_data
+
+
+@pytest.mark.asyncio
+async def testNonAskHumanToolsStillEmitStepEventsNormally():
+    """Regression guard: filtering applies ONLY to askHuman. Other tools
+    continue to emit STEP_NAME + STEP_CONTENT as before."""
+    events = [
+        {"event": "on_tool_start", "name": "convertCurrency",
+         "data": {"input": {"amount": 100, "fromCurrency": "USD"}}},
+        {
+            "event": "on_tool_end",
+            "name": "convertCurrency",
+            "data": {"output": json.dumps({
+                "fromAmount": 100,
+                "fromCurrency": "USD",
+                "convertedAmount": 136.0,
+                "rate": 1.36,
+            })},
+        },
+        {"event": "on_chat_model_end", "data": {"output": MagicMock(tool_calls=None)}},
+    ]
+    graph = _makeMockGraph(events)
+    request = _makeMockRequest()
+    collected = await _collectEvents(graph, _baseGraphInput(), request)
+
+    stepNameEvents = [e for e in collected if e.event == SseEvent.STEP_NAME]
+    stepContentEvents = [e for e in collected if e.event == SseEvent.STEP_CONTENT]
+    assert len(stepNameEvents) >= 1
+    assert len(stepContentEvents) >= 1
+    # Completion summary for convertCurrency includes "Converted" token; raw tool
+    # name must never appear.
+    assert any("Converted" in e.raw_data for e in stepContentEvents)
+    for sce in stepContentEvents:
+        assert "Completed convertCurrency" not in sce.raw_data
