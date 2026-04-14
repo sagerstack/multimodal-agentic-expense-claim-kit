@@ -29,6 +29,7 @@ See MILESTONES.md for archived v1.0 details.
 - [x] **Phase 11: Intake Multi-Turn Fix** -- Restore askHuman interrupt tool so intake agent pauses for user confirmation between extraction, policy check, and submission phases
 - [ ] **Phase 12: DeepEval + RAGAs Evaluation Suite** -- 20 MMGA benchmark test cases scored via Playwright browser capture + deepeval/RAGAs metrics, results on Confident AI dashboard
 - [x] **Phase 13: Intake Agent Hybrid Routing + Bug Fixes** -- Align intake agent with docs/deep-research-*.md: migrate from prompt-only routing (v4.1) to hybrid (code-enforced routing via hooks + state flags, prompt-driven conversation). Closes 6 open intake-layer bugs (2, 3, 4, 5, 6, 7) as symptoms of the misalignment.
+- [ ] **Phase 14: intake-gpt Deterministic Workflow Hardening** -- Complete the interrupt state machine and runtime advancement in the intake-gpt subgraph. Fix Bugs A–D: interrupt classification (interruptResolutionNode no-op, _classifyInterruptReply asymmetric fallthrough, sideQuestionResponderNode unreachable), missing deterministic tool-call enforcement after workflow gates, incorrect justification persistence, and prompt over-specification of workflow steps. Design intent: runtime enforces WHAT happens next; LLM handles HOW it is communicated.
 
 ---
 
@@ -543,10 +544,51 @@ Plans:
 
 ---
 
+### Phase 14: intake-gpt Deterministic Workflow Hardening
+
+**Goal:** The intake-gpt subgraph (`src/agentic_claims/agents/intake_gpt/`) runs a deterministic interrupt state machine and enforces runtime advancement after workflow gates — eliminating the dependency on LLM decision-making for structural workflow transitions. The LLM remains fully conversational (responds to user messages, presents results, asks confirmation questions) but the runtime decides which tool to call next and whether an interrupt is resolved.
+
+**Design intent:** Two layers operate simultaneously. Runtime layer: enforces WHAT happens next. LLM layer: handles HOW it is communicated. Turn pattern: respond to user → execute enforced workflow step → ask confirmation for that step.
+
+**Depends on:** Phase 13 (`feature/intake-improvements` branch)
+
+**Bugs closed:**
+- **Bug A**: Incomplete interrupt-resolution / side-question handling (`interruptResolutionNode` no-op, `_classifyInterruptReply` asymmetric fallthrough, `sideQuestionResponderNode` unreachable)
+- **Bug B**: Missing deterministic runtime advancement after workflow gates (LLM decides whether to call `searchPolicies` instead of runtime enforcing it)
+- **Bug C**: Incorrect justification persistence (downstream of Bug A — `_classifyInterruptReply` token match discards user's actual text)
+- **Bug D**: Prompt over-specification of workflow steps (trimmed once runtime is deterministic)
+
+**Additional cleanup (from code review):**
+- `IntakeGptSubgraphState` in `state.py` is dead code (never imported) — delete
+- `_CURRENCY_SYMBOL_MAP`, `_VALID_CATEGORIES`, token sets are hardcoded business constants — move to config
+- `applyToolResultsNode` only processes last tool message (latent risk) — process all
+- Image detection via string match on `"uploaded a receipt image"` — decouple from app layer
+
+**Success Criteria** (what must be TRUE when Phase 14 completes):
+1. A user replying "no" or "nope" to a `field_confirmation` interrupt is classified as `cancel` / negative, not `"answer"` — the draft is NOT advanced
+2. A user asking a side question during any pending interrupt receives a response, then the original blocking question is re-presented — `pendingInterrupt` state is preserved
+3. After `field_confirmation_answered`, `searchPolicies` is called deterministically by the runtime without the LLM deciding to do so — narration-only turns are not possible at this gate
+4. `intakeFindings.justification` in the DB contains the user's actual justification text, not a token match string like `"confirm"`
+5. System prompt (`prompt.py`) contains no workflow-step instructions; only conversational guidance (acknowledgment, result presentation, confirmation framing)
+6. Dead code removed: `IntakeGptSubgraphState` in `state.py`, routing gap in `sideQuestionResponderNode` closed
+7. Business constants (`_CURRENCY_SYMBOL_MAP`, `_VALID_CATEGORIES`, token sets) moved to config — no hardcoded domain values in `graph.py`
+8. All 22 existing `test_intake_gpt.py` tests pass; new tests cover: negative-token classification for `field_confirmation`, side-question path (respond + re-present), `field_confirmation_answered` → `searchPolicies` deterministic call, justification text preservation
+9. E2E: VND receipt with policy exception → user provides justification text → justification text (not token) persisted to `audit_log` and DB claim
+
+**Plans:** 4 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — Bug A failing tests: negative classification, side-question path, justification text preservation (RED)
+- [ ] 14-02-PLAN.md — Bug A implementation: fix _classifyInterruptReply, implement interruptResolutionNode, side-question path wiring (GREEN)
+- [ ] 14-03-PLAN.md — Bug B: deterministic searchPolicies after field_confirmation_answered (TDD)
+- [ ] 14-04-PLAN.md — Cleanup: dead code removal, config extraction, applyToolResultsNode multi-tool fix, prompt trim
+
+---
+
 ## Progress
 
 **Execution Order:**
-v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 10 -> 11 -> 12 -> 13
+v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 10 -> 11 -> 12 -> 13 -> 14
 
 | Phase | Plans Complete | Status | Completed |
 |-------|---------------|--------|-----------|
@@ -562,7 +604,8 @@ v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 
 | 11. Intake Multi-Turn Fix | 4/4 | Complete | 2026-04-11 |
 | 12. DeepEval + RAGAs Evaluation Suite | 0/4 | Not started | -- |
 | 13. Intake Agent Hybrid Routing + Bug Fixes | 9/9 | Complete | 2026-04-13 |
+| 14. intake-gpt Deterministic Workflow Hardening | 0/? | Planning | -- |
 
-**v2.0 total:** 35/47+ plans complete (Phase 13 adds 9 plans)
+**v2.0 total:** 35/47+ plans complete (Phase 14 planning in progress)
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)
