@@ -47,7 +47,8 @@ _AFFIRMATIVE_TOKENS = {
     "confirmed",
     "confirm",
 }
-_NEGATIVE_TOKENS = {"no", "nope", "cancel", "not yet", "later", "wait"}
+_NEGATIVE_TOKENS = {"no", "nope", "cancel", "not yet", "later", "wait", "skip", "never mind"}
+_INTERROGATIVE_PREFIXES = ("what", "why", "how", "when", "who", "is", "can", "does", "will")
 _CURRENCY_SYMBOL_MAP = {
     "₫": "VND",
     "đ": "VND",
@@ -607,12 +608,40 @@ def _buildSubmissionAcknowledgement(intakeState: IntakeGptState) -> AIMessage | 
     )
 
 
+def _isSideQuestionText(text: str) -> bool:
+    """Pure-logic side-question detector: trailing '?' OR starts with an interrogative word."""
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if stripped.endswith("?"):
+        return True
+    firstWord = stripped.split(maxsplit=1)[0].lower().rstrip(",.!;:")
+    return firstWord in _INTERROGATIVE_PREFIXES
+
+
+def _containsNegativeToken(lowered: str) -> bool:
+    """True if the lowered text is or contains any negative token."""
+    if lowered in _NEGATIVE_TOKENS:
+        return True
+    return any(token in lowered for token in _NEGATIVE_TOKENS if " " in token)
+
+
+def _containsAffirmativeToken(lowered: str) -> bool:
+    if lowered in _AFFIRMATIVE_TOKENS:
+        return True
+    return any(token in lowered for token in _AFFIRMATIVE_TOKENS if " " in token)
+
+
 def _classifyInterruptReply(text: str, *, pendingKind: str, expectedCurrency: str = "") -> tuple[str, str, dict | None]:
     lowered = text.strip().lower()
     if not lowered:
         return "ambiguous", "No reply captured for the pending interrupt.", None
+
+    # End-of-conversation tokens apply to every interrupt kind.
     if lowered in _END_CONVERSATION_TOKENS:
         return "end_conversation", "User chose to end the conversation.", None
+
+    # manual_fx_rate: parse exchange rate (existing logic, unchanged).
     if pendingKind == "manual_fx_rate":
         parsedRate = _parseManualFxRate(text, expectedCurrency)
         if parsedRate is None:
@@ -622,20 +651,64 @@ def _classifyInterruptReply(text: str, *, pendingKind: str, expectedCurrency: st
                 None,
             )
         return "answer", "User provided a manual exchange rate to SGD.", parsedRate
-    if pendingKind == "submit_confirmation":
-        if lowered in _AFFIRMATIVE_TOKENS or any(
-            token in lowered for token in _AFFIRMATIVE_TOKENS if " " in token
-        ):
-            return "answer", "User confirmed that the claim should be submitted.", None
-        if lowered in _NEGATIVE_TOKENS or any(
-            token in lowered for token in _NEGATIVE_TOKENS if " " in token
-        ):
+
+    # Side-question detection runs BEFORE affirmative/negative token checks for
+    # kinds that allow free-form questions. An interrogative trumps a keyword
+    # match (e.g. "is this correct?" should be a side question, not "answer").
+    if pendingKind in {"field_confirmation", "policy_justification", "submit_confirmation"}:
+        if _isSideQuestionText(text):
+            return (
+                "side_question",
+                "User asked an interrogative — treating as a side question.",
+                None,
+            )
+
+    # Negative tokens:
+    #   field_confirmation No → user rejects the extraction → side_question
+    #     (downstream: Plan 14-06 will turn this into an open-ended correction flow)
+    #   submit_confirmation No → user cancels the claim
+    #   policy_justification No → user declines to justify → cancel_claim
+    if _containsNegativeToken(lowered):
+        if pendingKind == "submit_confirmation":
             return "cancel_claim", "User declined claim submission.", None
-        return "ambiguous", "The user did not clearly confirm whether to submit the claim.", None
-    if lowered in _AFFIRMATIVE_TOKENS or any(
-        token in lowered for token in _AFFIRMATIVE_TOKENS if " " in token
-    ):
-        return "answer", "User confirmed the pending receipt details.", None
+        if pendingKind == "policy_justification":
+            return "cancel_claim", "User declined to provide a justification.", None
+        if pendingKind == "field_confirmation":
+            return (
+                "side_question",
+                "User indicated the extracted details are not correct.",
+                None,
+            )
+
+    # Affirmative tokens.
+    if _containsAffirmativeToken(lowered):
+        if pendingKind == "submit_confirmation":
+            return "answer", "User confirmed that the claim should be submitted.", None
+        if pendingKind == "field_confirmation":
+            return "answer", "User confirmed the extracted details.", None
+        # policy_justification with just "yes" is not a valid justification body —
+        # fall through so free-form rule below handles it as verbatim "answer".
+
+    # Free-form text:
+    #   policy_justification → the text IS the justification (answer, verbatim)
+    #   field_confirmation → treat as side_question (not a clear yes/no)
+    #   submit_confirmation → ambiguous (not a clear yes/no)
+    if pendingKind == "policy_justification":
+        return "answer", "User provided a justification.", None
+    if pendingKind == "field_confirmation":
+        return (
+            "side_question",
+            "User sent a free-form message during field confirmation.",
+            None,
+        )
+    if pendingKind == "submit_confirmation":
+        return (
+            "ambiguous",
+            "The user did not clearly confirm whether to submit the claim.",
+            None,
+        )
+
+    # Unknown pendingKind fallback.
     return "answer", "User replied to the pending interrupt.", None
 
 
