@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}AI Expense Submission{% endblock %}
 {% block content %}
-<div x-data="chatState()" @stream-done.window="onStreamDone()" @message-swapped.window="onMessageSwapped()" @tool-step.window="onStepName($event.detail)" class="flex flex-col lg:flex-row h-full overflow-hidden">
+<div x-data="chatState()" @stream-done.window="onStreamDone(); buttonInterruptActive = false" @message-swapped.window="onMessageSwapped()" @tool-step.window="onStepName($event.detail)" @interrupt-swapped.window="buttonInterruptActive = $event.detail.hasButtons" class="flex flex-col lg:flex-row h-full overflow-hidden">
 <div id="sseContainer" hx-ext="sse" sse-connect="/chat/stream" class="flex flex-col flex-1 overflow-hidden">
 <div class="flex flex-col lg:flex-row flex-1 overflow-hidden">
 <!-- Chat Interface Section -->
@@ -97,7 +97,7 @@
          Rationale: askHuman/policy-exception prompts are routine agent questions, not errors.
          Source: 13-DEBUG-display-regression.md "Related issues" §1. -->
     <div id="interruptTarget" sse-swap="interrupt" hx-swap="innerHTML"
-         hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done'))"
+         hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done')); window.dispatchEvent(new CustomEvent('interrupt-swapped', {detail: {hasButtons: this.querySelector('button[aria-label=\'Yes\'], button[aria-label=\'No\']') !== null}}))"
          class="max-w-2xl text-sm text-on-surface p-4 bg-surface-container-low rounded-2xl border border-outline-variant/5 shadow-xl empty:hidden"></div>
 
     <!-- Error target -->
@@ -129,9 +129,11 @@
             <span class="material-symbols-outlined">attach_file</span>
           </button>
           <textarea name="message" x-model="messageText" x-ref="messageInput"
+                    :class="{'opacity-50': buttonInterruptActive}"
+                    :placeholder="buttonInterruptActive ? 'Please click Yes or No above' : 'Type a message or drop files...'"
                     class="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none outline-none text-on-surface placeholder:text-outline/50 py-3 resize-none font-body text-sm"
                     style="outline: none !important;"
-                    placeholder="Type a message or drop files..." rows="1"
+                    rows="1"
                     @keydown.enter.prevent="if (!$event.shiftKey) $el.form.requestSubmit()"></textarea>
           <button type="submit" :disabled="processing"
                   class="p-3 rounded-xl bg-gradient-to-br from-primary to-primary-dim text-on-primary shadow-lg shadow-primary/20 active:scale-90 transition-transform disabled:opacity-50">
@@ -184,6 +186,7 @@ function chatState() {
     previewUrl: null,
     fileName: null,
     messageText: '',
+    buttonInterruptActive: false,
     activeToolName: 'Thinking...',
     toolDuration: 0,
     toolTimer: null,
