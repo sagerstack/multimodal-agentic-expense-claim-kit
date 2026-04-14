@@ -717,6 +717,48 @@ def _buildSubmitConfirmationAiMessage(intakeState: IntakeGptState) -> AIMessage 
     )
 
 
+def _buildFieldCorrectionAiMessage() -> AIMessage:
+    """Build a synthetic requestHumanInput(field_correction) tool_call for the correction loop."""
+    question = "What looks incorrect? Please describe the field(s) and the corrected value(s)."
+    toolCallId = f"rt-requestHumanInput-fc-{int(time.time() * 1000)}"
+    return AIMessage(
+        content="",
+        tool_calls=[{
+            "id": toolCallId,
+            "name": "requestHumanInput",
+            "args": {
+                "kind": "field_correction",
+                "question": question,
+                "contextMessage": "",
+                "expectedResponseKind": "text",
+                "blockingStep": "field_correction",
+                "allowSideQuestions": False,
+                "category": "",
+            },
+        }],
+    )
+
+
+def _buildFieldConfirmationAfterCorrectionAiMessage(intakeState: IntakeGptState) -> AIMessage | None:
+    """Re-emit field_confirmation interrupt after a correction, appending the correction text to contextMessage."""
+    base = _buildFieldConfirmationAiMessage(intakeState)
+    if not base or not base.tool_calls:
+        return None
+    correctionText = (intakeState.get("slots") or {}).get("correctionText") or ""
+    toolCall = dict(base.tool_calls[0])
+    args = dict(toolCall.get("args") or {})
+    originalContext = str(args.get("contextMessage") or "")
+    if correctionText:
+        args["contextMessage"] = (
+            f"{originalContext}\n\nYou reported: \"{correctionText}\"\n"
+            "Does the updated extraction above look correct now?"
+        )
+    toolCall["args"] = args
+    # Assign a new toolCallId to avoid duplicate ID collisions
+    toolCall["id"] = f"rt-requestHumanInput-fca-{int(time.time() * 1000)}"
+    return AIMessage(content="", tool_calls=[toolCall])
+
+
 def _isSideQuestionText(text: str) -> bool:
     """Pure-logic side-question detector: trailing '?' OR starts with an interrogative word."""
     stripped = text.strip()
@@ -773,8 +815,7 @@ def _classifyInterruptReply(text: str, *, pendingKind: str, expectedCurrency: st
             )
 
     # Negative tokens:
-    #   field_confirmation No → user rejects the extraction → side_question
-    #     (downstream: Plan 14-06 will turn this into an open-ended correction flow)
+    #   field_confirmation No → user rejects the extraction → correction_requested
     #   submit_confirmation No → user cancels the claim
     #   policy_justification No → user declines to justify → cancel_claim
     if _containsNegativeToken(lowered):
@@ -784,7 +825,7 @@ def _classifyInterruptReply(text: str, *, pendingKind: str, expectedCurrency: st
             return "cancel_claim", "User declined to provide a justification.", None
         if pendingKind == "field_confirmation":
             return (
-                "side_question",
+                "correction_requested",
                 "User indicated the extracted details are not correct.",
                 None,
             )
@@ -1193,6 +1234,101 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
                 message="intake-gpt node exited",
             )
             return {"messages": [response], "intakeGpt": intakeState}
+    # Gate FC1: field_correction_requested → emit field_correction interrupt (no LLM needed)
+    if (
+        intakeState["workflow"]["currentStep"] == "field_correction_requested"
+        and intakeState.get("pendingInterrupt") is None
+    ):
+        response = _buildFieldCorrectionAiMessage()
+        pending = _pendingInterruptFromToolCalls(response)
+        if pending is not None:
+            intakeState["pendingInterrupt"] = pending
+            intakeState["workflow"]["currentStep"] = "field_correction"
+            intakeState["workflow"]["status"] = "blocked"
+            logEvent(
+                logger,
+                "intake.gpt.runtime_field_correction_requested",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="runtime emitted field_correction interrupt",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {"messages": [response], "intakeGpt": intakeState}
+    # Gate FC2: correction_received → re-emit field_confirmation with correction context (no LLM needed)
+    if (
+        intakeState["workflow"]["currentStep"] == "correction_received"
+        and intakeState.get("pendingInterrupt") is None
+    ):
+        response = _buildFieldConfirmationAfterCorrectionAiMessage(intakeState)
+        pending = _pendingInterruptFromToolCalls(response) if response is not None else None
+        if response is not None and pending is not None:
+            intakeState["pendingInterrupt"] = pending
+            intakeState["workflow"]["currentStep"] = pending.get("blockingStep") or "field_confirmation"
+            intakeState["workflow"]["status"] = "blocked"
+            logEvent(
+                logger,
+                "intake.gpt.runtime_field_confirmation_after_correction",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="runtime re-emitted field_confirmation after correction",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {"messages": [response], "intakeGpt": intakeState}
+    # Gate SC: submission_declined (cancelled) → emit plain acknowledgement, no LLM needed
+    if (
+        intakeState["workflow"]["currentStep"] == "submission_declined"
+        and intakeState["workflow"].get("status") == "cancelled"
+        and intakeState.get("pendingInterrupt") is None
+    ):
+        ack = AIMessage(content="Claim cancelled. Upload a new receipt to start a new claim.")
+        intakeState["workflow"]["currentStep"] = "submission_cancelled_acknowledged"
+        intakeState["workflow"]["status"] = "completed"
+        # Preserve sessionReset — do NOT overwrite; chat.py consumes it on the next POST
+        logEvent(
+            logger,
+            "intake.gpt.runtime_submission_cancelled_acknowledged",
+            logCategory="agent",
+            agent="intake-gpt",
+            claimId=state.get("claimId"),
+            threadId=state.get("threadId"),
+            message="runtime emitted submission_cancelled acknowledgement",
+        )
+        logEvent(
+            logger,
+            "intake.graph.node_exited",
+            logCategory="agent",
+            agent="intake-gpt",
+            claimId=state.get("claimId"),
+            threadId=state.get("threadId"),
+            nodeName="reasonNode",
+            workflowStep=intakeState["workflow"]["currentStep"],
+            message="intake-gpt node exited",
+        )
+        return {"messages": [ack], "intakeGpt": intakeState}
     boundLlm = llm.bind_tools(_INTAKE_GPT_TOOLS)
     runtimeContext = _buildRuntimeContext(state, intakeState)
     logEvent(
@@ -1333,6 +1469,37 @@ async def applyToolResultsNode(state: IntakeGptGraphState) -> dict:
             }
             slots["lastHumanInput"] = responseText
 
+            # Correction-request guard: field_confirmation + negative token → correction loop.
+            # Clears pendingInterrupt and advances to field_correction_requested so reasonNode
+            # can emit a field_correction interrupt deterministically.
+            if outcome == "correction_requested" and pending.get("kind") == "field_confirmation":
+                intakeState["pendingInterrupt"] = None
+                intakeState["workflow"]["currentStep"] = "field_correction_requested"
+                intakeState["workflow"]["status"] = "active"
+                intakeState["slots"] = slots
+                updates["intakeGpt"] = intakeState
+                logEvent(
+                    logger,
+                    "intake.gpt.correction_requested",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    message="field_confirmation No — correction loop opened",
+                )
+                logEvent(
+                    logger,
+                    "intake.graph.node_exited",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    nodeName="applyToolResultsNode",
+                    workflowStep=intakeState["workflow"]["currentStep"],
+                    message="intake-gpt node exited",
+                )
+                return updates
+
             # Side-question guard: applies to ALL interrupt kinds.
             # The LLM will answer the question and re-present the original interrupt.
             # Do NOT clear pendingInterrupt, do NOT advance currentStep.
@@ -1364,7 +1531,36 @@ async def applyToolResultsNode(state: IntakeGptGraphState) -> dict:
                 )
                 return updates
 
-            if pending.get("kind") == "field_confirmation":
+            if pending.get("kind") == "field_correction":
+                # Store the user's correction text verbatim and advance to correction_received
+                slots["correctionText"] = responseText
+                intakeState["pendingInterrupt"] = None
+                intakeState["workflow"]["currentStep"] = "correction_received"
+                intakeState["workflow"]["status"] = "active"
+                intakeState["slots"] = slots
+                updates["intakeGpt"] = intakeState
+                logEvent(
+                    logger,
+                    "intake.gpt.correction_received",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    message="field_correction reply received — looping back to field_confirmation",
+                )
+                logEvent(
+                    logger,
+                    "intake.graph.node_exited",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    nodeName="applyToolResultsNode",
+                    workflowStep=intakeState["workflow"]["currentStep"],
+                    message="intake-gpt node exited",
+                )
+                return updates
+            elif pending.get("kind") == "field_confirmation":
                 slots["fieldConfirmationResponse"] = responseText
                 draftBundle = _buildDraftClaimBundle(slots)
                 if draftBundle is not None:
@@ -1434,9 +1630,18 @@ async def applyToolResultsNode(state: IntakeGptGraphState) -> dict:
                         pending.get("blockingStep") or pending.get("kind") or "awaiting_input"
                     )
                 else:
+                    isCancelOnSubmit = (
+                        outcome == "cancel_claim"
+                        and pending.get("kind") == "submit_confirmation"
+                    )
                     intakeState["pendingInterrupt"] = None
-                    intakeState["workflow"]["status"] = "completed" if outcome == "end_conversation" else "active"
-                    intakeState["workflow"]["readyForSubmission"] = outcome == "answer"
+                    if isCancelOnSubmit:
+                        intakeState["workflow"]["status"] = "cancelled"
+                        intakeState["workflow"]["readyForSubmission"] = False
+                        intakeState["sessionReset"] = True
+                    else:
+                        intakeState["workflow"]["status"] = "completed" if outcome == "end_conversation" else "active"
+                        intakeState["workflow"]["readyForSubmission"] = outcome == "answer"
                     intakeState["workflow"]["currentStep"] = (
                         "conversation_closed"
                         if outcome == "end_conversation"

@@ -168,6 +168,54 @@ async def postMessage(
                 payload={"oldClaimId": oldClaimId, "oldThreadId": oldThreadId, "trigger": "claimSubmitted"},
                 message="Session auto-reset after claim submission",
             )
+        # Also check for sessionReset flag (submit_confirmation cancel path).
+        # Same rotation logic as claimSubmitted, triggered by intakeGpt.sessionReset=True.
+        priorIntakeGpt = (priorState.values.get("intakeGpt") or {}) if priorState and priorState.values else {}
+        if not autoResetFired and priorIntakeGpt.get("sessionReset") is True:
+            oldClaimId = claimId
+            oldThreadId = threadId
+            oldDraftClaimId = request.session.get("draft_claim_id")
+            if oldClaimId:
+                clearImage(oldClaimId)
+            request.session["last_closed_thread_id"] = oldThreadId
+            request.session["last_closed_claim_id"] = oldClaimId
+            request.session["last_closed_draft_claim_id"] = oldDraftClaimId
+            newThreadId = str(uuid.uuid4())
+            request.session["thread_id"] = newThreadId
+            request.session["claim_id"] = str(uuid.uuid4())
+            request.session.pop("draft_created", None)
+            request.session.pop("draft_claim_id", None)
+            if oldThreadId:
+                oldQueue = popQueue(oldThreadId)
+                if oldQueue is not None:
+                    try:
+                        oldQueue.put_nowait(QueueRotationSignal(newThreadId=newThreadId))
+                    except asyncio.QueueFull:
+                        logEvent(
+                            logger,
+                            "sse.session_reset_sentinel_queue_full",
+                            logCategory="sse",
+                            threadId=oldThreadId,
+                            message="Old queue full on session_reset; rotation signal skipped",
+                        )
+            threadId = newThreadId
+            claimId = request.session["claim_id"]
+            draftClaimNumber = f"DRAFT-{claimId[:8]}"
+            autoResetFired = True
+            logEvent(
+                logger,
+                "chat.session_reset",
+                logCategory="chat",
+                actorType="app",
+                userId=username,
+                username=username,
+                employeeId=employeeId,
+                claimId=claimId,
+                threadId=threadId,
+                status="completed",
+                payload={"oldClaimId": oldClaimId, "oldThreadId": oldThreadId, "trigger": "sessionReset"},
+                message="Session reset after submit_confirmation cancel",
+            )
     except Exception:
         pass  # If auto-reset decision fails, continue normally
 
