@@ -1799,3 +1799,144 @@ def test_buildRuntimeContextExposesPendingInterruptAndSideQuestionOutcome():
     assert "Do these extracted details look correct?" in context, (
         "runtime context must include the pending interrupt question verbatim for re-presentation"
     )
+
+
+@pytest.mark.asyncio
+async def test_applyToolResultsNodeAfterFieldConfirmationNoTriggersCorrectionRequest():
+    toolMsg = ToolMessage(
+        content='{"response": "no"}',
+        name="requestHumanInput",
+        tool_call_id="tc-n1",
+    )
+    pendingInterrupt = {
+        "id": "int-n1",
+        "kind": "field_confirmation",
+        "question": "Do these extracted details look correct?",
+        "contextMessage": "Merchant: Koufu, Amount: SGD 12.50",
+        "expectedResponseKind": "text",
+        "blockingStep": "field_confirmation",
+        "status": "pending",
+        "retryCount": 0,
+        "allowSideQuestions": True,
+    }
+    state = {
+        "messages": [toolMsg],
+        "claimId": "c-n1",
+        "threadId": "t-n1",
+        "status": "active",
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "field_confirmation",
+                "readyForSubmission": False,
+                "status": "blocked",
+            },
+            "slots": {"claimData": {"merchant": "Koufu", "amountSgd": 12.50}},
+            "pendingInterrupt": pendingInterrupt,
+            "lastUserTurn": {"message": "no", "hasImage": False},
+            "lastResolution": None,
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+    result = await applyToolResultsNode(state)
+    intake = result["intakeGpt"]
+    assert intake["pendingInterrupt"] is None, "field_confirmation No must clear pendingInterrupt"
+    assert intake["workflow"]["currentStep"] == "field_correction_requested"
+    assert intake["workflow"]["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_applyToolResultsNodeAfterFieldCorrectionReplyLoopsBackToFieldConfirmation():
+    correctionText = "The merchant should be Toast Box, not Koufu"
+    toolMsg = ToolMessage(
+        content=f'{{"response": "{correctionText}"}}',
+        name="requestHumanInput",
+        tool_call_id="tc-n2",
+    )
+    pendingInterrupt = {
+        "id": "int-n2",
+        "kind": "field_correction",
+        "question": "What looks incorrect?",
+        "contextMessage": "",
+        "expectedResponseKind": "text",
+        "blockingStep": "field_correction",
+        "status": "pending",
+        "retryCount": 0,
+        "allowSideQuestions": False,
+    }
+    state = {
+        "messages": [toolMsg],
+        "claimId": "c-n2",
+        "threadId": "t-n2",
+        "status": "active",
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "field_correction",
+                "readyForSubmission": False,
+                "status": "blocked",
+            },
+            "slots": {"claimData": {"merchant": "Koufu", "amountSgd": 12.50}},
+            "pendingInterrupt": pendingInterrupt,
+            "lastUserTurn": {"message": correctionText, "hasImage": False},
+            "lastResolution": None,
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+    result = await applyToolResultsNode(state)
+    intake = result["intakeGpt"]
+    assert intake["pendingInterrupt"] is None, "field_correction must clear pendingInterrupt"
+    assert intake["workflow"]["currentStep"] == "correction_received"
+    assert intake["workflow"]["status"] == "active"
+    # correctionText must be stored (key: "correctionText")
+    assert intake["slots"].get("correctionText") == correctionText or correctionText in str(intake["slots"])
+
+
+@pytest.mark.asyncio
+async def test_applyToolResultsNodeAfterSubmitConfirmationNoCancelsClaimAndSetsSessionReset():
+    toolMsg = ToolMessage(
+        content='{"response": "no"}',
+        name="requestHumanInput",
+        tool_call_id="tc-n3",
+    )
+    pendingInterrupt = {
+        "id": "int-n3",
+        "kind": "submit_confirmation",
+        "question": "Shall I submit this claim?",
+        "contextMessage": "Claim: meals, SGD 45.00",
+        "expectedResponseKind": "text",
+        "blockingStep": "submit_confirmation",
+        "status": "pending",
+        "retryCount": 0,
+        "allowSideQuestions": True,
+    }
+    state = {
+        "messages": [toolMsg],
+        "claimId": "c-n3",
+        "threadId": "t-n3",
+        "status": "active",
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "submit_confirmation",
+                "readyForSubmission": True,
+                "status": "blocked",
+            },
+            "slots": {"intakeFindings": {"justification": "Client dinner"}},
+            "pendingInterrupt": pendingInterrupt,
+            "lastUserTurn": {"message": "no", "hasImage": False},
+            "lastResolution": None,
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+    result = await applyToolResultsNode(state)
+    intake = result["intakeGpt"]
+    assert intake["pendingInterrupt"] is None
+    assert intake["workflow"]["currentStep"] == "submission_declined"
+    assert intake["workflow"]["status"] == "cancelled"
+    assert intake.get("sessionReset") is True, "sessionReset must be True after submit_confirmation cancel"
+    resolution = intake.get("lastResolution") or {}
+    assert resolution.get("outcome") == "cancel_claim"
