@@ -9,8 +9,11 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
 from agentic_claims.agents.intake_gpt.graph import (
+    _buildRuntimeContext,
+    _classifyInterruptReply,
     applyToolResultsNode,
     buildIntakeGptSubgraph,
+    interruptResolutionNode,
     reasonNode,
     turnEntryNode,
 )
@@ -1349,3 +1352,193 @@ async def test_intakeGptLogsWrapperLifecycle():
     assert "intake.agent_invoked" in names
     assert "intake.completed" in names
     assert "intake.turn.end" in names
+
+
+# ---------------------------------------------------------------------------
+# Phase 14 Plan 01 — RED phase: interrupt state machine contract tests
+# ---------------------------------------------------------------------------
+
+
+def test_classifyInterruptReplyRejectsNegativeTokenForFieldConfirmation():
+    for reply in ("no", "nope", "cancel"):
+        outcome, _summary, _parsed = _classifyInterruptReply(
+            reply, pendingKind="field_confirmation"
+        )
+        assert outcome != "answer", (
+            f"Negative token {reply!r} must NOT classify as 'answer' for field_confirmation"
+        )
+
+
+def test_classifyInterruptReplyRejectsNegativeTokenForPolicyJustification():
+    for reply in ("no", "nope", "skip", "never mind"):
+        outcome, _summary, _parsed = _classifyInterruptReply(
+            reply, pendingKind="policy_justification"
+        )
+        assert outcome in {"cancel_claim", "side_question"}, (
+            f"Negative token {reply!r} must be cancel_claim or side_question, got {outcome}"
+        )
+
+
+def test_classifyInterruptReplyDetectsSideQuestionForPolicyJustification():
+    # Ends with '?'
+    outcome1, _, _ = _classifyInterruptReply(
+        "what is the meal allowance cap?", pendingKind="policy_justification"
+    )
+    assert outcome1 == "side_question"
+
+    # Starts with interrogative word
+    for reply in (
+        "what approval level is required",
+        "why does this policy cap exist",
+        "how do I escalate this",
+        "when should I submit receipts",
+        "can this be overridden",
+        "is there an exception path",
+    ):
+        outcome, _, _ = _classifyInterruptReply(reply, pendingKind="policy_justification")
+        assert outcome == "side_question", f"{reply!r} → {outcome}"
+
+
+def test_classifyInterruptReplyPreservesJustificationTextVerbatim():
+    text = "Client dinner on-site, approved by my manager offline."
+    outcome, _summary, _parsed = _classifyInterruptReply(
+        text, pendingKind="policy_justification"
+    )
+    assert outcome == "answer", (
+        f"Free-form justification text must classify as 'answer', got {outcome}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_interruptResolutionNodePreservesPendingInterruptOnSideQuestion():
+    pendingInterrupt = {
+        "id": "int-1",
+        "kind": "field_confirmation",
+        "question": "Do these extracted details look correct?",
+        "contextMessage": "Merchant: Koufu...",
+        "expectedResponseKind": "text",
+        "blockingStep": "field_confirmation",
+        "status": "pending",
+        "retryCount": 0,
+        "allowSideQuestions": True,
+    }
+    state = {
+        "messages": [HumanMessage(content="what is the meal cap in SGD?")],
+        "claimId": "c1",
+        "threadId": "t1",
+        "status": "active",
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "field_confirmation",
+                "readyForSubmission": False,
+                "status": "blocked",
+            },
+            "slots": {},
+            "pendingInterrupt": pendingInterrupt,
+            "lastUserTurn": {"message": "what is the meal cap in SGD?", "hasImage": False},
+            "lastResolution": None,
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+    result = await interruptResolutionNode(state)
+    intake = result["intakeGpt"]
+    assert intake["pendingInterrupt"] is not None, (
+        "pendingInterrupt must remain set on side_question"
+    )
+    assert intake["lastResolution"] is not None, "lastResolution must be written"
+    assert intake["lastResolution"]["outcome"] == "side_question"
+    assert intake["lastResolution"]["responseText"] == "what is the meal cap in SGD?"
+
+
+@pytest.mark.asyncio
+async def test_applyToolResultsNodeStoresVerbatimJustificationText():
+    justificationText = "Client dinner with external auditors, no cheaper option available."
+    toolMsg = ToolMessage(
+        content=f'{{"response": "{justificationText}"}}',
+        name="requestHumanInput",
+        tool_call_id="tc-1",
+    )
+    pendingInterrupt = {
+        "id": "int-2",
+        "kind": "policy_justification",
+        "question": "Please provide a justification.",
+        "contextMessage": "Policy violation...",
+        "expectedResponseKind": "text",
+        "blockingStep": "policy_justification",
+        "status": "pending",
+        "retryCount": 0,
+        "allowSideQuestions": True,
+    }
+    state = {
+        "messages": [toolMsg],
+        "claimId": "c1",
+        "threadId": "t1",
+        "status": "active",
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "policy_justification",
+                "readyForSubmission": False,
+                "status": "blocked",
+            },
+            "slots": {"intakeFindings": {"justification": ""}},
+            "pendingInterrupt": pendingInterrupt,
+            "lastUserTurn": {"message": justificationText, "hasImage": False},
+            "lastResolution": None,
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+    result = await applyToolResultsNode(state)
+    intake = result["intakeGpt"]
+    assert intake["slots"]["justification"] == justificationText, (
+        f"Expected verbatim text; got {intake['slots']['justification']!r}"
+    )
+    findings = intake["slots"].get("intakeFindings") or {}
+    assert findings.get("justification") == justificationText, (
+        f"intakeFindings.justification must be verbatim; got {findings.get('justification')!r}"
+    )
+
+
+def test_buildRuntimeContextExposesPendingInterruptAndSideQuestionOutcome():
+    intakeState = {
+        "workflow": {
+            "goal": "assist_claimant",
+            "currentStep": "field_confirmation",
+            "readyForSubmission": False,
+            "status": "blocked",
+        },
+        "slots": {},
+        "pendingInterrupt": {
+            "id": "int-3",
+            "kind": "field_confirmation",
+            "question": "Do these extracted details look correct?",
+            "contextMessage": "",
+            "expectedResponseKind": "text",
+            "blockingStep": "field_confirmation",
+            "status": "pending",
+            "retryCount": 0,
+            "allowSideQuestions": True,
+        },
+        "lastUserTurn": {"message": "what is the meal cap?", "hasImage": False},
+        "lastResolution": {
+            "outcome": "side_question",
+            "responseText": "what is the meal cap?",
+            "summary": "User asked a side question",
+        },
+        "toolTrace": {},
+        "protocolGuardCount": 0,
+    }
+    graphState = {"messages": [], "claimId": "c1", "threadId": "t1", "status": "active"}
+    context = _buildRuntimeContext(graphState, intakeState)
+    assert "field_confirmation" in context, (
+        "runtime context must mention the pending interrupt kind"
+    )
+    assert "side_question" in context or "side question" in context.lower(), (
+        "runtime context must surface the side_question resolution outcome"
+    )
+    assert "Do these extracted details look correct?" in context, (
+        "runtime context must include the pending interrupt question verbatim for re-presentation"
+    )
