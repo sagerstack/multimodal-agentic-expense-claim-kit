@@ -46,10 +46,10 @@ async def _queryClaims(
     dateTo: str | None = None,
 ) -> list[dict]:
     """Query claims with optional filters, joined with users for display name."""
-    conditions = ["1=1"]
+    conditions = ["c.status != 'draft'"]
     params: dict = {}
 
-    if statusFilter and statusFilter in _VALID_STATUSES:
+    if statusFilter and statusFilter in _VALID_STATUSES and statusFilter != "draft":
         conditions.append("c.status = :status")
         params["status"] = statusFilter
 

@@ -36,6 +36,10 @@ pytest-asyncio = ">=0.24"
 pytest-cov = ">=6.0"
 ruff = ">=0.8"
 pytailwindcss = ">=0.3"
+deepeval = ">=3.9"
+litellm = ">=1.83"
+claude-code-sdk = ">=0.0.25"
+playwright = ">=1.54"
 
 [build-system]
 requires = ["poetry-core"]

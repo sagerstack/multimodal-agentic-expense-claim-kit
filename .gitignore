@@ -211,3 +211,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Tool artifacts
+.playwright-mcp/
+.codex/
+.qa/
+
+# Eval results (captured outputs)
+eval/results/
+eval/results/*.json
+
+# Upload artifacts
+static/uploads/

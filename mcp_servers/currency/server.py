@@ -1,5 +1,6 @@
 """Currency MCP Server for currency conversion via Frankfurter API."""
 
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -12,6 +13,8 @@ FRANKFURTER_BASE_URL = "https://api.frankfurter.dev/v1"
 # Initialize FastMCP server
 mcp = FastMCP("currency-server")
 
+logger = logging.getLogger(__name__)
+
 
 @mcp.tool()
 def convertCurrency(
@@ -20,13 +23,21 @@ def convertCurrency(
     """
     Convert currency using Frankfurter API (European Central Bank rates).
 
+    Returns a structured dict with a `supported` key on every path:
+      - Success:  {supported: True, originalAmount, originalCurrency,
+                   convertedAmount, convertedCurrency, rate, date}
+      - Unsupported currency (Frankfurter 404):
+                  {supported: False, currency, error: "unsupported", provider: "frankfurter"}
+
+    No secondary provider and no caching (locked decisions per 13-CONTEXT.md).
+
     Args:
         amount: Amount to convert
         fromCurrency: Source currency code (e.g., USD, EUR, GBP)
         toCurrency: Target currency code (default SGD)
 
     Returns:
-        Conversion result with original, converted amounts, rate, and date
+        Structured conversion result with explicit `supported` key
     """
     try:
         # Call Frankfurter API
@@ -43,11 +54,12 @@ def convertCurrency(
         # Extract rate and calculate converted amount
         rate = data["rates"].get(toCurrency.upper())
         if rate is None:
-            return {"error": f"Conversion rate for {toCurrency} not found"}
+            return {"supported": False, "currency": fromCurrency.upper(), "error": "unsupported", "provider": "frankfurter"}
 
         convertedAmount = round(amount * rate, 2)
 
         return {
+            "supported": True,
             "originalAmount": amount,
             "originalCurrency": fromCurrency.upper(),
             "convertedAmount": convertedAmount,
@@ -56,7 +68,18 @@ def convertCurrency(
             "date": data.get("date", datetime.now().strftime("%Y-%m-%d")),
         }
     except httpx.HTTPStatusError as e:
-        return {"error": f"Frankfurter API error: {e.response.status_code} {e.response.text}"}
+        if e.response.status_code == 404:
+            logger.info(
+                "mcp.currency.unsupported",
+                extra={"currency": fromCurrency, "provider": "frankfurter", "statusCode": 404},
+            )
+            return {
+                "supported": False,
+                "currency": fromCurrency.upper(),
+                "error": "unsupported",
+                "provider": "frankfurter",
+            }
+        raise  # Let non-404 HTTP errors surface through existing error path
     except httpx.RequestError as e:
         return {"error": f"Network error: {e}"}
     except Exception as e:

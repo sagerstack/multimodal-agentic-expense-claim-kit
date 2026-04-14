@@ -561,7 +561,7 @@ async function submitDecisionV2(action) {
     });
     if (resp.ok) {
       const redirect = resp.headers.get("HX-Redirect");
-      window.location.href = redirect || "/dashboard";
+      window.location.href = redirect || "/manage";
     } else {
       const data = await resp.json().catch(() => ({}));
       alert("Error: " + (data.error || "Failed to process decision"));

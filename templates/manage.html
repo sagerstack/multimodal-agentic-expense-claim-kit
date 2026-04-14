@@ -53,7 +53,6 @@
         <select name="status"
                 class="bg-surface-bright border border-outline-variant/20 rounded-xl px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary/50 transition-colors">
           <option value="" {% if not filterStatus %}selected{% endif %}>All Statuses</option>
-          <option value="draft" {% if filterStatus == "draft" %}selected{% endif %}>Draft</option>
           <option value="pending" {% if filterStatus == "pending" %}selected{% endif %}>Pending</option>
           <option value="ai_reviewed" {% if filterStatus == "ai_reviewed" %}selected{% endif %}>AI Reviewed</option>
           <option value="ai_approved" {% if filterStatus == "ai_approved" %}selected{% endif %}>AI Approved</option>

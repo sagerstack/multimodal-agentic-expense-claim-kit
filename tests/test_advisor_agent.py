@@ -231,6 +231,11 @@ async def testAdvisorReadsDbClaimIdFromState():
     assert thirdCall["arguments"]["claimId"] == 99
     assert thirdCall["toolName"] == "updateClaimStatus"
     assert thirdCall["arguments"]["approvedBy"] == "agent"
+    advisorFindings = thirdCall["arguments"]["advisorFindings"]
+    assert advisorFindings["reasoning"] == "Compliance pass + legit fraud check."
+    assert advisorFindings["summary"] == "Claim auto-approved."
+    assert advisorFindings["complianceSummary"] == "Claim passes all policy checks."
+    assert advisorFindings["fraudSummary"] == "No duplicates detected."
 
 
 @pytest.mark.asyncio

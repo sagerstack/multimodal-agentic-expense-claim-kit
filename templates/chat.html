@@ -16,10 +16,17 @@
         <span x-show="!processing">Ready</span>
       </span>
     </div>
-    <button hx-post="/chat/reset" hx-swap="none"
-            class="text-xs text-secondary hover:text-primary transition-colors font-bold uppercase tracking-widest flex items-center gap-1">
-      <span class="material-symbols-outlined text-sm align-middle">add_circle</span> New Claim
-    </button>
+    <div class="flex items-center gap-4">
+      <a href="/chat/export" download
+         class="text-xs text-secondary hover:text-primary transition-colors font-bold uppercase tracking-widest flex items-center gap-1"
+         title="Download conversation as markdown">
+        <span class="material-symbols-outlined text-sm align-middle">download</span> Export
+      </a>
+      <button hx-post="/chat/reset" hx-swap="none"
+              class="text-xs text-secondary hover:text-primary transition-colors font-bold uppercase tracking-widest flex items-center gap-1">
+        <span class="material-symbols-outlined text-sm align-middle">add_circle</span> New Claim
+      </button>
+    </div>
   </div>
   <!-- Chat History -->
   <div id="chatHistory"
@@ -28,7 +35,7 @@
        @dragleave="$el.classList.remove('ring-2', 'ring-secondary/50')"
        @drop.prevent="handleDrop($event)">
     <!-- System Greeting -->
-    <div class="flex gap-4 max-w-2xl">
+    <div id="systemGreeting" class="flex gap-4 max-w-2xl">
       <div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0 border border-outline-variant/20">
         <span class="material-symbols-outlined text-secondary text-sm" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
       </div>
@@ -72,9 +79,9 @@
          hx-on::after-swap="document.getElementById('chatHistory').scrollTop = document.getElementById('chatHistory').scrollHeight"
          class="text-on-surface text-sm leading-relaxed max-w-2xl whitespace-pre-wrap empty:hidden"></div>
 
-    <!-- Hidden thinking-start trigger — clears prior turn's thinking content -->
+    <!-- Hidden thinking-start trigger — clears prior turn's thinking content AND stale interrupt prompt -->
     <div sse-swap="thinking-start" hx-swap="innerHTML"
-         hx-on::after-swap="document.getElementById('thinkingStepName').innerHTML = ''; document.getElementById('thinkingContent').innerHTML = ''; document.getElementById('thinkingSummary').innerHTML = ''"
+         hx-on::after-swap="document.getElementById('thinkingStepName').innerHTML = ''; document.getElementById('thinkingContent').innerHTML = ''; document.getElementById('thinkingSummary').innerHTML = ''; document.getElementById('interruptTarget').innerHTML = ''"
          class="hidden"></div>
 
     <!-- AI Messages (accumulator — frozen into flow on done) -->
@@ -86,10 +93,12 @@
     <div id="doneTarget" sse-swap="done" hx-swap="innerHTML"
          hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done'))" class="hidden"></div>
 
-    <!-- Interrupt target -->
+    <!-- Interrupt target — neutral agent-bubble styling (matches partials/message_bubble.html).
+         Rationale: askHuman/policy-exception prompts are routine agent questions, not errors.
+         Source: 13-DEBUG-display-regression.md "Related issues" §1. -->
     <div id="interruptTarget" sse-swap="interrupt" hx-swap="innerHTML"
          hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done'))"
-         class="max-w-2xl text-sm text-tertiary italic p-4 bg-tertiary/5 rounded-2xl border border-tertiary/10 empty:hidden"></div>
+         class="max-w-2xl text-sm text-on-surface p-4 bg-surface-container-low rounded-2xl border border-outline-variant/5 shadow-xl empty:hidden"></div>
 
     <!-- Error target -->
     <div id="errorTarget" sse-swap="error" hx-swap="innerHTML"
@@ -97,7 +106,7 @@
          class="hidden"></div>
   </div>
   <!-- Chat Input Area -->
-  <div class="p-6 md:p-8 bg-surface/80 backdrop-blur-md">
+  <div class="px-6 pb-6 pt-3 md:px-8 md:pb-8 md:pt-4 bg-surface/80 backdrop-blur-md">
     <div class="max-w-3xl mx-auto relative">
       <!-- Image Preview -->
       <div x-show="previewUrl" class="flex items-center gap-3 mb-3 px-2" x-cloak>
@@ -130,20 +139,6 @@
           </button>
         </div>
       </form>
-      <div class="mt-4 flex gap-6 px-4">
-        <div class="flex items-center gap-1.5 opacity-40 hover:opacity-100 transition-opacity cursor-pointer" @click="$refs.fileInput.click()">
-          <span class="material-symbols-outlined text-sm">photo_camera</span>
-          <span class="text-[10px] font-bold uppercase tracking-tighter">Capture</span>
-        </div>
-        <div class="flex items-center gap-1.5 opacity-40 hover:opacity-100 transition-opacity cursor-pointer">
-          <span class="material-symbols-outlined text-sm">mic</span>
-          <span class="text-[10px] font-bold uppercase tracking-tighter">Voice</span>
-        </div>
-        <div class="flex items-center gap-1.5 opacity-40 hover:opacity-100 transition-opacity cursor-pointer">
-          <span class="material-symbols-outlined text-sm">history</span>
-          <span class="text-[10px] font-bold uppercase tracking-tighter">Recent</span>
-        </div>
-      </div>
     </div>
   </div>
 </section>
@@ -155,7 +150,7 @@
 </aside>
 </div>
 <!-- Bottom Submission Table -->
-<section class="w-full bg-surface-container-low border-t border-outline-variant/10 p-6 md:px-8 shrink-0 max-h-[35vh] overflow-y-auto">
+<section class="w-full bg-surface-container-low border-t border-outline-variant/10 p-4 md:px-8 shrink-0 overflow-y-auto" style="max-height: 170px;">
   <div id="tableContent" sse-swap="table-update" hx-swap="innerHTML"
        class="max-w-[1440px] mx-auto">
     {% include "partials/submission_table.html" %}
@@ -181,15 +176,68 @@
 <script>
 function chatState() {
   return {
+    threadId: '{{ threadId }}',
+    historyStorageKey: '',
     processing: false,
     thinkingCollapsed: false,
     turnDone: false,
     previewUrl: null,
     fileName: null,
     messageText: '',
-    activeToolName: 'Analyzing...',
+    activeToolName: 'Thinking...',
     toolDuration: 0,
     toolTimer: null,
+
+    init() {
+      this.historyStorageKey = `claims.chat.history.${this.threadId}`;
+      this.restorePersistedHistory();
+    },
+
+    restorePersistedHistory() {
+      const savedHtml = window.localStorage ? window.localStorage.getItem(this.historyStorageKey) : null;
+      if (!savedHtml) return;
+      const thinkingPanel = document.getElementById('thinkingPanel');
+      if (thinkingPanel) {
+        thinkingPanel.insertAdjacentHTML('beforebegin', savedHtml);
+        this.renderMarkdownAndScroll();
+      }
+    },
+
+    scrollChatToBottom() {
+      const chatHistory = document.getElementById('chatHistory');
+      if (!chatHistory) return;
+      const scroll = () => {
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+      };
+      scroll();
+      requestAnimationFrame(() => {
+        scroll();
+        requestAnimationFrame(scroll);
+      });
+      setTimeout(scroll, 50);
+    },
+
+    persistHistory() {
+      if (!window.localStorage) return;
+      const greeting = document.getElementById('systemGreeting');
+      const thinkingPanel = document.getElementById('thinkingPanel');
+      if (!greeting || !thinkingPanel) return;
+      const parts = [];
+      let node = greeting.nextSibling;
+      while (node && node !== thinkingPanel) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const clone = node.cloneNode(true);
+          clone.querySelectorAll('img[src^="blob:"]').forEach((img) => {
+            img.setAttribute('src', '/chat/receipt-image');
+          });
+          parts.push(clone.outerHTML);
+        } else if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+          parts.push(node.textContent);
+        }
+        node = node.nextSibling;
+      }
+      window.localStorage.setItem(this.historyStorageKey, parts.join(''));
+    },
 
     handleFileSelect(event) {
       const file = event.target.files[0];
@@ -236,6 +284,7 @@ function chatState() {
       setTimeout(() => {
         this.$refs.fileInput.value = '';
       }, 0);
+      this.$nextTick(() => this.scrollChatToBottom());
     },
 
     onStepName(label) {
@@ -250,19 +299,19 @@ function chatState() {
       this.thinkingCollapsed = true;
       this.turnDone = true;
       if (this.toolTimer) { clearInterval(this.toolTimer); this.toolTimer = null; }
-      this.activeToolName = 'Analyzing...';
+      this.activeToolName = 'Thinking...';
       this.toolDuration = 0;
       // Defer freeze to allow HTMX to complete pending SSE swaps
       setTimeout(() => this.freezeTurn(), 200);
       this.$nextTick(() => {
-        const ch = document.getElementById('chatHistory');
-        if (ch) ch.scrollTop = ch.scrollHeight;
+        this.scrollChatToBottom();
       });
     },
 
     freezeTurn() {
       const thinkingPanel = document.getElementById('thinkingPanel');
       const aiMessages = document.getElementById('aiMessages');
+      const interruptTarget = document.getElementById('interruptTarget');
       const tokenTarget = document.getElementById('tokenTarget');
       const thinkingSummary = document.getElementById('thinkingSummary');
       const thinkingContent = document.getElementById('thinkingContent');
@@ -293,8 +342,20 @@ function chatState() {
       // 2. Move AI messages out of accumulator into flow (if arrived)
       const moved = this.moveAiMessages();
 
+      // 2b. Freeze the interrupt prompt into the transcript so policy /
+      // clarification questions remain visible on subsequent turns.
+      if (interruptTarget && interruptTarget.innerHTML.trim()) {
+        const frozenInterrupt = interruptTarget.cloneNode(true);
+        frozenInterrupt.removeAttribute('id');
+        frozenInterrupt.removeAttribute('sse-swap');
+        frozenInterrupt.removeAttribute('hx-swap');
+        frozenInterrupt.removeAttribute('hx-on::after-swap');
+        thinkingPanel.insertAdjacentElement('beforebegin', frozenInterrupt);
+      }
+
       // 3. Clear reusable elements for next turn
       tokenTarget.innerHTML = '';
+      if (interruptTarget) interruptTarget.innerHTML = '';
       if (thinkingSummary) thinkingSummary.innerHTML = '';
       if (thinkingContent) thinkingContent.innerHTML = '';
       if (thinkingStepName) thinkingStepName.innerHTML = '';
@@ -306,6 +367,7 @@ function chatState() {
       // If message SSE hasn't arrived yet, keep turnDone=true
       // so onMessageSwapped() can do the move later.
       if (moved) this.turnDone = false;
+      this.persistHistory();
     },
 
     moveAiMessages() {
@@ -321,6 +383,7 @@ function chatState() {
       }
       // Clear any remaining text nodes
       if (moved) aiMessages.innerHTML = '';
+      if (moved) this.persistHistory();
       return moved;
     },
 
@@ -331,8 +394,7 @@ function chatState() {
           el.dataset.rendered = '1';
         }
       });
-      const chatHistory = document.getElementById('chatHistory');
-      if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;
+      this.scrollChatToBottom();
     },
 
     onMessageSwapped() {
@@ -346,6 +408,7 @@ function chatState() {
         this.renderMarkdownAndScroll();
         this.turnDone = false;
       }
+      this.persistHistory();
     },
 
     appendUserBubble(text, imageUrl, imageName) {
@@ -377,8 +440,8 @@ function chatState() {
       </div>`;
       const thinkingPanel = document.getElementById('thinkingPanel');
       if (thinkingPanel) thinkingPanel.insertAdjacentHTML('beforebegin', html);
-      const chatHistory = document.getElementById('chatHistory');
-      if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;
+      this.scrollChatToBottom();
+      this.persistHistory();
     }
   };
 }

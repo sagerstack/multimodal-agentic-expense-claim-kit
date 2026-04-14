@@ -9,11 +9,13 @@ from psycopg_pool import AsyncConnectionPool
 
 from agentic_claims.agents.advisor.node import advisorNode
 from agentic_claims.agents.compliance.node import complianceNode
-from agentic_claims.agents.debug_llm_node import debugLlmNode
+from agentic_claims.agents.intake_gpt.node import intakeGptNode
 from agentic_claims.agents.fraud.node import fraudNode
-from agentic_claims.agents.intake.node import intakeNode
+from agentic_claims.agents.intake.node import intakeNode, postIntakeRouter, preIntakeValidator
+from agentic_claims.agents.intake.nodes.humanEscalation import humanEscalationNode
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
+from agentic_claims.core.logging import logEvent
 from agentic_claims.core.state import ClaimState
 
 logger = logging.getLogger(__name__)
@@ -30,7 +32,14 @@ def evaluatorGate(state: ClaimState) -> str:
         "pending" if still in intake conversation (route to END)
     """
     result = "submitted" if state.get("claimSubmitted", False) else "pending"
-    logger.info("evaluatorGate decision", extra={"decision": result, "claimId": state.get("claimId")})
+    logEvent(
+        logger,
+        "graph.evaluator_gate",
+        logCategory="graph",
+        claimId=state.get("claimId"),
+        decision=result,
+        message="evaluatorGate decision",
+    )
     return result
 
 
@@ -55,58 +64,115 @@ async def markAiReviewedNode(state: ClaimState) -> dict:
                     "actor": "system",
                 },
             )
-            logger.info("markAiReviewedNode: status set to ai_reviewed", extra={"claimId": claimId, "dbClaimId": dbClaimId})
+            logEvent(
+                logger,
+                "graph.mark_ai_reviewed",
+                logCategory="graph",
+                claimId=claimId,
+                dbClaimId=dbClaimId,
+                message="markAiReviewedNode: status set to ai_reviewed",
+            )
         except Exception as e:
-            logger.warning(
-                "markAiReviewedNode: failed to update status — continuing to advisor",
-                extra={"claimId": claimId, "error": str(e)},
+            logEvent(
+                logger,
+                "graph.mark_ai_reviewed_error",
+                level=logging.WARNING,
+                logCategory="graph",
+                claimId=claimId,
+                error=str(e),
+                message="markAiReviewedNode: failed to update status — continuing to advisor",
             )
 
     return {"status": "ai_reviewed"}
 
 
 def buildGraph() -> StateGraph:
-    """Build the StateGraph with 4 nodes and parallel fan-out topology.
+    """Build the StateGraph with Phase 13 wrapper-graph topology.
 
-    Graph topology:
-        START -> intake -> [compliance || fraud] -> advisor -> END
+    Graph topology (Phase 13):
+        START -> preIntakeValidator -> intake -> postIntakeRouter
+          ├─ humanEscalation -> END   (escalation: validatorEscalate OR askHumanCount > 3)
+          └─ evaluatorGate
+               ├─ submitted -> postSubmission -> [compliance || fraud || debugLlm]
+               │                              -> markAiReviewed -> advisor -> END
+               └─ pending -> END
 
-    The parallel fan-out means compliance and fraud run in the same superstep
-    after intake. Advisor waits for both to complete (fan-in).
+    Phase 13 notes:
+    - preIntakeValidator increments turnIndex, runs postToolFlagSetter + submitClaimGuard
+    - postIntakeRouter is the conditional edge after intake (replaces the old direct
+      conditional edge from intake to evaluatorGate)
+    - evaluatorGate is unchanged — it remains the submitted/pending router
+    - humanEscalation is terminal: its edge goes directly to END
+    - AsyncPostgresSaver is the sole checkpointer on the outer compile (no secondary)
 
     Returns:
         Uncompiled StateGraph builder
     """
     builder = StateGraph(ClaimState)
+    settings = getSettings()
+    intakeNodeImpl = (
+        intakeGptNode if settings.intake_agent_mode.lower() == "gpt" else intakeNode
+    )
 
     # Add agent nodes
-    builder.add_node("intake", intakeNode)
+    builder.add_node("preIntakeValidator", preIntakeValidator)
+    builder.add_node("intake", intakeNodeImpl)
+    builder.add_node("humanEscalation", humanEscalationNode)
     builder.add_node("compliance", complianceNode)
     builder.add_node("fraud", fraudNode)
-    builder.add_node("debugLlm", debugLlmNode)
     builder.add_node("markAiReviewed", markAiReviewedNode)
     builder.add_node("advisor", advisorNode)
 
-    # Wire the graph with Evaluator Gate
-    # START -> intake
-    builder.add_edge(START, "intake")
+    # START -> preIntakeValidator -> intake
+    builder.add_edge(START, "preIntakeValidator")
+    builder.add_edge("preIntakeValidator", "intake")
 
-    # Evaluator Gate: intake -> (submitted) -> postSubmission OR (pending) -> END
-    # Use intermediate postSubmission node for fan-out to compliance and fraud
+    # Phase 13 conditional edge from intake:
+    #   postIntakeRouter decides humanEscalation vs. evaluatorGate path
+    # evaluatorGate is still a conditional function — "continue" resolves
+    # to evaluatorGate as a *node-level routing call* by using a lambda
+    # that runs evaluatorGate and maps its result to postSubmission/END.
+    #
+    # Implementation: use a combined conditional that:
+    #   1. Checks postIntakeRouter first (escalation takes precedence)
+    #   2. Falls through to evaluatorGate for the non-escalation branch
+    #   The "continue" branch from postIntakeRouter invokes evaluatorGate
+    #   inline so we keep a single add_conditional_edges call.
     builder.add_node("postSubmission", lambda state: state)  # Pass-through node
+
+    def _intakeConditionalRouter(state: ClaimState) -> str:
+        """Combined router: escalation check → evaluator gate.
+
+        Escalation takes precedence over submitted/pending routing.
+        postIntakeRouter returns 'humanEscalation' or 'continue'.
+        When 'continue', evaluatorGate decides submitted/pending.
+        """
+        branch = postIntakeRouter(state)
+        if branch == "humanEscalation":
+            return "humanEscalation"
+        # continue path: delegate to evaluatorGate
+        return evaluatorGate(state)  # returns "submitted" or "pending"
+
     builder.add_conditional_edges(
-        "intake", evaluatorGate, {"submitted": "postSubmission", "pending": END}
+        "intake",
+        _intakeConditionalRouter,
+        {
+            "humanEscalation": "humanEscalation",
+            "submitted": "postSubmission",
+            "pending": END,
+        },
     )
 
-    # Fan-out from postSubmission to compliance, fraud, and debug (parallel)
+    # humanEscalation is terminal
+    builder.add_edge("humanEscalation", END)
+
+    # Fan-out from postSubmission to compliance and fraud (parallel)
     builder.add_edge("postSubmission", "compliance")
     builder.add_edge("postSubmission", "fraud")
-    builder.add_edge("postSubmission", "debugLlm")
 
     # Fan-in to markAiReviewed, then advisor
     builder.add_edge("compliance", "markAiReviewed")
     builder.add_edge("fraud", "markAiReviewed")
-    builder.add_edge("debugLlm", "markAiReviewed")
     builder.add_edge("markAiReviewed", "advisor")
     builder.add_edge("advisor", END)
 

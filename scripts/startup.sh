@@ -53,27 +53,39 @@ else
 fi
 
 # Step 1: Stop existing containers
-echo -e "\n${YELLOW}[1/8] Stopping existing containers...${NC}"
+echo -e "\n${YELLOW}[1/9] Stopping existing containers...${NC}"
 docker compose down
 echo -e "${GREEN}✓ Containers stopped${NC}"
 
+# Step 1b: Reconcile poetry.lock with pyproject.toml so the Docker build's
+# `poetry export` step never fails with "pyproject.toml changed significantly
+# since poetry.lock was last generated". Safe to run unconditionally — poetry
+# is a no-op when the lock already matches.
+echo -e "\n${YELLOW}[2/9] Reconciling poetry.lock with pyproject.toml...${NC}"
+if ! command -v poetry >/dev/null 2>&1; then
+    echo -e "${RED}✗ poetry not found on PATH — install poetry to run startup${NC}"
+    exit 1
+fi
+poetry lock
+echo -e "${GREEN}✓ poetry.lock up to date${NC}"
+
 # Step 2: Handle reset mode
 if [ "$RESET_MODE" = true ]; then
-    echo -e "\n${YELLOW}[2/8] Resetting volumes...${NC}"
+    echo -e "\n${YELLOW}[3/9] Resetting volumes...${NC}"
     docker compose down -v
     echo -e "${GREEN}✓ Volumes wiped (clean restart)${NC}"
 else
-    echo -e "\n${YELLOW}[2/8] Keeping existing volumes${NC}"
+    echo -e "\n${YELLOW}[3/9] Keeping existing volumes${NC}"
     echo -e "${GREEN}✓ Volumes preserved${NC}"
 fi
 
 # Step 3: Start Docker Compose
-echo -e "\n${YELLOW}[3/8] Starting Docker Compose services...${NC}"
+echo -e "\n${YELLOW}[4/9] Starting Docker Compose services...${NC}"
 docker compose up -d --build
 echo -e "${GREEN}✓ Services starting${NC}"
 
 # Step 4: Wait for health checks
-echo -e "\n${YELLOW}[4/8] Waiting for services to be healthy (timeout: ${TIMEOUT}s)...${NC}"
+echo -e "\n${YELLOW}[5/9] Waiting for services to be healthy (timeout: ${TIMEOUT}s)...${NC}"
 
 waitForHealthy() {
     local service=$1
@@ -123,7 +135,7 @@ for service in postgres qdrant mcp-rag mcp-db mcp-currency mcp-email seq app; do
 done
 
 # Step 5: Run Alembic migrations with retry logic
-echo -e "\n${YELLOW}[5/8] Running database migrations...${NC}"
+echo -e "\n${YELLOW}[6/9] Running database migrations...${NC}"
 
 MIGRATION_SUCCESS=false
 for attempt in {1..3}; do
@@ -148,7 +160,7 @@ fi
 
 # Step 6: Truncate tables in reset mode (clean dev state)
 if [ "$RESET_MODE" = true ]; then
-    echo -e "\n${YELLOW}[6/8] Truncating claims, receipts, audit_log tables for clean dev state...${NC}"
+    echo -e "\n${YELLOW}[7/9] Truncating claims, receipts, audit_log tables for clean dev state...${NC}"
     docker compose exec -T postgres psql -U agentic -d agentic_claims -c "
         TRUNCATE claims, receipts, audit_log CASCADE;
         -- Reset claim number sequence if it exists (created by migration 004)
@@ -160,18 +172,18 @@ if [ "$RESET_MODE" = true ]; then
     " 2>/dev/null
     echo -e "${GREEN}✓ Tables truncated${NC}"
 else
-    echo -e "\n${YELLOW}[6/8] Keeping existing claim data${NC}"
+    echo -e "\n${YELLOW}[7/9] Keeping existing claim data${NC}"
     echo -e "${GREEN}✓ Data preserved${NC}"
 fi
 
 # Step 7: Ingest policies (always run - script is idempotent)
 # Run via mcp-rag container (has sentence-transformers + qdrant-client deps)
-echo -e "\n${YELLOW}[7/8] Ingesting policies...${NC}"
+echo -e "\n${YELLOW}[8/9] Ingesting policies...${NC}"
 docker compose exec -T -e POLICY_DIR=/app/policy mcp-rag python /app/scripts/ingest_policies.py
 echo -e "${GREEN}✓ Policies ingested${NC}"
 
 # Step 8: Verify routes and MCP servers
-echo -e "\n${YELLOW}[8/8] Verifying routes and MCP servers...${NC}"
+echo -e "\n${YELLOW}[9/9] Verifying routes and MCP servers...${NC}"
 
 VERIFY_FAILED=false
 

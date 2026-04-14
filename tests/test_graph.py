@@ -9,6 +9,14 @@ from agentic_claims.core.graph import buildGraph
 from agentic_claims.core.state import ClaimState
 
 
+@pytest.fixture(autouse=True)
+def _defaultIntakeModeLegacy():
+    """Keep existing graph tests deterministic regardless of local .env mode."""
+    mockSettings = type("Settings", (), {"intake_agent_mode": "legacy"})()
+    with patch("agentic_claims.core.graph.getSettings", return_value=mockSettings):
+        yield
+
+
 async def _mockMarkAiReviewedNode(state: ClaimState) -> dict:
     """Mock markAiReviewedNode that skips DB call."""
     return {"status": "ai_reviewed"}
@@ -74,6 +82,104 @@ async def test_pendingClaimEndsAfterIntake():
         assert "Compliance Check" not in allContent, "Compliance should NOT run"
         assert "Fraud Check" not in allContent, "Fraud should NOT run"
         assert "Advisor Decision" not in allContent, "Advisor should NOT run"
+
+
+@pytest.mark.asyncio
+async def test_graphUsesIntakeGptNodeWhenModeIsGpt():
+    """Feature flag should switch the intake node implementation."""
+
+    async def mockIntakeGptNode(state: ClaimState) -> dict:
+        return {
+            "messages": [AIMessage(content="intake-gpt active")],
+            "intakeGpt": {
+                "workflow": {
+                    "goal": "assist_claimant",
+                    "currentStep": "plain_chat",
+                    "readyForSubmission": False,
+                    "status": "active",
+                },
+                "slots": {},
+                "pendingInterrupt": None,
+                "lastUserTurn": {"message": "hello", "hasImage": False},
+                "lastResolution": None,
+                "toolTrace": {},
+                "protocolGuardCount": 0,
+            },
+        }
+
+    mockSettings = type("Settings", (), {"intake_agent_mode": "gpt"})()
+
+    with (
+        patch("agentic_claims.core.graph.getSettings", return_value=mockSettings),
+        patch("agentic_claims.core.graph.intakeGptNode", mockIntakeGptNode),
+    ):
+        graph = buildGraph().compile()
+        result = await graph.ainvoke(
+            {
+                "claimId": "test-gpt-mode",
+                "status": "draft",
+                "messages": [HumanMessage(content="hello")],
+                "claimSubmitted": False,
+            }
+        )
+
+    assert any(msg.content == "intake-gpt active" for msg in result["messages"])
+    assert result["intakeGpt"]["workflow"]["currentStep"] == "plain_chat"
+
+
+@pytest.mark.asyncio
+async def test_submittedIntakeGptClaimRoutesToPostSubmissionNodes():
+    """Submitted intake-gpt claims should use the same outer graph handoff as legacy intake."""
+
+    async def mockIntakeGptNode(state: ClaimState) -> dict:
+        return {
+            "messages": [AIMessage(content="intake-gpt submitted claim")],
+            "intakeGpt": {
+                "workflow": {
+                    "goal": "assist_claimant",
+                    "currentStep": "claim_submitted",
+                    "readyForSubmission": False,
+                    "status": "active",
+                },
+                "slots": {"submissionResult": {"claim": {"claim_number": "CLAIM-777"}}},
+                "pendingInterrupt": None,
+                "lastUserTurn": {"message": "submit", "hasImage": False},
+                "lastResolution": {"outcome": "answer", "responseText": "submit", "summary": "User confirmed submission."},
+                "toolTrace": {},
+                "protocolGuardCount": 0,
+            },
+            "claimSubmitted": True,
+            "claimNumber": "CLAIM-777",
+            "dbClaimId": 777,
+        }
+
+    mockSettings = type("Settings", (), {"intake_agent_mode": "gpt"})()
+
+    with (
+        patch("agentic_claims.core.graph.getSettings", return_value=mockSettings),
+        patch("agentic_claims.core.graph.intakeGptNode", mockIntakeGptNode),
+        patch("agentic_claims.core.graph.complianceNode", _mockComplianceNode),
+        patch("agentic_claims.core.graph.fraudNode", _mockFraudNode),
+        patch("agentic_claims.core.graph.markAiReviewedNode", _mockMarkAiReviewedNode),
+        patch("agentic_claims.core.graph.advisorNode", _mockAdvisorNode),
+    ):
+        graph = buildGraph().compile()
+        result = await graph.ainvoke(
+            {
+                "claimId": "test-gpt-submitted",
+                "status": "draft",
+                "messages": [HumanMessage(content="submit")],
+                "claimSubmitted": False,
+            }
+        )
+
+    assert result.get("claimSubmitted") is True
+    messageContents = [msg.content for msg in result["messages"]]
+    allContent = " ".join(messageContents)
+    assert "intake-gpt submitted claim" in allContent
+    assert "Compliance Check" in allContent
+    assert "Fraud Check" in allContent
+    assert "Advisor Decision" in allContent
 
 
 @pytest.mark.asyncio
@@ -157,8 +263,12 @@ async def test_complianceAndFraudRunInParallel():
         # Flatten to get all node names in execution order
         allNodes = [node for nodeList in updates for node in nodeList]
 
-        # Verify intake runs first
-        assert allNodes[0] == "intake", "Intake should run first"
+        # Phase 13: preIntakeValidator runs first, then intake
+        assert allNodes[0] == "preIntakeValidator", "preIntakeValidator should run first (Phase 13)"
+        assert "intake" in allNodes, "intake should execute"
+        intakeIdx = allNodes.index("intake")
+        preValidatorIdx = allNodes.index("preIntakeValidator")
+        assert preValidatorIdx < intakeIdx, "preIntakeValidator must precede intake"
 
         # Find positions of compliance and fraud
         complianceIdx = allNodes.index("compliance")

@@ -71,7 +71,7 @@
   </section>
 
   <!-- Charts Section: Status + Category -->
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8 items-stretch">
 
     <!-- Claims by Status -->
     <div class="bg-surface-container-low rounded-3xl p-8 border-t border-outline-variant/15">
@@ -139,28 +139,28 @@
     </div>
   </div>
 
-  <!-- Monthly Trend + Top Employees -->
+  <!-- Daily Trend + Top Employees -->
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-    <!-- Monthly Trend -->
+    <!-- Daily Trend -->
     <div class="lg:col-span-5 bg-surface-container-low rounded-3xl p-8 border-t border-outline-variant/15">
-      <h3 class="font-headline font-bold text-xl tracking-tight mb-6">Monthly Trend</h3>
-      {% if monthlyTrend %}
+      <h3 class="font-headline font-bold text-xl tracking-tight mb-6">Daily Trend</h3>
+      {% if dailyTrend %}
       <div class="flex items-end justify-between gap-3 h-32 px-2">
-        {% for month in monthlyTrend %}
+        {% for day in dailyTrend %}
         <div class="flex flex-col items-center gap-1 flex-1">
-          <span class="text-[10px] text-on-surface-variant font-bold">{{ month.count }}</span>
+          <span class="text-[10px] text-on-surface-variant font-bold">{{ day.count }}</span>
           <div class="w-full rounded-t-lg bg-primary/60 hover:bg-primary transition-colors duration-200 relative group"
-               style="height: {{ [((month.count / maxMonthlyCount) * 100) | int, 4] | max }}%;">
+               style="height: {{ [((day.count / maxDailyCount) * 100) | int, 4] | max }}%;">
             <div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-[#1f2b49] text-[#dee5ff] text-[10px] font-bold py-0.5 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-              {{ month.count }}
+              {{ day.count }}
             </div>
           </div>
-          <span class="text-[9px] text-on-surface-variant/70 uppercase tracking-widest text-center">{{ month.label[:3] }}</span>
+          <span class="text-[9px] text-on-surface-variant/70 uppercase tracking-widest text-center">{{ day.label }}</span>
         </div>
         {% endfor %}
       </div>
-      <p class="text-xs text-on-surface-variant mt-4">Claims submitted per month (last 6 months)</p>
+      <p class="text-xs text-on-surface-variant mt-4">Claims submitted per day (past 5 days)</p>
       {% else %}
         <p class="text-on-surface-variant/50 text-sm text-center py-10">No trend data available yet.</p>
       {% endif %}

@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Claimant uploads a receipt and gets a validated, policy-compliant expense claim submitted in under 3 minutes
-**Current focus:** Milestone v2.0 — Phase 8.2 complete, Phase 8.1 and 10 remain
+**Current focus:** Milestone v2.0 — Phases 11 and 13 complete; Phase 8.1, 10, 12 remain
 
 ## Current Position
 
-Phase: 8.2 — Advisor Refactor + Schema Alignment (COMPLETE)
-Plan: 3/3 plans complete
-Status: All plans executed and verified. Advisor LLM reasoning captured, review v2 promoted, category pipeline wired, Manage + Analytics pages added.
-Last activity: 2026-04-08 — Phase 8.2 verification passed
+Phase: 13 — Intake Agent Hybrid Routing + Bug Fixes (gap closure in progress)
+Plan: 10/10 plans complete (13-01 through 13-10 done, gap closure plans ongoing)
+Status: Phase 13 gap closure. Plan 13-10 (Fix A) delivered: mid-stream MESSAGE bubble for AIMessage content+tool_calls via _isUserFacingProse gate. Extraction tables and policy summaries now route to chat channel instead of thinking panel. 324 tests passing, 7 pre-existing failures unchanged.
+Last activity: 2026-04-13 — Completed 13-10-PLAN.md (Fix A: SSE content routing)
 
 ```
-v2.0 Progress: [##########################] 26/32 plans
+v2.0 Progress: [##################################] 33/38 plans
 Phase 6:       [##########] 3/3 plans (complete)
 Phase 7:       [##########] 3/3 plans (complete)
 Phase 6.1:     [##########] complete
@@ -25,12 +25,15 @@ Phase 8:       [##########] 5/5 plans (complete)
 Phase 8.1:     [####......] 0/4 plans (in progress — bugs documented)
 Phase 8.2:     [##########] 3/3 plans (complete)
 Phase 10:      [..........] 0/2 plans
+Phase 11:      [##########] 4/4 plans (complete)
+Phase 12:      [##########] 4/4 plans (complete — checkpoint pending)
+Phase 13:      [##########] 9/9 plans (complete)
 ```
 
 ## Performance Metrics
 
 **Velocity (from v1.0):**
-- Total plans completed: 27
+- Total plans completed: 31
 - Average duration: 8 min
 - Total execution time: ~3.5 hours
 
@@ -47,6 +50,21 @@ Carried forward from v1.0:
 - CamelCase naming throughout: validated, continues
 - OpenRouter via OpenAI SDK: validated, continues
 - FastMCP with Streamable HTTP: validated, continues
+
+Phase 12 decisions (2026-04-11):
+- Eval suite uses plain dataclass (not pydantic-settings) — standalone, decoupled from app
+- LiteLLMModel model string is `openrouter/openai/gpt-4o` (litellm provider/model format)
+- ER-018/019/020 scoringType = "safety" (not "verifier" per PDF tier table wording)
+- 18.pdf missing from eval/invoices/ — capture handles gracefully (file-not-found error JSON)
+- deepeval/litellm installed via pip --trusted-host due to SSL cert issue with poetry on this machine
+- ER-013 uses buildDuplicateCapturePrompt (two-session pattern, logout between sessions)
+- Enrichment uses psycopg (not asyncpg) — already in project dependencies
+- Qdrant enrichment uses scroll API with section metadata filter on expense_policies collection
+- DB enrichment overrides browser-scraped agentDecision with authoritative advisor_decision column
+- claude-code-sdk query() used for subagent capture (not ClaudeSDKClient -- benchmarks are stateless)
+- parseSubagentResponse() 3-tier extraction: plain JSON -> markdown-fenced -> balanced-brace scan
+- stepScore() reads metric.score attributes post-evaluate() (not EvaluationResult.test_results iteration)
+- LiteLLMModel uses base_url (not deprecated api_base)
 
 New for v2.0:
 - Chainlit replaced by FastAPI + Jinja2 + HTMX
@@ -112,13 +130,46 @@ From research (see .planning/research/PITFALLS.md):
 
 ## Session Continuity
 
-Last session: 2026-04-08
-Stopped at: Completed 08.2-03-PLAN.md (Manage Claims page, Analytics page, sidebar Manage/Analytics links, category fix in review.py)
+Last session: 2026-04-13
+Stopped at: Completed Phase 13 Plan 10 — Fix A (SSE content routing: mid-stream MESSAGE bubble for AIMessage content+tool_calls). 6 new tests green, 324 total passing, 7 pre-existing failures unchanged.
 Resume file: None
 
 ### Roadmap Evolution
 
 - v1.0 archived to MILESTONES.md (24/26 plans across phases 1–2.5)
 - v2.0 milestone started: Phases 6–10, 14 plans total
+- Phase 11 added: Intake Multi-Turn Fix — restore askHuman interrupt for multi-turn confirmation flow (2026-04-11)
 - Phase 6 completed: 2026-04-01 (3 plans, 3 waves)
 - Phase 7 completed: 2026-04-02 (3 plans, 3 waves, 36 new tests, browser UAT passed)
+- Phase 11 completed: 2026-04-11 (4 plans, 2 waves, 18/18 must-haves verified)
+- Phase 13 added: Intake Agent Hybrid Routing + Bug Fixes — align intake agent with docs/deep-research-*.md (hybrid code-enforced routing + prompt-driven conversation); closes 6 open intake-layer bugs (2, 3, 4, 5, 6, 7) as symptoms of the misalignment (2026-04-12)
+
+Phase 13 decisions (2026-04-12, Plan 06):
+- messages delta form chosen in _mergeSubgraphResult: slice result["messages"][priorCount:] so outer add_messages reducer appends only new messages without duplicates
+- phase field absent from IntakeSubgraphState: 13-02 boolean-flag decomposition supersedes single enum; phase key does not exist in ClaimState
+- _intakeConditionalRouter: postIntakeRouter + evaluatorGate composed inline in a single conditional edge — escalation takes precedence over submitted/pending routing
+- _buildLlmAndTools extracted as shared factory for both getIntakeAgent and intakeNode
+
+Phase 13 decisions (2026-04-12):
+- convertCurrency structured contract: two-layer normalisation — MCP server (source of truth) + intake tool wrapper (defence-in-depth for legacy shapes)
+- rate-is-None guard in MCP server returns {supported: False} (not just HTTP 404)
+- No secondary currency provider (Frankfurter → manual-rate askHuman is the two-tier chain, wired in Plan 06)
+- No currency caching (locked decision per 13-CONTEXT.md)
+- logEvent keyword is logCategory= (not category=) — confirmed from core/logging.py
+- v5 prompt: 8-section layered operating manual; all routing removed; Section 6 synthetic directive contract readies LLM for ROUTING DIRECTIVE SystemMessages from pre-model hook (Plan 05)
+- v5 confidence thresholds: High >=0.85, Medium 0.60-0.84, Low <0.60 (tightened from v4.1)
+- deep-research-report.md is upstream synthesis; systemprompt-chat-agent.md and technical.md are the authoritative cite-sites for implementation (intentional traceability model)
+- Boolean-flag decomposition chosen over single phase enum: composable flags (clarificationPending + askHumanCount + unsupportedCurrencies) provide finer routing granularity without enum exhaustion (13-02)
+- preModelHook returns llm_input_messages (ephemeral channel, never writes state.messages); directives prepended before baseMessages (13-04)
+- postModelHook trigger: all three must be true (hasContent + no tool_calls + clarificationPending); retry bound = 1 (13-04)
+- humanEscalationNode uses getSettings().db_mcp_url — consistent with all existing call sites; zero hardcoded URL literals in codebase (13-04)
+- TypedDict fields have no default factories — consuming code uses .get(field, default) convention (13-02)
+- postToolFlagSetter scans only trailing unbroken ToolMessage run (this-turn scope) to avoid double-counting across turns (13-05)
+- submitClaimGuard escalates immediately on hallucination detection — no soft-rewrite for submitClaim hallucinations per 13-CONTEXT.md (13-05)
+- logEvent(logger, event, logCategory=...) is the correct call convention — plan examples used wrong dict-as-first-arg form (13-05)
+
+Phase 13 decisions (2026-04-13, Plan 09):
+- PROBE A and PROBE D retained at logging.DEBUG level instead of deleted — user directive (overrides plan's "fully remove" must_haves). Rationale: probes remain diagnostically useful; DEBUG level prevents default log noise. ROADMAP Criterion #7 reinterpreted as "probes no longer emit at default log level" and treated as satisfied.
+- Single aget_state() per /chat/message request: single fetch wrapped by sse.aget_state_timing (logCategory="chat" to disambiguate from sseHelpers' own timing event); auto-reset short-circuits the resume check because a new thread_id has no pending interrupts by construction — satisfies ROADMAP Criterion #8 without second DB read.
+- priorStateFetchFailed flag: when the single aget_state raises, chat.resume_check_failed fires once; both auto-reset and resume checks skip their state-dependent logic.
+- interruptDetection.py (Option 3 resume contract) committed alongside chat.py refactor — the module is the authoritative source for pending-interrupt state (checkpointer, not session cookie).
