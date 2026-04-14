@@ -1,0 +1,21 @@
+{# Button-style interrupt prompt. Rendered server-side when uiKind=='buttons'.
+   The form posts to /chat/message with button_value and the raw button label.
+   Styling matches the existing message_bubble.html agent-neutral tone. #}
+<div class="space-y-3">
+  <div class="text-sm text-on-surface">{{ question }}</div>
+  <div class="flex gap-2">
+    {% for opt in options %}
+    <form hx-post="/chat/message"
+          hx-swap="none"
+          hx-encoding="multipart/form-data"
+          class="inline">
+      <input type="hidden" name="button_value" value="{{ opt.value }}">
+      <input type="hidden" name="message" value="{{ opt.value }}">
+      <button type="submit"
+              class="px-4 py-2 rounded-xl bg-surface-container text-on-surface hover:bg-surface-bright border border-outline-variant/30 text-sm font-medium transition-colors">
+        {{ opt.label }}
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
