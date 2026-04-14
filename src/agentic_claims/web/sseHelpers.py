@@ -2008,16 +2008,47 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                                 yield ServerSentEvent(
                                     raw_data=contextHtml, event=SseEvent.MESSAGE
                                 )
+                        # Dispatch on uiKind for interrupt-prompt rendering.
+                        uiKind = str(payload.get("uiKind", "text"))
                         question = (
                             payload.get("question", str(payload))
                             if isinstance(payload, dict)
                             else str(payload)
                         )
-                        # Note: no session mutation here. The checkpointer
-                        # already persisted the pending interrupt when
-                        # interrupt() fired; the next POST reads state via
-                        # isPausedAtInterrupt(graph.aget_state(...)).
-                        yield ServerSentEvent(raw_data=question, event=SseEvent.INTERRUPT)
+                        logEvent(
+                            logger,
+                            "sse.interrupt_render",
+                            logCategory="sse",
+                            claimId=graphInput.get("claimId"),
+                            kind=payload.get("kind") if isinstance(payload, dict) else None,
+                            uiKind=uiKind,
+                            blockingStep=payload.get("blockingStep") if isinstance(payload, dict) else None,
+                            message="SSE interrupt render branch selected",
+                        )
+                        if uiKind == "buttons":
+                            options = payload.get("options") or []
+                            try:
+                                buttonTemplate = templates.get_template(
+                                    "partials/interrupt_buttons.html"
+                                )
+                                interruptHtml = buttonTemplate.render(
+                                    question=question,
+                                    options=options,
+                                )
+                            except Exception:
+                                # Fallback to plain text if template rendering fails.
+                                interruptHtml = str(question)
+                            yield ServerSentEvent(
+                                raw_data=interruptHtml, event=SseEvent.INTERRUPT
+                            )
+                        else:
+                            # Note: no session mutation here. The checkpointer
+                            # already persisted the pending interrupt when
+                            # interrupt() fired; the next POST reads state via
+                            # isPausedAtInterrupt(graph.aget_state(...)).
+                            yield ServerSentEvent(
+                                raw_data=str(question), event=SseEvent.INTERRUPT
+                            )
                         return
         except Exception as e:
             logEvent(
