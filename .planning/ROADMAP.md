@@ -575,13 +575,16 @@ Plans:
 8. All 22 existing `test_intake_gpt.py` tests pass; new tests cover: negative-token classification for `field_confirmation`, side-question path (respond + re-present), `field_confirmation_answered` → `searchPolicies` deterministic call, justification text preservation
 9. E2E: VND receipt with policy exception → user provides justification text → justification text (not token) persisted to `audit_log` and DB claim
 
-**Plans:** 4 plans
+**Plans:** 7 plans (5 waves)
 
 Plans:
-- [ ] 14-01-PLAN.md — Bug A failing tests: negative classification, side-question path, justification text preservation (RED)
-- [ ] 14-02-PLAN.md — Bug A implementation: fix _classifyInterruptReply, implement interruptResolutionNode, side-question path wiring (GREEN)
-- [ ] 14-03-PLAN.md — Bug B: deterministic searchPolicies after field_confirmation_answered (TDD)
-- [ ] 14-04-PLAN.md — Cleanup: dead code removal, config extraction, applyToolResultsNode multi-tool fix, prompt trim
+- [ ] 14-01-PLAN.md — Wave 1 RED: 7 failing tests for symmetric negative tokens, pure-logic interrogative classifier, verbatim justification, side-question preservation, runtime context exposure
+- [ ] 14-02-PLAN.md — Wave 2 GREEN (Bug A + C): rewrite _classifyInterruptReply, implement interruptResolutionNode, early-return side_question guard, verbatim intakeFindings.justification
+- [ ] 14-03-PLAN.md — Wave 3 TDD (Bug B): three deterministic gates — field_confirmation_answered → searchPolicies, searchPolicies+violations → policy_justification, policy_justification_answered → submit_confirmation
+- [ ] 14-04-PLAN.md — Wave 3 buttons backend: requestHumanInput.uiKind/options, sseHelpers.py interrupt dispatch, templates/partials/interrupt_buttons.html, /chat/message button_value form param + tests
+- [ ] 14-05-PLAN.md — Wave 4 buttons frontend: finalize partial styling + a11y, optional Alpine textarea soften, human-verify checkpoint (5 sub-checks A–E)
+- [ ] 14-06-PLAN.md — Wave 4 TDD recovery: field-confirmation No → correction loop (correction_requested outcome + field_correction interrupt), submit-confirmation No → claim cancel + acknowledgement
+- [ ] 14-07-PLAN.md — Wave 5 cleanup: delete dead code (IntakeGptSubgraphState, interrupt_prompt.py, sideQuestionResponderNode), lift constants into Settings, fix applyToolResultsNode multi-tool processing, decouple image detection (hasImageThisTurn flag), trim prompt.py workflow prose
 
 ---
 
@@ -604,8 +607,8 @@ v2.0 phases execute in order: 6 -> 7 -> 6.1 -> 6.2 -> 6.3 -> 8 -> 8.1 -> 8.2 -> 
 | 11. Intake Multi-Turn Fix | 4/4 | Complete | 2026-04-11 |
 | 12. DeepEval + RAGAs Evaluation Suite | 0/4 | Not started | -- |
 | 13. Intake Agent Hybrid Routing + Bug Fixes | 9/9 | Complete | 2026-04-13 |
-| 14. intake-gpt Deterministic Workflow Hardening | 0/? | Planning | -- |
+| 14. intake-gpt Deterministic Workflow Hardening | 0/7 | Planned | -- |
 
-**v2.0 total:** 35/47+ plans complete (Phase 14 planning in progress)
+**v2.0 total:** 35/54 plans complete (Phase 14 planned, ready for execution)
 
 **v1.0 (archived):** 24/26 plans complete (see MILESTONES.md)
