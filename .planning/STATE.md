@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 14 — Intake GPT React Replacement (in progress)
-Plan: 3/7 plans complete (14-01, 14-02, 14-03 done)
-Status: Phase 14 active. Plan 14-03 (deterministic gates) complete: 3 runtime bypasses added to reasonNode, 34/34 tests pass. Gate 3 replaces direct policy_justification_answered->submitClaim with policy_justification_answered->submit_confirmation->submitClaim chain.
-Last activity: 2026-04-14 — Completed 14-03-PLAN.md (three deterministic workflow gates: 5 new tests, 34 total)
+Plan: 4/7 plans complete (14-01, 14-02, 14-03, 14-04 done)
+Status: Phase 14 active. Plan 14-04 (button interrupt backend) complete: uiKind annotated on interrupt payloads, SSE dispatcher renders button partial, POST accepts button_value, 41/41 tests pass.
+Last activity: 2026-04-14 — Completed 14-04-PLAN.md (button interrupt backend: 7 new web tests, 41 total)
 
 ```
 v2.0 Progress: [###################################] 35/38 plans
@@ -132,7 +132,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-14
-Stopped at: Completed Phase 14 Plan 03 — three deterministic runtime gates in reasonNode. 34/34 tests pass. Gate 3 replaces direct policy_justification_answered->submitClaim with submit_confirmation interstitial.
+Stopped at: Completed Phase 14 Plan 04 — button interrupt backend: uiKind annotation, SSE dispatch, button partial template, button_value POST field. 41/41 tests pass.
 Resume file: None
 
 ### Roadmap Evolution
