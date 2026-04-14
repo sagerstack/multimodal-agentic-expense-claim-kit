@@ -1502,6 +1502,56 @@ async def test_applyToolResultsNodeStoresVerbatimJustificationText():
     )
 
 
+def test_pendingInterruptFromToolCallsHandlesPolicyJustification():
+    """_pendingInterruptFromToolCalls must accept policy_justification kind."""
+    from agentic_claims.agents.intake_gpt.graph import _pendingInterruptFromToolCalls
+
+    msg = AIMessage(
+        content="",
+        tool_calls=[{
+            "id": "tc-1",
+            "name": "requestHumanInput",
+            "args": {
+                "kind": "policy_justification",
+                "question": "Why did this exceed?",
+                "contextMessage": "Claim exceeds cap",
+                "expectedResponseKind": "text",
+                "blockingStep": "policy_justification",
+                "allowSideQuestions": True,
+                "category": "meals",
+            },
+        }],
+    )
+    pending = _pendingInterruptFromToolCalls(msg)
+    assert pending is not None, "_pendingInterruptFromToolCalls must accept policy_justification kind"
+    assert pending.get("kind") == "policy_justification"
+
+
+def test_pendingInterruptFromToolCallsHandlesSubmitConfirmation():
+    """_pendingInterruptFromToolCalls must accept submit_confirmation kind."""
+    from agentic_claims.agents.intake_gpt.graph import _pendingInterruptFromToolCalls
+
+    msg = AIMessage(
+        content="",
+        tool_calls=[{
+            "id": "tc-2",
+            "name": "requestHumanInput",
+            "args": {
+                "kind": "submit_confirmation",
+                "question": "Shall I submit?",
+                "contextMessage": "Claim summary",
+                "expectedResponseKind": "text",
+                "blockingStep": "submit_confirmation",
+                "allowSideQuestions": True,
+                "category": "meals",
+            },
+        }],
+    )
+    pending = _pendingInterruptFromToolCalls(msg)
+    assert pending is not None, "_pendingInterruptFromToolCalls must accept submit_confirmation kind"
+    assert pending.get("kind") == "submit_confirmation"
+
+
 def test_buildRuntimeContextExposesPendingInterruptAndSideQuestionOutcome():
     intakeState = {
         "workflow": {
