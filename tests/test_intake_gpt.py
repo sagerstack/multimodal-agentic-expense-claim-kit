@@ -582,8 +582,12 @@ async def test_reasonNodeSkipsLlmAndCallsSubmitClaimAfterSubmitConfirmation():
 
 
 @pytest.mark.asyncio
-async def test_reasonNodeSkipsLlmAndCallsSubmitClaimAfterPolicyJustificationWithoutPrebuiltDraft():
-    """A stored justification should be enough to rebuild the draft claim bundle and submit."""
+async def test_reasonNodeSkipsLlmAndRequestsSubmitConfirmationAfterPolicyJustification():
+    """Gate 3: after policy_justification_answered, runtime deterministically requests submit_confirmation.
+
+    NOTE: The original test (direct to submitClaim) is updated here because Gate 3 now intercepts
+    policy_justification_answered to first request submit_confirmation before submitting.
+    """
 
     class FakeLlm:
         def bind_tools(self, tools):
@@ -602,25 +606,16 @@ async def test_reasonNodeSkipsLlmAndCallsSubmitClaimAfterPolicyJustificationWith
                 "status": "active",
             },
             "slots": {
-                "category": "meals",
-                "justification": "it was a client dinner",
-                "extractedReceipt": {
-                    "fields": {
-                        "merchant": "DIG.",
-                        "date": "2024-05-28",
-                        "totalAmount": 16.2,
-                        "currency": "USD",
-                        "lineItems": [{"description": "Charred Chicken", "amount": 13.4}],
-                        "tax": 1.19,
-                        "paymentMethod": "VISA CREDIT",
-                    },
-                    "confidence": {
-                        "merchant": 0.95,
-                        "date": 0.92,
-                        "totalAmount": 0.98,
-                        "currency": 0.99,
-                    },
-                    "imagePath": "uploads/claim-gpt-submit-justification-001.jpg",
+                "claimData": {"category": "meals", "amountSgd": 20.68},
+                "receiptData": {
+                    "merchant": "DIG.",
+                    "date": "2024-05-28",
+                    "totalAmount": 16.2,
+                    "currency": "USD",
+                },
+                "intakeFindings": {
+                    "policyViolation": True,
+                    "justification": "it was a client dinner",
                 },
                 "currencyConversion": {
                     "supported": True,
@@ -648,11 +643,14 @@ async def test_reasonNodeSkipsLlmAndCallsSubmitClaimAfterPolicyJustificationWith
     message = result["messages"][-1]
     assert isinstance(message, AIMessage)
     assert message.tool_calls
-    assert message.tool_calls[0]["name"] == "submitClaim"
-    assert message.tool_calls[0]["args"]["sessionClaimId"] == "claim-gpt-submit-justification-001"
-    assert message.tool_calls[0]["args"]["intakeFindings"]["justification"] == "it was a client dinner"
-    assert result["intakeGpt"]["slots"]["claimData"]["category"] == "meals"
-    assert result["intakeGpt"]["workflow"]["currentStep"] == "submitting_claim"
+    assert message.tool_calls[0]["name"] == "requestHumanInput", (
+        f"Gate 3 must call requestHumanInput(submit_confirmation), got {message.tool_calls[0]['name']}"
+    )
+    assert message.tool_calls[0]["args"]["kind"] == "submit_confirmation"
+    pendingInterrupt = result["intakeGpt"].get("pendingInterrupt")
+    assert pendingInterrupt is not None
+    assert pendingInterrupt.get("kind") == "submit_confirmation"
+    assert result["intakeGpt"]["workflow"]["currentStep"] == "submit_confirmation"
 
 
 @pytest.mark.asyncio

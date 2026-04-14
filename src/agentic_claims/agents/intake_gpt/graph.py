@@ -608,6 +608,115 @@ def _buildSubmissionAcknowledgement(intakeState: IntakeGptState) -> AIMessage | 
     )
 
 
+def _hasPolicyViolation(slots: dict) -> bool:
+    """Return True if policySearchResults indicates a policy violation."""
+    policyResults = slots.get("policySearchResults") or {}
+    if not isinstance(policyResults, dict):
+        return False
+    if policyResults.get("violation") is True:
+        return True
+    cap = policyResults.get("policyCap")
+    claimData = slots.get("claimData") or {}
+    amount = claimData.get("amountSgd")
+    if isinstance(cap, (int, float)) and isinstance(amount, (int, float)):
+        return float(amount) > float(cap)
+    return False
+
+
+def _buildSearchPoliciesAiMessage(intakeState: IntakeGptState) -> AIMessage | None:
+    """Build a synthetic searchPolicies tool_call from confirmed claimData slots."""
+    slots = intakeState.get("slots") or {}
+    claimData = slots.get("claimData") or {}
+    category = str(claimData.get("category") or slots.get("category") or "").strip()
+    amountSgd = claimData.get("amountSgd")
+    if not category or amountSgd is None:
+        return None
+    query = (
+        f"{category} expense policy limit for SGD {float(amountSgd):.2f}; "
+        f"approval thresholds and justification requirements"
+    )
+    toolCallId = f"rt-searchPolicies-{int(time.time() * 1000)}"
+    return AIMessage(
+        content="",
+        tool_calls=[{"id": toolCallId, "name": "searchPolicies", "args": {"query": query}}],
+    )
+
+
+def _buildPolicyJustificationAiMessage(intakeState: IntakeGptState) -> AIMessage | None:
+    """Build a synthetic requestHumanInput(policy_justification) tool_call when a violation is detected."""
+    slots = intakeState.get("slots") or {}
+    policyResults = slots.get("policySearchResults") or {}
+    claimData = slots.get("claimData") or {}
+    cap = policyResults.get("policyCap") if isinstance(policyResults, dict) else None
+    amount = claimData.get("amountSgd")
+    category = claimData.get("category") or slots.get("category") or "expense"
+    if amount is None:
+        return None
+    capText = f"SGD {float(cap):.2f}" if isinstance(cap, (int, float)) else "the policy cap"
+    amountText = f"SGD {float(amount):.2f}"
+    contextMessage = (
+        f"The {category} claim amount is {amountText}, which exceeds {capText}. "
+        f"A justification is required before the claim can be submitted."
+    )
+    question = "Please describe the business reason for this expense exceeding the policy cap."
+    toolCallId = f"rt-requestHumanInput-pj-{int(time.time() * 1000)}"
+    return AIMessage(
+        content="",
+        tool_calls=[{
+            "id": toolCallId,
+            "name": "requestHumanInput",
+            "args": {
+                "kind": "policy_justification",
+                "question": question,
+                "contextMessage": contextMessage,
+                "expectedResponseKind": "text",
+                "blockingStep": "policy_justification",
+                "allowSideQuestions": True,
+                "category": str(category) if category else "",
+            },
+        }],
+    )
+
+
+def _buildSubmitConfirmationAiMessage(intakeState: IntakeGptState) -> AIMessage | None:
+    """Build a synthetic requestHumanInput(submit_confirmation) tool_call before final submission."""
+    slots = intakeState.get("slots") or {}
+    claimData = slots.get("claimData") or {}
+    receiptData = slots.get("receiptData") or {}
+    findings = slots.get("intakeFindings") or {}
+    amount = claimData.get("amountSgd")
+    category = claimData.get("category") or slots.get("category") or "expense"
+    merchant = (receiptData.get("merchant") if isinstance(receiptData, dict) else "") or ""
+    justification = findings.get("justification") or ""
+    if amount is None:
+        return None
+    amountText = f"SGD {float(amount):.2f}"
+    parts = [f"Claim: {category}, {amountText}"]
+    if merchant:
+        parts.append(f"Merchant: {merchant}")
+    if justification:
+        parts.append(f"Justification: {justification}")
+    contextMessage = "\n".join(parts)
+    question = "Shall I submit this claim?"
+    toolCallId = f"rt-requestHumanInput-sc-{int(time.time() * 1000)}"
+    return AIMessage(
+        content="",
+        tool_calls=[{
+            "id": toolCallId,
+            "name": "requestHumanInput",
+            "args": {
+                "kind": "submit_confirmation",
+                "question": question,
+                "contextMessage": contextMessage,
+                "expectedResponseKind": "text",
+                "blockingStep": "submit_confirmation",
+                "allowSideQuestions": True,
+                "category": str(category) if category else "",
+            },
+        }],
+    )
+
+
 def _isSideQuestionText(text: str) -> bool:
     """Pure-logic side-question detector: trailing '?' OR starts with an interrogative word."""
     stripped = text.strip()
@@ -883,9 +992,10 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
     )
     conversion = intakeState.get("slots", {}).get("currencyConversion") or {}
     if (
-        intakeState["workflow"]["currentStep"] in {"submit_confirmation_answered", "policy_justification_answered"}
+        intakeState["workflow"]["currentStep"] == "submit_confirmation_answered"
         and intakeState.get("pendingInterrupt") is None
         and not intakeState.get("slots", {}).get("submissionResult")
+        and (intakeState.get("lastResolution") or {}).get("outcome") == "answer"
     ):
         response = _buildSubmitClaimAiMessage(state, intakeState)
         if response is not None:
@@ -984,6 +1094,105 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
             "messages": [response],
             "intakeGpt": intakeState,
         }
+    # Gate 1: field_confirmation_answered -> searchPolicies (deterministic, no LLM)
+    if (
+        intakeState["workflow"]["currentStep"] == "field_confirmation_answered"
+        and intakeState.get("pendingInterrupt") is None
+        and not (intakeState.get("slots") or {}).get("policySearchResults")
+        and (intakeState.get("lastResolution") or {}).get("outcome") == "answer"
+    ):
+        response = _buildSearchPoliciesAiMessage(intakeState)
+        if response is not None:
+            intakeState["workflow"]["currentStep"] = "searching_policies"
+            intakeState["workflow"]["status"] = "active"
+            logEvent(
+                logger,
+                "intake.gpt.runtime_search_policies",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="runtime deterministically called searchPolicies",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {"messages": [response], "intakeGpt": intakeState}
+    # Gate 2: policy_answered with violations -> policy_justification requestHumanInput (deterministic, no LLM)
+    if (
+        intakeState["workflow"]["currentStep"] == "policy_answered"
+        and intakeState.get("pendingInterrupt") is None
+        and _hasPolicyViolation(intakeState.get("slots") or {})
+    ):
+        response = _buildPolicyJustificationAiMessage(intakeState)
+        pending = _pendingInterruptFromToolCalls(response) if response is not None else None
+        if response is not None and pending is not None:
+            intakeState["pendingInterrupt"] = pending
+            intakeState["workflow"]["currentStep"] = pending["blockingStep"] or "policy_justification"
+            intakeState["workflow"]["status"] = "blocked"
+            logEvent(
+                logger,
+                "intake.gpt.runtime_policy_justification_requested",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="runtime deterministically requested policy_justification",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {"messages": [response], "intakeGpt": intakeState}
+    # Gate 3: policy_justification_answered -> submit_confirmation (deterministic, no LLM)
+    if (
+        intakeState["workflow"]["currentStep"] == "policy_justification_answered"
+        and intakeState.get("pendingInterrupt") is None
+        and not (intakeState.get("slots") or {}).get("submissionResult")
+        and (intakeState.get("lastResolution") or {}).get("outcome") == "answer"
+    ):
+        response = _buildSubmitConfirmationAiMessage(intakeState)
+        pending = _pendingInterruptFromToolCalls(response) if response is not None else None
+        if response is not None and pending is not None:
+            intakeState["pendingInterrupt"] = pending
+            intakeState["workflow"]["currentStep"] = pending["blockingStep"] or "submit_confirmation"
+            intakeState["workflow"]["status"] = "blocked"
+            logEvent(
+                logger,
+                "intake.gpt.runtime_submit_confirmation_after_justification",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="runtime deterministically requested submit_confirmation after justification",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {"messages": [response], "intakeGpt": intakeState}
     boundLlm = llm.bind_tools(_INTAKE_GPT_TOOLS)
     runtimeContext = _buildRuntimeContext(state, intakeState)
     logEvent(
