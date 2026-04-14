@@ -789,7 +789,7 @@ def turnEntryNode(state: IntakeGptGraphState) -> dict:
 
 
 async def interruptResolutionNode(state: IntakeGptGraphState) -> dict:
-    """Placeholder interrupt-resolution node for future slices."""
+    """Classify the latest user reply against the pending interrupt before reasonNode runs."""
     intakeState = _normalizeIntakeState(state)
     logEvent(
         logger,
@@ -801,6 +801,57 @@ async def interruptResolutionNode(state: IntakeGptGraphState) -> dict:
         nodeName="interruptResolutionNode",
         message="intake-gpt node entered",
     )
+
+    pending = intakeState.get("pendingInterrupt")
+    if not pending:
+        logEvent(
+            logger,
+            "intake.graph.node_exited",
+            logCategory="agent",
+            agent="intake-gpt",
+            claimId=state.get("claimId"),
+            threadId=state.get("threadId"),
+            nodeName="interruptResolutionNode",
+            message="intake-gpt node exited",
+        )
+        return {"intakeGpt": intakeState}
+
+    latestText = _latestHumanText(state.get("messages", []))
+    expectedCurrency = ""
+    if pending.get("kind") == "manual_fx_rate":
+        expectedCurrency = _manualFxCurrencyLabel(intakeState)
+    outcome, summary, _parsed = _classifyInterruptReply(
+        latestText,
+        pendingKind=str(pending.get("kind") or ""),
+        expectedCurrency=expectedCurrency,
+    )
+    intakeState["lastResolution"] = {
+        "outcome": outcome,
+        "responseText": latestText,
+        "summary": summary,
+    }
+
+    # Status transitions — pendingInterrupt mutation is owned by applyToolResultsNode
+    # after the requestHumanInput ToolMessage is emitted. Here we only update status
+    # so reasonNode can route correctly.
+    if outcome == "side_question":
+        intakeState["workflow"]["status"] = "active"
+    elif outcome == "end_conversation":
+        intakeState["pendingInterrupt"] = None
+        intakeState["workflow"]["status"] = "completed"
+        intakeState["workflow"]["currentStep"] = "conversation_closed"
+
+    logEvent(
+        logger,
+        "intake.gpt.interrupt_resolution",
+        logCategory="agent",
+        agent="intake-gpt",
+        claimId=state.get("claimId"),
+        threadId=state.get("threadId"),
+        pendingKind=str(pending.get("kind") or ""),
+        outcome=outcome,
+        message="intake-gpt classified interrupt reply",
+    )
     logEvent(
         logger,
         "intake.graph.node_exited",
@@ -809,6 +860,7 @@ async def interruptResolutionNode(state: IntakeGptGraphState) -> dict:
         claimId=state.get("claimId"),
         threadId=state.get("threadId"),
         nodeName="interruptResolutionNode",
+        workflowStep=intakeState["workflow"]["currentStep"],
         message="intake-gpt node exited",
     )
     return {"intakeGpt": intakeState}
@@ -1071,6 +1123,38 @@ async def applyToolResultsNode(state: IntakeGptGraphState) -> dict:
                 "summary": summary,
             }
             slots["lastHumanInput"] = responseText
+
+            # Side-question guard: applies to ALL interrupt kinds.
+            # The LLM will answer the question and re-present the original interrupt.
+            # Do NOT clear pendingInterrupt, do NOT advance currentStep.
+            if outcome == "side_question":
+                intakeState["pendingInterrupt"] = dict(pending)
+                intakeState["workflow"]["status"] = "active"
+                intakeState["slots"] = slots
+                updates["intakeGpt"] = intakeState
+                logEvent(
+                    logger,
+                    "intake.gpt.side_question_preserved",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    pendingKind=str(pending.get("kind") or ""),
+                    message="side_question outcome — pendingInterrupt preserved for re-presentation",
+                )
+                logEvent(
+                    logger,
+                    "intake.graph.node_exited",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    nodeName="applyToolResultsNode",
+                    workflowStep=intakeState["workflow"]["currentStep"],
+                    message="intake-gpt node exited",
+                )
+                return updates
+
             if pending.get("kind") == "field_confirmation":
                 slots["fieldConfirmationResponse"] = responseText
                 draftBundle = _buildDraftClaimBundle(slots)
@@ -1124,10 +1208,9 @@ async def applyToolResultsNode(state: IntakeGptGraphState) -> dict:
                 if pending.get("kind") == "policy_justification":
                     slots["justification"] = responseText
                     intakeFindings = dict(slots.get("intakeFindings") or {})
-                    if intakeFindings:
-                        intakeFindings["justification"] = responseText
-                        slots["intakeFindings"] = intakeFindings
-                        updates["intakeFindings"] = intakeFindings
+                    intakeFindings["justification"] = responseText
+                    slots["intakeFindings"] = intakeFindings
+                    updates["intakeFindings"] = intakeFindings
                 elif pending.get("kind") == "submit_confirmation":
                     slots["submitConfirmationResponse"] = responseText
                 if outcome == "ambiguous":
