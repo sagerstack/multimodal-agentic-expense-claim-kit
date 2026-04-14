@@ -426,10 +426,17 @@ def _buildPathwaySteps(
 ) -> list:
     """Build the 4 Decision Pathway steps from current tool state."""
     completedTools = set(completedTools)
+    activeTools = set(activeTools)
     if "submitClaim" in completedTools:
         completedTools.update({"extractReceiptFields", "searchPolicies"})
     elif "searchPolicies" in completedTools:
         completedTools.add("extractReceiptFields")
+
+    downstreamEvidence = {"extractReceiptFields", "searchPolicies", "submitClaim"}
+    hasReceiptEvidence = hasImage or bool(
+        completedTools.intersection(downstreamEvidence)
+        or activeTools.intersection(downstreamEvidence)
+    )
 
     steps = [
         {
@@ -471,7 +478,7 @@ def _buildPathwaySteps(
     ]
 
     # Step 0: Receipt Uploaded
-    if hasImage:
+    if hasReceiptEvidence:
         steps[0]["status"] = "completed"
         steps[0]["timestamp"] = toolTimestamps.get("receiptUploaded", _nowTimestamp())
 
@@ -1043,13 +1050,17 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         pathwayToolTimestamps["receiptUploaded"] = _nowTimestamp()
                     pathwayToolTimestamps.setdefault("extractReceiptFields", _nowTimestamp())
                 if _stateHasToolResult(sv, "searchPolicies"):
+                    hasImage = True
                     pathwayCompletedTools.add("searchPolicies")
                     pathwayCompletedTools.add("extractReceiptFields")
+                    pathwayToolTimestamps.setdefault("receiptUploaded", _nowTimestamp())
                     pathwayToolTimestamps.setdefault("searchPolicies", _nowTimestamp())
                 if sv.get("claimSubmitted") or _stateHasToolResult(sv, "submitClaim"):
+                    hasImage = True
                     pathwayCompletedTools.update(
                         {"extractReceiptFields", "searchPolicies", "submitClaim"}
                     )
+                    pathwayToolTimestamps.setdefault("receiptUploaded", _nowTimestamp())
                     pathwayToolTimestamps.setdefault("submitClaim", _nowTimestamp())
     except Exception as e:
         logEvent(

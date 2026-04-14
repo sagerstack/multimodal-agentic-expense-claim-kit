@@ -97,6 +97,22 @@ def testBuildPathwayStepsMakesExtractionCompletedWhenPolicyCompleted():
     assert steps[2]["status"] == "completed"
 
 
+def testBuildPathwayStepsMakesReceiptUploadedCompletedWhenClaimAlreadySubmitted():
+    from agentic_claims.web.sseHelpers import _buildPathwaySteps
+
+    steps = _buildPathwaySteps(
+        completedTools={"submitClaim"},
+        activeTools=set(),
+        hasImage=False,
+        toolTimestamps={"submitClaim": "01:02:00 PM"},
+    )
+
+    assert steps[0]["name"] == "Receipt Uploaded"
+    assert steps[0]["status"] == "completed"
+    assert steps[3]["name"] == "Claim Submission"
+    assert steps[3]["status"] == "completed"
+
+
 @pytest.mark.asyncio
 async def testFraudDuplicateQueryExcludesCurrentClaimId():
     from agentic_claims.agents.fraud.tools.queryClaimsHistory import exactDuplicateCheck
