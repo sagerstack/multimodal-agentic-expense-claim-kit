@@ -12,9 +12,7 @@
       <input type="hidden" name="button_value" value="{{ opt.value }}">
       <input type="hidden" name="message" value="{{ opt.value }}">
       <button type="submit"
-              class="px-4 py-2 rounded-xl bg-surface-container text-on-surface hover:bg-surface-bright border border-outline-variant/30 text-sm font-medium transition-colors">
-        {{ opt.label }}
-      </button>
+              class="px-4 py-2 rounded-xl bg-surface-container text-on-surface hover:bg-surface-bright border border-outline-variant/30 text-sm font-medium transition-colors">{{ opt.label }}</button>
     </form>
     {% endfor %}
   </div>
