@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}AI Expense Submission{% endblock %}
 {% block content %}
-<div x-data="chatState()" @stream-done.window="onStreamDone(); buttonInterruptActive = false" @message-swapped.window="onMessageSwapped()" @tool-step.window="onStepName($event.detail)" @interrupt-swapped.window="buttonInterruptActive = $event.detail.hasButtons" class="flex flex-col lg:flex-row h-full overflow-hidden">
+<div x-data="chatState()" @stream-done.window="onStreamDone(); buttonInterruptActive = false" @message-swapped.window="onMessageSwapped()" @tool-step.window="onStepName($event.detail)" @interrupt-swapped.window="buttonInterruptActive = $event.detail.hasButtons" @button-submitted.window="appendUserBubble($event.detail.label, null, null); processing = true; thinkingCollapsed = false" class="flex flex-col lg:flex-row h-full overflow-hidden">
 <div id="sseContainer" hx-ext="sse" sse-connect="/chat/stream" class="flex flex-col flex-1 overflow-hidden">
 <div class="flex flex-col lg:flex-row flex-1 overflow-hidden">
 <!-- Chat Interface Section -->
@@ -97,7 +97,7 @@
          Rationale: askHuman/policy-exception prompts are routine agent questions, not errors.
          Source: 13-DEBUG-display-regression.md "Related issues" §1. -->
     <div id="interruptTarget" sse-swap="interrupt" hx-swap="innerHTML"
-         hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done')); window.dispatchEvent(new CustomEvent('interrupt-swapped', {detail: {hasButtons: this.querySelector('button[aria-label=\'Yes\'], button[aria-label=\'No\']') !== null}}))"
+         hx-on::after-swap="htmx.process(this); window.dispatchEvent(new CustomEvent('stream-done')); window.dispatchEvent(new CustomEvent('interrupt-swapped', {detail: {hasButtons: this.querySelector('button[aria-label=\'Yes\'], button[aria-label=\'No\']') !== null}}))"
          class="max-w-2xl text-sm text-on-surface p-4 bg-surface-container-low rounded-2xl border border-outline-variant/5 shadow-xl empty:hidden"></div>
 
     <!-- Error target -->

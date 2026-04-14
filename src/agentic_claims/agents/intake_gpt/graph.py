@@ -529,6 +529,34 @@ def _pendingInterruptFromToolCalls(response: AIMessage) -> dict | None:
     return None
 
 
+def _buildReInterruptAiMessage(pending: dict) -> AIMessage:
+    """Synthetic re-emit of a pending interrupt after the LLM answers a side question.
+
+    Used by the post-LLM hook in reasonNode when the LLM responded to a side
+    question without re-calling requestHumanInput. Mirrors the pending interrupt
+    exactly so the SSE INTERRUPT event fires again with the same uiKind/options.
+    """
+    toolCallId = f"rt-reInterrupt-{int(time.time() * 1000)}"
+    return AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "id": toolCallId,
+                "name": "requestHumanInput",
+                "args": {
+                    "kind": pending.get("kind", ""),
+                    "question": pending.get("question", ""),
+                    "contextMessage": "",  # already shown; don't re-show the context block
+                    "expectedResponseKind": pending.get("expectedResponseKind", "text"),
+                    "blockingStep": pending.get("blockingStep", ""),
+                    "allowSideQuestions": pending.get("allowSideQuestions", True),
+                    "category": pending.get("category", ""),
+                },
+            }
+        ],
+    )
+
+
 def _buildFieldConfirmationAiMessage(intakeState: IntakeGptState) -> AIMessage:
     question = "Does the above information look correct? Please confirm or let me know what needs changing."
     category = _normalizeCategory((intakeState.get("slots") or {}).get("category"))
@@ -1368,6 +1396,43 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
         toolCallCount=len(getattr(hydratedResponse, "tool_calls", []) or []),
         message="intake-gpt reason node llm completed",
     )
+    # Post-LLM side-question re-emit:
+    # If the LLM answered a side question without re-calling requestHumanInput,
+    # deterministically inject a synthetic re-emit so the SSE INTERRUPT event
+    # fires again (causing the buttons/prompt to re-render in the UI).
+    # This covers Checkpoint D from Phase 14 UAT.
+    if (
+        intakeState.get("pendingInterrupt") is not None
+        and (intakeState.get("lastResolution") or {}).get("outcome") == "side_question"
+        and pendingInterrupt is None  # LLM did NOT re-call requestHumanInput
+    ):
+        reInterruptMsg = _buildReInterruptAiMessage(intakeState["pendingInterrupt"])
+        logEvent(
+            logger,
+            "intake.gpt.side_question_re_emit",
+            logCategory="agent",
+            agent="intake-gpt",
+            claimId=state.get("claimId"),
+            threadId=state.get("threadId"),
+            pendingKind=str(intakeState["pendingInterrupt"].get("kind")),
+            message="LLM answered side question without re-emitting interrupt; injecting re-emit",
+        )
+        logEvent(
+            logger,
+            "intake.graph.node_exited",
+            logCategory="agent",
+            agent="intake-gpt",
+            claimId=state.get("claimId"),
+            threadId=state.get("threadId"),
+            nodeName="reasonNode",
+            workflowStep=intakeState["workflow"]["currentStep"],
+            message="intake-gpt node exited",
+        )
+        return {
+            "messages": [hydratedResponse, reInterruptMsg],
+            "intakeGpt": intakeState,
+        }
+
     logEvent(
         logger,
         "intake.graph.node_exited",

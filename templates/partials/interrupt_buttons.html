@@ -2,11 +2,16 @@
    Server emits this via SseEvent.INTERRUPT when payload.uiKind == "buttons".
    The container #interruptTarget in chat.html (sse-swap="interrupt",
    hx-swap="innerHTML") replaces its children with this partial on arrival.
+   htmx.process(this) in the after-swap handler ensures HTMX activates these
+   dynamically injected forms on the first click.
 
    Each button is its own HTMX form so a click triggers a POST without
    bundling the textarea value. Both `message` and `button_value` carry
    the same canonical reply — `message` is the text the graph classifier
-   sees; `button_value` is metadata for logging. #}
+   sees; `button_value` is metadata for logging.
+
+   hx-on::before-request dispatches `button-submitted` so the Alpine
+   root can show a user bubble immediately, matching textarea submit UX. #}
 <div class="space-y-3" role="group" aria-label="Confirmation response">
   {% if question %}
   <div class="text-sm text-on-surface leading-relaxed">{{ question }}</div>
@@ -16,7 +21,7 @@
     <form hx-post="/chat/message"
           hx-swap="none"
           hx-encoding="multipart/form-data"
-          hx-on::after-request="document.getElementById('interruptTarget').innerHTML=''"
+          hx-on::before-request="window.dispatchEvent(new CustomEvent('button-submitted', {detail: {label: '{{ opt.label }}', value: '{{ opt.value }}'}})); document.getElementById('interruptTarget').innerHTML=''"
           class="inline-flex">
       <input type="hidden" name="button_value" value="{{ opt.value }}">
       <input type="hidden" name="message" value="{{ opt.value }}">
