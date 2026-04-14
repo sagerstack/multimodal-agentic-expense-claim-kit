@@ -106,7 +106,7 @@
          class="hidden"></div>
   </div>
   <!-- Chat Input Area -->
-  <div class="p-6 md:p-8 bg-surface/80 backdrop-blur-md">
+  <div class="px-6 pb-6 pt-3 md:px-8 md:pb-8 md:pt-4 bg-surface/80 backdrop-blur-md">
     <div class="max-w-3xl mx-auto relative">
       <!-- Image Preview -->
       <div x-show="previewUrl" class="flex items-center gap-3 mb-3 px-2" x-cloak>
@@ -139,20 +139,6 @@
           </button>
         </div>
       </form>
-      <div class="mt-4 flex gap-6 px-4">
-        <div class="flex items-center gap-1.5 opacity-40 hover:opacity-100 transition-opacity cursor-pointer" @click="$refs.fileInput.click()">
-          <span class="material-symbols-outlined text-sm">photo_camera</span>
-          <span class="text-[10px] font-bold uppercase tracking-tighter">Capture</span>
-        </div>
-        <div class="flex items-center gap-1.5 opacity-40 hover:opacity-100 transition-opacity cursor-pointer">
-          <span class="material-symbols-outlined text-sm">mic</span>
-          <span class="text-[10px] font-bold uppercase tracking-tighter">Voice</span>
-        </div>
-        <div class="flex items-center gap-1.5 opacity-40 hover:opacity-100 transition-opacity cursor-pointer">
-          <span class="material-symbols-outlined text-sm">history</span>
-          <span class="text-[10px] font-bold uppercase tracking-tighter">Recent</span>
-        </div>
-      </div>
     </div>
   </div>
 </section>
@@ -325,6 +311,7 @@ function chatState() {
     freezeTurn() {
       const thinkingPanel = document.getElementById('thinkingPanel');
       const aiMessages = document.getElementById('aiMessages');
+      const interruptTarget = document.getElementById('interruptTarget');
       const tokenTarget = document.getElementById('tokenTarget');
       const thinkingSummary = document.getElementById('thinkingSummary');
       const thinkingContent = document.getElementById('thinkingContent');
@@ -355,8 +342,20 @@ function chatState() {
       // 2. Move AI messages out of accumulator into flow (if arrived)
       const moved = this.moveAiMessages();
 
+      // 2b. Freeze the interrupt prompt into the transcript so policy /
+      // clarification questions remain visible on subsequent turns.
+      if (interruptTarget && interruptTarget.innerHTML.trim()) {
+        const frozenInterrupt = interruptTarget.cloneNode(true);
+        frozenInterrupt.removeAttribute('id');
+        frozenInterrupt.removeAttribute('sse-swap');
+        frozenInterrupt.removeAttribute('hx-swap');
+        frozenInterrupt.removeAttribute('hx-on::after-swap');
+        thinkingPanel.insertAdjacentElement('beforebegin', frozenInterrupt);
+      }
+
       // 3. Clear reusable elements for next turn
       tokenTarget.innerHTML = '';
+      if (interruptTarget) interruptTarget.innerHTML = '';
       if (thinkingSummary) thinkingSummary.innerHTML = '';
       if (thinkingContent) thinkingContent.innerHTML = '';
       if (thinkingStepName) thinkingStepName.innerHTML = '';

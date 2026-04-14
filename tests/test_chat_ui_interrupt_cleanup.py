@@ -66,3 +66,24 @@ def test_interruptTargetUsesNeutralAgentStyling():
             f"#interruptTarget missing required neutral-palette class '{cls}'. "
             f"Expected parity with partials/message_bubble.html. Got tag: {tag}"
         )
+
+
+def test_freezeTurnPersistsInterruptPromptIntoTranscript():
+    """Regression: the transient interrupt prompt must be frozen into chat flow.
+
+    Otherwise the policy-justification / clarification question disappears on
+    the next turn when `thinking-start` clears #interruptTarget.
+    """
+    html = _readChatTemplate()
+    requiredSnippets = [
+        "const interruptTarget = document.getElementById('interruptTarget');",
+        "const frozenInterrupt = interruptTarget.cloneNode(true);",
+        "frozenInterrupt.removeAttribute('id');",
+        "thinkingPanel.insertAdjacentElement('beforebegin', frozenInterrupt);",
+        "if (interruptTarget) interruptTarget.innerHTML = '';",
+    ]
+    for snippet in requiredSnippets:
+        assert snippet in html, (
+            "templates/chat.html freezeTurn() must freeze the interrupt prompt "
+            f"into the transcript. Missing snippet: {snippet}"
+        )

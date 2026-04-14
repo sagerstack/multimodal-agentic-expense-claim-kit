@@ -139,6 +139,42 @@ def _extractAdvisorDecision(messages: list) -> str:
     return "escalate_to_reviewer"
 
 
+def _extractAdvisorSummaryFields(messages: list) -> dict:
+    """Extract plain-text reasoning/summary fields from the advisor's final JSON output."""
+    for msg in reversed(messages):
+        if not isinstance(msg, AIMessage):
+            continue
+        content = msg.content if isinstance(msg.content, str) else ""
+        jsonStr = extractJsonBlock(content)
+        if not jsonStr:
+            continue
+        try:
+            parsed = json.loads(jsonStr)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        reasoning = parsed.get("reasoning")
+        summary = parsed.get("summary")
+        citedClauses = parsed.get("citedClauses")
+        return {
+            "reasoning": str(reasoning).strip() if reasoning else "",
+            "summary": str(summary).strip() if summary else "",
+            "citedClauses": citedClauses if isinstance(citedClauses, list) else [],
+        }
+
+    fallbackText = ""
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage) and isinstance(msg.content, str) and msg.content.strip():
+            fallbackText = msg.content.strip()
+            break
+    return {
+        "reasoning": fallbackText,
+        "summary": "",
+        "citedClauses": [],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Node
 # ---------------------------------------------------------------------------
@@ -461,17 +497,16 @@ async def advisorNode(state: ClaimState) -> dict:
     # ------------------------------------------------------------------
     # 5. Write advisor_decision audit log and persist findings to claims table
     # ------------------------------------------------------------------
-    # Extract LLM reasoning text from agent output
     agentMessages = result.get("messages", [])
-    advisorReasoningText = ""
-    for msg in reversed(agentMessages):
-        if isinstance(msg, AIMessage) and isinstance(msg.content, str) and msg.content.strip():
-            advisorReasoningText = msg.content
-            break
+    advisorSummaryFields = _extractAdvisorSummaryFields(agentMessages)
 
     advisorFindingsPayload = {
         "decision": advisorDecision,
-        "reasoning": advisorReasoningText,
+        "reasoning": advisorSummaryFields.get("reasoning", ""),
+        "summary": advisorSummaryFields.get("summary", ""),
+        "citedClauses": advisorSummaryFields.get("citedClauses", []),
+        "complianceSummary": complianceFindings.get("summary", ""),
+        "fraudSummary": fraudFindings.get("summary", ""),
         "complianceVerdict": complianceFindings.get("verdict"),
         "fraudVerdict": fraudFindings.get("verdict"),
     }

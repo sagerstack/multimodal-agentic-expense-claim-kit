@@ -13,6 +13,13 @@ def buildIntakeGptInput(state: dict) -> dict[str, Any]:
         "status": state.get("status", "draft"),
         "messages": state.get("messages", []),
         "intakeGpt": state.get("intakeGpt"),
+        "extractedReceipt": state.get("extractedReceipt"),
+        "violations": state.get("violations"),
+        "currencyConversion": state.get("currencyConversion"),
+        "claimSubmitted": state.get("claimSubmitted"),
+        "claimNumber": state.get("claimNumber"),
+        "intakeFindings": state.get("intakeFindings"),
+        "dbClaimId": state.get("dbClaimId"),
     }
 
 

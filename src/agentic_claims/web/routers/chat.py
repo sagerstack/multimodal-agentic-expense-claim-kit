@@ -327,6 +327,9 @@ async def streamChat(request: Request):
         # auto_reset rotation. The POST handler always writes the current
         # threadId/claimId into graphInput.
         turnClaimId = graphInput.get("claimId")
+        activeIntakeAgent = (
+            "intake-gpt" if getSettings().intake_agent_mode.lower() == "gpt" else "intake"
+        )
         logEvent(
             logger,
             "agent.turn_queued",
@@ -334,7 +337,7 @@ async def streamChat(request: Request):
             actorType="app",
             employeeId=request.session.get("employee_id"),
             username=request.session.get("username"),
-            agent="intake",
+            agent=activeIntakeAgent,
             claimId=turnClaimId,
             draftClaimNumber=f"DRAFT-{turnClaimId[:8]}" if turnClaimId else None,
             threadId=graphInput.get("threadId"),
@@ -357,7 +360,7 @@ async def streamChat(request: Request):
                 actorType="app",
                 employeeId=request.session.get("employee_id"),
                 username=request.session.get("username"),
-                agent="intake",
+                agent=activeIntakeAgent,
                 claimId=turnClaimId,
                 draftClaimNumber=f"DRAFT-{turnClaimId[:8]}" if turnClaimId else None,
                 threadId=graphInput.get("threadId"),

@@ -367,6 +367,20 @@ TOOL_TO_STEP = {
     "submitClaim": 3,
 }
 
+POST_SUBMISSION_GRAPH_NODES = {
+    "postSubmission",
+    "compliance",
+    "fraud",
+    "advisor",
+    "markAiReviewed",
+}
+
+GRAPH_NODE_AGENT_MAP = {
+    "compliance": "compliance",
+    "fraud": "fraud",
+    "advisor": "advisor",
+}
+
 PATHWAY_WAITING_TEXT = {
     0: "",
     1: "Awaiting receipt upload...",
@@ -378,6 +392,29 @@ PATHWAY_WAITING_TEXT = {
 def _nowTimestamp() -> str:
     sgt = ZoneInfo("Asia/Singapore")
     return datetime.now(sgt).strftime("%I:%M:%S %p")
+
+
+def _agentFromGraphNode(nodeName: str | None, defaultAgent: str) -> str:
+    """Map a graph node name to the owning agent for logging purposes."""
+    if not nodeName:
+        return defaultAgent
+    return GRAPH_NODE_AGENT_MAP.get(str(nodeName), defaultAgent)
+
+
+def _inferLlmLogAgent(metadata: dict | None, currentNodeName: str | None, defaultAgent: str) -> str:
+    """Infer which agent owns an LLM event.
+
+    `runGraph` observes a single outer LangGraph stream that includes intake,
+    compliance, fraud, and advisor events. The intake-mode default is only
+    correct for intake turns; post-submission LLM calls must be labeled with
+    their actual node owner.
+    """
+    if isinstance(metadata, dict):
+        for key in ("langgraph_node", "graph_node", "node_name"):
+            agent = _agentFromGraphNode(metadata.get(key), defaultAgent)
+            if agent != defaultAgent:
+                return agent
+    return _agentFromGraphNode(currentNodeName, defaultAgent)
 
 
 def _buildPathwaySteps(
@@ -529,6 +566,28 @@ def _toolOutputError(toolOutput) -> str | None:
     if isinstance(decoded, str) and "error" in decoded.lower():
         return decoded
     return None
+
+
+def _extractSubmitClaimIdentifiers(toolOutput) -> tuple[int | None, str | None]:
+    """Extract (dbClaimId, claimNumber) from a submitClaim tool result.
+
+    LangGraph may surface tool outputs either as raw JSON strings or as
+    ToolMessage-like objects with a `.content` field. The early-termination
+    acknowledgement path must decode both forms reliably.
+    """
+    decoded = _decodeToolOutput(toolOutput)
+    if not isinstance(decoded, dict):
+        return None, None
+    claim = decoded.get("claim") or {}
+    if not isinstance(claim, dict):
+        return None, None
+    dbClaimId = claim.get("id")
+    claimNumber = claim.get("claim_number") or claim.get("claimNumber")
+    try:
+        parsedDbClaimId = int(dbClaimId) if dbClaimId is not None else None
+    except (TypeError, ValueError):
+        parsedDbClaimId = None
+    return parsedDbClaimId, str(claimNumber) if claimNumber else None
 
 
 def _stateHasToolResult(stateValues: dict, toolName: str) -> bool:
@@ -951,6 +1010,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
 
     threadId = graphInput["threadId"]
     config = {"configurable": {"thread_id": threadId}}
+    currentGraphNodeName: str | None = None
 
     # Seed pathway from prior state so navigation/resume keeps completed steps
     # monotonic. Current-stream tool events can only advance these states.
@@ -1060,6 +1120,9 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             if eventKind != "on_chat_model_stream":
                 logger.debug("astream_events event: %s - %s", eventKind, event.get("name", ""))
 
+            if eventKind == "on_chain_start":
+                currentGraphNodeName = event.get("name", "")
+
             if eventKind == "on_chat_model_start":
                 try:
                     inputData = event.get("data", {}).get("input", {}) or {}
@@ -1067,6 +1130,9 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     # astream_events sometimes nests messages as [[msg, msg, ...]]
                     messages = rawMessages[0] if rawMessages and isinstance(rawMessages[0], list) else rawMessages
                     metadata = event.get("metadata", {}) or {}
+                    eventAgentName = _inferLlmLogAgent(
+                        metadata, currentGraphNodeName, activeAgentName
+                    )
                     serializedMessages = []
                     for m in messages:
                         msgType = type(m).__name__
@@ -1088,7 +1154,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         "llm.call_started",
                         logCategory="llm",
                         actorType="agent",
-                        agent=activeAgentName,
+                        agent=eventAgentName,
                         claimId=graphInput.get("claimId"),
                         threadId=graphInput.get("threadId"),
                         model=metadata.get("ls_model_name"),
@@ -1104,13 +1170,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             if eventKind == "on_chain_start" and shouldTerminateEarly:
                 # BUG-027/029: intakeNode has checkpointed — break before post-submission nodes
                 nodeName = event.get("name", "")
-                if nodeName in (
-                    "postSubmission",
-                    "compliance",
-                    "fraud",
-                    "advisor",
-                    "markAiReviewed",
-                ):
+                if nodeName in POST_SUBMISSION_GRAPH_NODES:
                     break
 
             if eventKind == "on_chat_model_stream":
@@ -1141,6 +1201,10 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             elif eventKind == "on_chat_model_end":
                 try:
                     endOutput = event.get("data", {}).get("output")
+                    metadata = event.get("metadata", {}) or {}
+                    eventAgentName = _inferLlmLogAgent(
+                        metadata, currentGraphNodeName, activeAgentName
+                    )
                     strippedReasoningSummary = reasoningBuffer.strip()
                     endToolCalls = []
                     if endOutput is not None:
@@ -1161,7 +1225,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         "llm.call_completed",
                         logCategory="llm",
                         actorType="agent",
-                        agent=activeAgentName,
+                        agent=eventAgentName,
                         claimId=graphInput.get("claimId"),
                         threadId=graphInput.get("threadId"),
                         responseContent=responseContent,
@@ -1592,9 +1656,12 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 elif toolName == "submitClaim":
                     if tableClaims:
                         tableClaims[-1]["status"] = "submitted"
-                    # BUG-016: flag that submission completed so subsequent
-                    # post-submission agent LLM events do not overwrite finalResponse.
+                    # submitClaim completion is the reliable cutover point from
+                    # intake chat UX to background post-submission agents. Arm
+                    # early termination here so parallel compliance/fraud token
+                    # streams never reach the user chat buffer.
                     claimSubmittedFlag = True
+                    shouldTerminateEarly = True
 
                 if toolName in ("extractReceiptFields", "submitClaim"):
                     try:
@@ -1707,15 +1774,39 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
         claimNumber = None
         for entry in thinkingEntries:
             if entry.get("name") == "submitClaim" and entry.get("type") == "tool":
-                output = entry.get("output", "")
-                try:
-                    parsed = json.loads(output) if isinstance(output, str) else output
-                    if isinstance(parsed, dict):
-                        claim = parsed.get("claim", {})
-                        dbClaimId = claim.get("id")
-                        claimNumber = claim.get("claim_number")
-                except (json.JSONDecodeError, TypeError):
-                    pass
+                parsedDbClaimId, parsedClaimNumber = _extractSubmitClaimIdentifiers(
+                    entry.get("output", "")
+                )
+                if parsedDbClaimId is not None:
+                    dbClaimId = parsedDbClaimId
+                if parsedClaimNumber:
+                    claimNumber = parsedClaimNumber
+
+        if not (finalResponse or "").strip():
+            if claimNumber:
+                finalResponse = (
+                    f"Your claim has been submitted successfully. Claim number: {claimNumber}. "
+                    "Please click on New Claim if you would like to submit another receipt. Thank you."
+                )
+            elif dbClaimId is not None:
+                finalResponse = (
+                    f"Your claim has been submitted successfully. Claim ID: {dbClaimId}. "
+                    "Please click on New Claim if you would like to submit another receipt. Thank you."
+                )
+            else:
+                finalResponse = (
+                    "Your claim has been submitted successfully. "
+                    "Please click on New Claim if you would like to submit another receipt. Thank you."
+                )
+            logEvent(
+                logger,
+                "sse.submission_acknowledgement_synthesized",
+                logCategory="sse",
+                claimId=sessionClaimId,
+                dbClaimId=dbClaimId,
+                claimNumber=claimNumber,
+                message="Synthesized submission acknowledgement from submitClaim output",
+            )
 
         # BUG-029: Force-update graph checkpoint with claimSubmitted=True so
         # runPostSubmissionAgents checkpoint guard passes
@@ -1788,6 +1879,38 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             claimId=sessionClaimId,
             message="Background task queued for post-submission agents",
         )
+        submissionMessage = _stripToolCallExpressions(
+            _stripThinkingTags(_stripToolCallJson(finalResponse or ""))
+        ).strip()
+        if submissionMessage:
+            try:
+                template = templates.get_template("partials/message_bubble.html")
+                messageHtml = template.render(
+                    content=submissionMessage,
+                    isAi=True,
+                    confidenceScores=None,
+                    violations=None,
+                    timestamp=datetime.now(ZoneInfo("Asia/Singapore")).strftime("%-I:%M %p"),
+                )
+            except Exception:
+                messageHtml = f'<div class="ai-message">{submissionMessage}</div>'
+            yield ServerSentEvent(raw_data=messageHtml, event=SseEvent.MESSAGE)
+            logEvent(
+                logger,
+                "assistant.chat_message_rendered",
+                logCategory="chat_history",
+                actorType="agent",
+                agent=activeAgentName,
+                employeeId=employeeIdVar.get(None),
+                claimId=graphInput.get("claimId"),
+                draftClaimNumber=f"DRAFT-{graphInput.get('claimId', '')[:8]}",
+                threadId=threadId,
+                claimNumber=claimNumber,
+                status="rendered",
+                payload={"message": submissionMessage},
+                message="Assistant chat message rendered",
+            )
+        return
     else:
         # BUG-016: after the graph completes, refresh the submission table from DB.
         # The advisor node may have updated the claim status (e.g. submitted ->

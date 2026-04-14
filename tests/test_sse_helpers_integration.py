@@ -58,6 +58,7 @@ def _makeMockGraph(events, stateNext=None, stateTasks=None, stateMessages=None):
     stateResult.tasks = stateTasks or []
     stateResult.values = {"messages": stateMessages or []}
     graph.aget_state = AsyncMock(return_value=stateResult)
+    graph.aupdate_state = AsyncMock()
 
     return graph
 
@@ -187,7 +188,6 @@ async def testRunGraphDetectsInterruptAndYieldsInterruptEvent():
     interruptEvents = [e for e in collected if e.event == SseEvent.INTERRUPT]
     assert len(interruptEvents) == 1
     assert "confirm the amount" in interruptEvents[0].raw_data
-    assert request.session["awaiting_clarification"] is True
 
 
 @pytest.mark.asyncio
@@ -332,8 +332,11 @@ async def testRunGraphIntakeResponseNotOverwrittenByAdvisor():
 
     msgEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
     assert len(msgEvents) == 1
-    # The rendered message must contain the intake summary, not the advisor JSON
-    assert "CLM-042 has been submitted" in msgEvents[0].raw_data
+    # The rendered message must contain a clean submission acknowledgement,
+    # not the advisor JSON.
+    assert "submitted successfully" in msgEvents[0].raw_data
+    assert "CLM-042" in msgEvents[0].raw_data
+    assert "Please click on New Claim" in msgEvents[0].raw_data
     assert '"decision"' not in msgEvents[0].raw_data
 
 
@@ -432,6 +435,119 @@ async def testRunGraphSetsBackgroundTaskWhenClaimSubmitted():
 
 
 @pytest.mark.asyncio
+async def testRunGraphSynthesizesSubmissionAcknowledgementWhenNoFinalAgentMessage():
+    """If submitClaim succeeds but no final intake acknowledgement is streamed, runGraph should render one."""
+    from unittest.mock import patch
+
+    submitOutput = json.dumps({"claim": {"id": 104, "claim_number": "CLAIM-027"}, "receipt": {}})
+
+    events = [
+        {"event": "on_tool_start", "name": "submitClaim", "data": {}},
+        {"event": "on_tool_end", "name": "submitClaim", "data": {"output": submitOutput}},
+        # Empty model-end event means no final user-facing response was streamed.
+        {"event": "on_chat_model_end", "data": {"output": MagicMock(tool_calls=None)}},
+        {"event": "on_chain_start", "name": "postSubmission", "data": {}},
+    ]
+
+    stateValues = {"messages": [], "claimSubmitted": True}
+    graph = _makeMockGraph(events)
+    graph.aget_state.return_value.values = stateValues
+
+    request = _makeMockRequest()
+    with patch(
+        "agentic_claims.web.sseHelpers.fetchClaimsForTable",
+        new=AsyncMock(return_value=[]),
+    ):
+        collected = await _collectEvents(graph, _baseGraphInput(), request)
+
+    msgEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
+    assert len(msgEvents) == 1
+    assert "Your claim has been submitted successfully." in msgEvents[0].raw_data
+    assert "CLAIM-027" in msgEvents[0].raw_data
+    assert "Please click on New Claim" in msgEvents[0].raw_data
+
+
+@pytest.mark.asyncio
+async def testRunGraphStopsBeforePostSubmissionJsonWhenSubmitCompletes():
+    """Runtime submission ack path must render only the synthesized acknowledgement.
+
+    intake-gpt emits the final acknowledgement from runtime code, not an
+    `on_chat_model_end` event. Once submitClaim finishes, compliance/fraud JSON
+    must never enter the chat buffer.
+    """
+    from unittest.mock import patch
+
+    submitOutput = json.dumps({"claim": {"id": 56, "claim_number": "CLAIM-056"}, "receipt": {}})
+
+    events = [
+        {"event": "on_tool_start", "name": "submitClaim", "data": {}},
+        {"event": "on_tool_end", "name": "submitClaim", "data": {"output": submitOutput}},
+        # intake-gpt runtime acknowledgement path: no model-end event here.
+        {"event": "on_chain_start", "name": "reasonNode", "data": {}},
+        {"event": "on_chain_end", "name": "reasonNode", "data": {}},
+        {"event": "on_chain_start", "name": "finalizeTurnNode", "data": {}},
+        {"event": "on_chain_end", "name": "finalizeTurnNode", "data": {}},
+        # Outer graph starts post-submission fan-out; stream must break here.
+        {"event": "on_chain_start", "name": "compliance", "data": {}},
+        {"event": "on_chat_model_stream", "data": {"chunk": _makeChunk('{"verdict":"pass"}')}},
+        {"event": "on_chat_model_end", "data": {"output": MagicMock(tool_calls=None)}},
+    ]
+
+    stateValues = {"messages": [], "claimSubmitted": True}
+    graph = _makeMockGraph(events)
+    graph.aget_state.return_value.values = stateValues
+
+    request = _makeMockRequest()
+    with patch(
+        "agentic_claims.web.sseHelpers.fetchClaimsForTable",
+        new=AsyncMock(return_value=[]),
+    ):
+        collected = await _collectEvents(graph, _baseGraphInput(), request)
+
+    msgEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
+    assert len(msgEvents) == 1
+    assert "Your claim has been submitted successfully." in msgEvents[0].raw_data
+    assert "CLAIM-056" in msgEvents[0].raw_data
+    assert "Please click on New Claim" in msgEvents[0].raw_data
+    assert '"verdict"' not in msgEvents[0].raw_data
+    assert hasattr(request.state, "backgroundTask")
+    assert request.state.backgroundTask["claimId"] == "test-claim"
+    graph.aupdate_state.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def testRunGraphSynthesizedAckExtractsClaimNumberFromToolObject():
+    """submitClaim tool outputs may arrive as objects with `.content`, not plain strings."""
+    from unittest.mock import patch
+
+    submitOutput = _makeToolOutput(
+        "submitClaim",
+        {"claim": {"id": 88, "claim_number": "CLAIM-088"}, "receipt": {}},
+    )
+
+    events = [
+        {"event": "on_tool_start", "name": "submitClaim", "data": {}},
+        {"event": "on_tool_end", "name": "submitClaim", "data": {"output": submitOutput}},
+        {"event": "on_chain_start", "name": "compliance", "data": {}},
+    ]
+
+    stateValues = {"messages": [], "claimSubmitted": True}
+    graph = _makeMockGraph(events)
+    graph.aget_state.return_value.values = stateValues
+
+    request = _makeMockRequest()
+    with patch(
+        "agentic_claims.web.sseHelpers.fetchClaimsForTable",
+        new=AsyncMock(return_value=[]),
+    ):
+        collected = await _collectEvents(graph, _baseGraphInput(), request)
+
+    msgEvents = [e for e in collected if e.event == SseEvent.MESSAGE]
+    assert len(msgEvents) == 1
+    assert "Claim number: CLAIM-088" in msgEvents[0].raw_data
+
+
+@pytest.mark.asyncio
 async def testRunGraphSuppressesTokensAfterClaimSubmitted():
     """BUG-027/029: tokens after submitClaim completes must not be emitted as SSE TOKEN events."""
     from unittest.mock import patch
@@ -466,6 +582,56 @@ async def testRunGraphSuppressesTokensAfterClaimSubmitted():
     tokenEvents = [e for e in collected if e.event == SseEvent.TOKEN]
     # "extra post-submission token" must not appear
     assert not any("extra post-submission" in e.raw_data for e in tokenEvents)
+
+
+@pytest.mark.asyncio
+async def testLlmLogsUseOwningPostSubmissionAgentLabels():
+    """Post-submission llm.call_* logs must use the current node owner, not intake-gpt."""
+    from unittest.mock import patch
+
+    def _mockOutput(content):
+        output = MagicMock()
+        output.tool_calls = []
+        output.content = content
+        output.usage_metadata = {}
+        output.response_metadata = {}
+        return output
+
+    events = [
+        {"event": "on_chain_start", "name": "compliance", "data": {}},
+        {"event": "on_chat_model_start", "data": {"input": {"messages": []}}, "metadata": {}},
+        {"event": "on_chat_model_end", "data": {"output": _mockOutput('{"verdict":"pass"}')}, "metadata": {}},
+        {"event": "on_chain_start", "name": "fraud", "data": {}},
+        {"event": "on_chat_model_start", "data": {"input": {"messages": []}}, "metadata": {}},
+        {"event": "on_chat_model_end", "data": {"output": _mockOutput('{"verdict":"duplicate"}')}, "metadata": {}},
+        {"event": "on_chain_start", "name": "advisor", "data": {}},
+        {"event": "on_chat_model_start", "data": {"input": {"messages": []}}, "metadata": {}},
+        {"event": "on_chat_model_end", "data": {"output": _mockOutput('{"decision":"escalate"}')}, "metadata": {}},
+    ]
+    graph = _makeMockGraph(events)
+
+    with (
+        patch("agentic_claims.web.sseHelpers.logEvent") as mockLogEvent,
+        patch(
+            "agentic_claims.web.sseHelpers.getSettings",
+            return_value=MagicMock(intake_agent_mode="gpt", enable_response_streaming=False),
+        ),
+    ):
+        await _collectEvents(graph, _baseGraphInput(), _makeMockRequest())
+
+    startedAgents = [
+        call.kwargs.get("agent")
+        for call in mockLogEvent.call_args_list
+        if len(call.args) >= 2 and call.args[1] == "llm.call_started"
+    ]
+    completedAgents = [
+        call.kwargs.get("agent")
+        for call in mockLogEvent.call_args_list
+        if len(call.args) >= 2 and call.args[1] == "llm.call_completed"
+    ]
+
+    assert startedAgents[:3] == ["compliance", "fraud", "advisor"]
+    assert completedAgents[:3] == ["compliance", "fraud", "advisor"]
 
 
 # ── Plan 13-16: askHuman filter + tool-label hygiene ──

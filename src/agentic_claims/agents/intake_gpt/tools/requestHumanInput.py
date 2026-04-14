@@ -18,6 +18,7 @@ def requestHumanInput(
     expectedResponseKind: str = "text",
     blockingStep: str = "",
     allowSideQuestions: bool = True,
+    category: str = "",
 ) -> dict:
     """Pause the workflow and ask the user for structured input.
 
@@ -42,6 +43,7 @@ def requestHumanInput(
         "expectedResponseKind": expectedResponseKind,
         "blockingStep": blockingStep,
         "allowSideQuestions": allowSideQuestions,
+        "category": category,
     }
     response = interrupt(payload)
     logEvent(

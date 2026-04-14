@@ -128,6 +128,61 @@ async def test_graphUsesIntakeGptNodeWhenModeIsGpt():
 
 
 @pytest.mark.asyncio
+async def test_submittedIntakeGptClaimRoutesToPostSubmissionNodes():
+    """Submitted intake-gpt claims should use the same outer graph handoff as legacy intake."""
+
+    async def mockIntakeGptNode(state: ClaimState) -> dict:
+        return {
+            "messages": [AIMessage(content="intake-gpt submitted claim")],
+            "intakeGpt": {
+                "workflow": {
+                    "goal": "assist_claimant",
+                    "currentStep": "claim_submitted",
+                    "readyForSubmission": False,
+                    "status": "active",
+                },
+                "slots": {"submissionResult": {"claim": {"claim_number": "CLAIM-777"}}},
+                "pendingInterrupt": None,
+                "lastUserTurn": {"message": "submit", "hasImage": False},
+                "lastResolution": {"outcome": "answer", "responseText": "submit", "summary": "User confirmed submission."},
+                "toolTrace": {},
+                "protocolGuardCount": 0,
+            },
+            "claimSubmitted": True,
+            "claimNumber": "CLAIM-777",
+            "dbClaimId": 777,
+        }
+
+    mockSettings = type("Settings", (), {"intake_agent_mode": "gpt"})()
+
+    with (
+        patch("agentic_claims.core.graph.getSettings", return_value=mockSettings),
+        patch("agentic_claims.core.graph.intakeGptNode", mockIntakeGptNode),
+        patch("agentic_claims.core.graph.complianceNode", _mockComplianceNode),
+        patch("agentic_claims.core.graph.fraudNode", _mockFraudNode),
+        patch("agentic_claims.core.graph.markAiReviewedNode", _mockMarkAiReviewedNode),
+        patch("agentic_claims.core.graph.advisorNode", _mockAdvisorNode),
+    ):
+        graph = buildGraph().compile()
+        result = await graph.ainvoke(
+            {
+                "claimId": "test-gpt-submitted",
+                "status": "draft",
+                "messages": [HumanMessage(content="submit")],
+                "claimSubmitted": False,
+            }
+        )
+
+    assert result.get("claimSubmitted") is True
+    messageContents = [msg.content for msg in result["messages"]]
+    allContent = " ".join(messageContents)
+    assert "intake-gpt submitted claim" in allContent
+    assert "Compliance Check" in allContent
+    assert "Fraud Check" in allContent
+    assert "Advisor Decision" in allContent
+
+
+@pytest.mark.asyncio
 async def test_submittedClaimRoutesToComplianceAndFraud():
     """Verify submitted claim routes to compliance and fraud nodes."""
     # Mock intakeNode to simulate claim submission
