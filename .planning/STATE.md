@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 14 — Intake GPT React Replacement (in progress)
-Plan: 4/7 plans complete (14-01, 14-02, 14-03, 14-04 done)
-Status: Phase 14 active. Plan 14-04 (button interrupt backend) complete: uiKind annotated on interrupt payloads, SSE dispatcher renders button partial, POST accepts button_value, 41/41 tests pass.
-Last activity: 2026-04-14 — Completed 14-04-PLAN.md (button interrupt backend: 7 new web tests, 41 total)
+Plan: 6/7 plans complete (14-01, 14-02, 14-03, 14-04, 14-05, 14-06 done)
+Status: Phase 14 active. Plan 14-06 (No-path recovery flows) complete: correction loop + submit-cancel session reset, 37/37 tests pass.
+Last activity: 2026-04-14 — Completed 14-06-PLAN.md (No-path recovery: correction_requested outcome, field_correction loop, sessionReset flag + chat.py rotation)
 
 ```
 v2.0 Progress: [###################################] 35/38 plans
@@ -132,7 +132,7 @@ From research (see .planning/research/PITFALLS.md):
 ## Session Continuity
 
 Last session: 2026-04-14
-Stopped at: Completed Phase 14 Plan 04 — button interrupt backend: uiKind annotation, SSE dispatch, button partial template, button_value POST field. 41/41 tests pass.
+Stopped at: Completed Phase 14 Plan 06 — No-path recovery flows: correction_requested outcome, field_correction loop, sessionReset flag + chat.py session rotation. 37/37 tests pass.
 Resume file: None
 
 ### Roadmap Evolution
