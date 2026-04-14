@@ -38,11 +38,23 @@ async def postMessage(
     request: Request,
     message: str = Form(default=""),
     receipt: UploadFile | None = File(default=None),
+    button_value: str = Form(default=""),
 ):
     """Accept a chat message, enqueue graph input, return 204."""
     sessionIds = getSessionIds(request)
     threadId = sessionIds["threadId"]
     claimId = sessionIds["claimId"]
+
+    if button_value:
+        logEvent(
+            logger,
+            "chat.button_reply",
+            logCategory="chat",
+            claimId=claimId,
+            threadId=threadId,
+            payload={"button_value": button_value, "message": message},
+            message="Structured button-value reply received",
+        )
 
     hasImage = False
     imageB64 = None
