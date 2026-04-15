@@ -1468,10 +1468,38 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
         messageCount=len(state.get("messages", [])),
         message="intake-gpt reason node invoking llm",
     )
+    # When a side question was just classified, inject an explicit directive
+    # so the LLM does not produce an empty response. General prompt rules are
+    # insufficient — the LLM needs an in-context instruction naming the exact
+    # situation and required steps.
+    sideQuestionDirective: list = []
+    lastResolution = intakeState.get("lastResolution") or {}
+    if lastResolution.get("outcome") == "side_question":
+        pending = intakeState.get("pendingInterrupt") or {}
+        sideQ = str(lastResolution.get("responseText") or "")
+        pendingQuestion = str(pending.get("question") or "")
+        pendingCtx = str(pending.get("contextMessage") or "")
+        pendingKind = str(pending.get("kind") or "")
+        pendingStep = str(pending.get("blockingStep") or pendingKind)
+        sideQuestionDirective = [
+            SystemMessage(
+                content=(
+                    f"The user has asked a follow-up question while a confirmation was pending.\n"
+                    f'Their question: "{sideQ}"\n\n'
+                    f"Answer the question directly and visibly in plain text using at least "
+                    f"2-3 sentences. If it is about policy, approvers, or expense rules, call "
+                    f"searchPolicies first and use the result to answer.\n\n"
+                    f"Do NOT call requestHumanInput — the system will automatically re-present "
+                    f"the pending prompt after your answer. Do not produce an empty response."
+                )
+            )
+        ]
+
     response = await boundLlm.ainvoke(
         [
             SystemMessage(content=INTAKE_GPT_SYSTEM_PROMPT),
             SystemMessage(content=runtimeContext),
+            *sideQuestionDirective,
             *state.get("messages", []),
         ]
     )

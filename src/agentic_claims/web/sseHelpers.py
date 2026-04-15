@@ -2016,7 +2016,10 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         sideAnswerText = _stripToolCallExpressions(
                             _stripThinkingTags(_stripToolCallJson(finalResponse or ""))
                         ).strip()
-                        if sideAnswerText and _isUserFacingProse(sideAnswerText):
+                        # Use a lower length floor than _isUserFacingProse (40 chars) —
+                        # a brief side-question answer like "Yes, the receipt is valid." is
+                        # still valuable to surface even at 30 chars.
+                        if sideAnswerText and len(sideAnswerText) >= 10:
                             try:
                                 template = templates.get_template(
                                     "partials/message_bubble.html"
