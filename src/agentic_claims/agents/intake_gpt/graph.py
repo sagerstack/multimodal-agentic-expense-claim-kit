@@ -580,6 +580,40 @@ def _buildFieldConfirmationAiMessage(intakeState: IntakeGptState) -> AIMessage:
     )
 
 
+def _buildSubmitConfirmationAiMessage(intakeState: IntakeGptState) -> AIMessage | None:
+    """Synthetic requestHumanInput(submit_confirmation) after a compliant policy check.
+
+    Used by the deterministic gate in reasonNode when policySearchResults shows
+    compliance but the LLM might otherwise ask in plain text (skipping the button UI).
+    Returns None if amountSgd is missing (gate should not fire).
+    """
+    slots = intakeState.get("slots") or {}
+    claimData = slots.get("claimData") or {}
+    amountSgd = claimData.get("amountSgd")
+    if amountSgd is None:
+        return None
+    category = (claimData.get("category") or slots.get("category") or "expense").capitalize()
+    contextMsg = f"{category} expense — SGD {float(amountSgd):.2f}. Policy check passed."
+    toolCallId = f"rt-submitConfirm-{int(time.time() * 1000)}"
+    return AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "id": toolCallId,
+                "name": "requestHumanInput",
+                "args": {
+                    "kind": "submit_confirmation",
+                    "blockingStep": "submit_confirmation",
+                    "question": "The expense is within policy. Would you like to submit this claim?",
+                    "contextMessage": contextMsg,
+                    "expectedResponseKind": "confirmation",
+                    "allowSideQuestions": True,
+                },
+            }
+        ],
+    )
+
+
 def _buildSubmitClaimAiMessage(state: IntakeGptGraphState, intakeState: IntakeGptState) -> AIMessage | None:
     slots = intakeState.get("slots") or {}
     claimData = slots.get("claimData")
@@ -998,7 +1032,7 @@ async def interruptResolutionNode(state: IntakeGptGraphState) -> dict:
     expectedCurrency = ""
     if pending.get("kind") == "manual_fx_rate":
         expectedCurrency = _manualFxCurrencyLabel(intakeState)
-    outcome, summary, _parsed = _classifyInterruptReply(
+    outcome, summary, parsedAnswer = _classifyInterruptReply(
         latestText,
         pendingKind=str(pending.get("kind") or ""),
         expectedCurrency=expectedCurrency,
@@ -1008,6 +1042,29 @@ async def interruptResolutionNode(state: IntakeGptGraphState) -> dict:
         "responseText": latestText,
         "summary": summary,
     }
+
+    # manual_fx_rate answered via fresh turn (not LangGraph interrupt resume):
+    # applyToolResultsNode only runs after toolNode, so it never sees this reply.
+    # Apply the conversion here so _buildDraftClaimBundle gets amountSgd when
+    # field_confirmation fires on the same or next turn.
+    if pending.get("kind") == "manual_fx_rate" and outcome == "answer" and parsedAnswer:
+        slots = dict(intakeState.get("slots") or {})
+        manualConversion = _applyManualFxConversion(slots, parsedAnswer)
+        if manualConversion is not None:
+            slots["currencyConversion"] = manualConversion
+            intakeState["slots"] = slots
+            intakeState["pendingInterrupt"] = None
+            intakeState["workflow"]["currentStep"] = "currency_converted"
+            intakeState["workflow"]["status"] = "active"
+            logEvent(
+                logger,
+                "intake.gpt.manual_fx_applied_on_fresh_turn",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="manual_fx_rate answered via fresh turn — applied conversion in interruptResolutionNode",
+            )
 
     # Status transitions — pendingInterrupt mutation is owned by applyToolResultsNode
     # after the requestHumanInput ToolMessage is emitted. Here we only update status
@@ -1078,6 +1135,48 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
                 claimId=state.get("claimId"),
                 threadId=state.get("threadId"),
                 message="runtime advanced intake-gpt flow directly to submitClaim",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {
+                "messages": [response],
+                "intakeGpt": intakeState,
+            }
+    # Gate: after searchPolicies returns compliant, deterministically emit
+    # requestHumanInput(submit_confirmation) so the button UI always fires.
+    # Without this gate, the LLM sometimes asks in plain text (skipping buttons).
+    _slots = intakeState.get("slots") or {}
+    if (
+        intakeState["workflow"]["currentStep"] == "field_confirmation_answered"
+        and isinstance(_slots.get("policySearchResults"), list)
+        and intakeState.get("pendingInterrupt") is None
+        and not _slots.get("submissionResult")
+        and _hasPolicyViolation(intakeState) is False
+    ):
+        response = _buildSubmitConfirmationAiMessage(intakeState)
+        if response is not None:
+            pendingFromGate = _pendingInterruptFromToolCalls(response)
+            if pendingFromGate:
+                intakeState["pendingInterrupt"] = pendingFromGate
+                intakeState["workflow"]["currentStep"] = "submit_confirmation"
+                intakeState["workflow"]["status"] = "blocked"
+            logEvent(
+                logger,
+                "intake.gpt.runtime_submit_confirmation",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="runtime forced submit_confirmation interrupt after compliant policy check",
             )
             logEvent(
                 logger,

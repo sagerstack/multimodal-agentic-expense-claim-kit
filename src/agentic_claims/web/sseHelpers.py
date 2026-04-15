@@ -1665,14 +1665,16 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             }
                         )
                 elif toolName == "submitClaim":
-                    if tableClaims:
-                        tableClaims[-1]["status"] = "submitted"
-                    # submitClaim completion is the reliable cutover point from
-                    # intake chat UX to background post-submission agents. Arm
-                    # early termination here so parallel compliance/fraud token
-                    # streams never reach the user chat buffer.
-                    claimSubmittedFlag = True
-                    shouldTerminateEarly = True
+                    # Only arm early termination when submitClaim actually succeeded.
+                    # If insertion failed, toolOutput contains a Pydantic/error string —
+                    # _extractSubmitClaimIdentifiers returns (None, None) and we fall
+                    # through so the LLM's error response streams through to the user.
+                    _submitId, _ = _extractSubmitClaimIdentifiers(toolOutput)
+                    if _submitId is not None:
+                        if tableClaims:
+                            tableClaims[-1]["status"] = "submitted"
+                        claimSubmittedFlag = True
+                        shouldTerminateEarly = True
 
                 if toolName in ("extractReceiptFields", "submitClaim"):
                     try:
@@ -1793,20 +1795,15 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 if parsedClaimNumber:
                     claimNumber = parsedClaimNumber
 
-        if not (finalResponse or "").strip():
+        if not (finalResponse or "").strip() and (claimNumber or dbClaimId is not None):
             if claimNumber:
                 finalResponse = (
                     f"Your claim has been submitted successfully. Claim number: {claimNumber}. "
                     "Please click on New Claim if you would like to submit another receipt. Thank you."
                 )
-            elif dbClaimId is not None:
-                finalResponse = (
-                    f"Your claim has been submitted successfully. Claim ID: {dbClaimId}. "
-                    "Please click on New Claim if you would like to submit another receipt. Thank you."
-                )
             else:
                 finalResponse = (
-                    "Your claim has been submitted successfully. "
+                    f"Your claim has been submitted successfully. Claim ID: {dbClaimId}. "
                     "Please click on New Claim if you would like to submit another receipt. Thank you."
                 )
             logEvent(
