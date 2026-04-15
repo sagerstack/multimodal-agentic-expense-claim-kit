@@ -158,6 +158,100 @@ def test_browser_restaurant_receipt_renders_table_and_confirmation():
 
 
 @pytest.mark.e2e
+def test_browser_restaurant_receipt_renders_table_and_confirmation_with_early_policy_sideq():
+    """Upload receipt → policy side question → searchPolicies called → field_confirmation re-presented.
+
+    Extends the basic confirmation test with one side question that requires a policy
+    lookup before the user has clicked Yes/No on field_confirmation.
+
+    Turn 1: upload DIG restaurant receipt
+            → agent extracts fields, renders table, presents field_confirmation (Yes/No)
+    Turn 2: ask "what is my daily meal allowance"
+            → agent calls searchPolicies (policy lookup)
+            → agent answers with SGD amounts from the meals policy
+            → field_confirmation re-presented (button count must increase)
+
+    Key assertion: button count after Turn 2 > button count after Turn 1, proving
+    that the pending field_confirmation interrupt survived the side question and was
+    re-shown after the policy answer, rather than being silently dropped.
+    """
+    assert RESTAURANT_RECEIPT.exists(), f"Missing receipt fixture: {RESTAURANT_RECEIPT}"
+    _require_services_up()
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1536, "height": 960})
+        try:
+            _login(page)
+
+            # ── Turn 1: upload DIG restaurant receipt ─────────────────────────
+            _upload_receipt(
+                page,
+                RESTAURANT_RECEIPT,
+                "Here is my lunch receipt from DIG restaurant.",
+            )
+            _wait_for_processing_to_finish(page)
+
+            history = _chat_text(page)
+            table = _latest_ai_markdown_table(page)
+
+            # Verify the extraction table rendered correctly (same as basic test)
+            if table.count():
+                table.wait_for(state="visible", timeout=30_000)
+                header_text = table.locator("thead").inner_text().lower()
+                body_text = table.locator("tbody").inner_text()
+                assert "field" in header_text and "value" in header_text and "confidence" in header_text
+                assert "Merchant" in body_text and "DIG" in body_text
+            else:
+                flattened = history.lower()
+                assert "field" in flattened and "value" in flattened and "confidence" in flattened
+                assert "merchant" in flattened and "dig" in flattened
+
+            assert "Merchant" in history and "DIG" in history
+            confirmation_prompts = (
+                "Does the extracted receipt information look correct?",
+                "Please confirm if the extracted receipt details are correct.",
+                "Do the extracted receipt details look correct?",
+            )
+            assert any(prompt in history for prompt in confirmation_prompts), (
+                f"FAIL Turn 1: no confirmation prompt in history\n{history[-400:]}"
+            )
+
+            # field_confirmation Yes/No buttons must be visible
+            assert _wait_for_interrupt_buttons(page), (
+                "FAIL Turn 1: field_confirmation Yes/No buttons did not appear"
+            )
+            btn_count_after_t1 = _interrupt_button_count(page)
+
+            # ── Turn 2: policy side question while field_confirmation is pending ──
+            _send_text_message(page, "what is my daily meal allowance")
+            _wait_for_processing_to_finish(page)
+
+            history = _chat_text(page)
+
+            # Agent must answer with policy data — the only source is searchPolicies.
+            # The meals policy specifies SGD caps (15 breakfast, 20 lunch, 30 dinner,
+            # 50 total daily). At least one SGD amount must appear in the answer.
+            assert any(
+                kw in history
+                for kw in ["SGD 20", "SGD 15", "SGD 30", "SGD 50", "SGD20", "20.00", "50.00"]
+            ), (
+                f"FAIL Turn 2: no SGD meal cap amounts in history — "
+                f"searchPolicies likely not called\n"
+                f"Last 800 chars:\n{history[-800:]}"
+            )
+
+            # field_confirmation must be re-presented after the side question answer
+            btn_count_after_t2 = _interrupt_button_count(page)
+            assert btn_count_after_t2 > btn_count_after_t1, (
+                f"FAIL Turn 2: field_confirmation was NOT re-presented after policy side question\n"
+                f"Button count before={btn_count_after_t1}, after={btn_count_after_t2}"
+            )
+        finally:
+            browser.close()
+
+
+@pytest.mark.e2e
 def test_browser_side_question_full_conversation():
     """Full intake-gpt conversation: upload -> 2 side questions -> Yes -> submit.
 
