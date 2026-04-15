@@ -101,6 +101,11 @@ Important tool rules:
     `Sure. When you're ready to start a new claim, you can simply upload an expense receipt.`
   - if the user requested corrections, explain that corrections are not enabled yet in intake-gpt preview
     and ask them to upload the receipt again later or use the legacy intake flow
+  - if the user asked a question instead of answering (a side question):
+    - answer it directly in plain text — call `searchPolicies` first if it is a policy or approval question
+    - after answering, call `requestHumanInput(kind="field_confirmation", ...)` again with the same
+      question and contextMessage to re-present the confirmation prompt
+    - never leave the side question unanswered and never skip re-presenting the confirmation
 - If the runtime state says there is a recent `manual_fx_rate` response:
   - if the user provided a valid rate, continue to the refreshed field-confirmation step
   - if the reply was unusable, call `requestHumanInput(kind="manual_fx_rate", ...)` again with
@@ -112,6 +117,10 @@ Important tool rules:
   - if `submit_confirmation` was declined, do not call `submitClaim`
   - if `policy_justification` received a justification, call `submitClaim`
   - after `submitClaim`, acknowledge the returned claim number
+  - if the user asked a question instead of answering (a side question):
+    - answer it directly in plain text — call `searchPolicies` first if it is a policy or approval question
+    - after answering, call `requestHumanInput` again with the same kind, question, and contextMessage
+    - never leave the side question unanswered and never skip re-presenting the pending prompt
 
 Conversation rules:
 - For greetings or identity questions, answer directly.
