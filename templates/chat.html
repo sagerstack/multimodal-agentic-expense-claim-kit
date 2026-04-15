@@ -97,7 +97,7 @@
          Rationale: askHuman/policy-exception prompts are routine agent questions, not errors.
          Source: 13-DEBUG-display-regression.md "Related issues" §1. -->
     <div id="interruptTarget" sse-swap="interrupt" hx-swap="innerHTML"
-         hx-on::after-swap="htmx.process(this); window.dispatchEvent(new CustomEvent('stream-done')); window.dispatchEvent(new CustomEvent('interrupt-swapped', {detail: {hasButtons: this.querySelector('button[aria-label=\'Yes\'], button[aria-label=\'No\']') !== null}}))"
+         hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done')); window.dispatchEvent(new CustomEvent('interrupt-swapped', {detail: {hasButtons: this.querySelector('button[aria-label=\'Yes\'], button[aria-label=\'No\']') !== null}}))"
          class="max-w-2xl text-sm text-on-surface p-4 bg-surface-container-low rounded-2xl border border-outline-variant/5 shadow-xl empty:hidden"></div>
 
     <!-- Error target -->
@@ -176,6 +176,20 @@
   .ai-markdown li { margin: 0.25rem 0; }
 </style>
 <script>
+function submitButtonInterrupt(btn) {
+  var label = btn.dataset.label;
+  var value = btn.dataset.value;
+  // Show user bubble + set processing state via Alpine custom event
+  window.dispatchEvent(new CustomEvent('button-submitted', {detail: {label: label, value: value}}));
+  // Clear interrupt prompt immediately for instant feedback
+  document.getElementById('interruptTarget').innerHTML = '';
+  // POST to /chat/message via fetch — no htmx.process() dependency
+  var fd = new FormData();
+  fd.append('message', value);
+  fd.append('button_value', value);
+  fetch('/chat/message', {method: 'POST', body: fd});
+}
+
 function chatState() {
   return {
     threadId: '{{ threadId }}',

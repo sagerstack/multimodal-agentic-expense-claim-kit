@@ -43,8 +43,10 @@ def test_deriveButtonOptionsReturnsEmptyForTextKinds():
 
 
 def test_interruptButtonsPartialRendersYesNoButtons():
-    """Partial template renders both Yes and No buttons with correct form fields.
+    """Partial template renders both Yes and No buttons with onclick handlers.
 
+    Buttons now use plain onclick + fetch instead of HTMX forms so they
+    work without htmx.process() on dynamically injected content.
     Template path is resolved relative to __file__ so the test passes regardless
     of pytest's invocation working directory.
     """
@@ -65,7 +67,8 @@ def test_interruptButtonsPartialRendersYesNoButtons():
     assert "Do these extracted details look correct?" in html
     assert ">Yes</button>" in html
     assert ">No</button>" in html
-    assert 'name="button_value"' in html
-    assert 'value="yes"' in html
-    assert 'value="no"' in html
-    assert 'hx-post="/chat/message"' in html
+    assert 'data-label="Yes"' in html
+    assert 'data-label="No"' in html
+    assert 'data-value="yes"' in html
+    assert 'data-value="no"' in html
+    assert "submitButtonInterrupt(this)" in html
