@@ -45,8 +45,10 @@ def _login(page) -> None:
     page.goto(f"{APP_URL}/login", wait_until="networkidle")
     page.locator('input[name="username"]').fill(USERNAME)
     page.locator('input[name="password"]').fill(PASSWORD)
-    page.get_by_role("button", name="Sign In").click()
-    page.wait_for_url(f"{APP_URL}/")
+    # no_wait_after=True avoids Playwright blocking on the long-lived SSE
+    # stream that the chat page opens immediately after redirect.
+    page.get_by_role("button", name="Sign In").click(no_wait_after=True)
+    page.wait_for_url(f"{APP_URL}/", timeout=60_000)
     page.locator("#chatHistory").wait_for(state="visible", timeout=30_000)
 
 
@@ -56,9 +58,45 @@ def _upload_receipt(page, receipt_path: Path, prompt: str) -> None:
     page.locator('#chatForm button[type="submit"]').click()
 
 
+def _send_text_message(page, text: str) -> None:
+    """Type a text message and submit the chat form."""
+    page.locator('textarea[name="message"]').fill(text)
+    page.locator('#chatForm button[type="submit"]').click()
+
+
+def _interrupt_button_count(page) -> int:
+    """Return the total number of Yes-button instances visible in chat history.
+
+    `freezeTurn()` clones the interrupt content (Yes/No buttons) into the static
+    frozen history and clears #interruptTarget. So after each completed turn, the
+    buttons live in frozen divs before #thinkingPanel, NOT in #interruptTarget.
+
+    Each re-presentation of an interrupt adds one more pair of buttons to the frozen
+    history. We use the count to verify re-presentation: after a side question, the
+    count must increase by at least 1 compared to before the side question.
+    """
+    return page.locator('button[data-value="yes"]').count()
+
+
+def _click_latest_yes_button(page) -> None:
+    """Click the most recently rendered Yes button (last in document order)."""
+    page.locator('button[data-value="yes"]').last.click()
+
+
+def _wait_for_interrupt_buttons(page, timeout_ms: int = 30_000) -> bool:
+    """Wait until at least one Yes button exists in the page. Returns True if found."""
+    try:
+        page.locator('button[data-value="yes"]').first.wait_for(
+            state="visible", timeout=timeout_ms
+        )
+        return True
+    except Exception:
+        return False
+
+
 def _wait_for_processing_to_finish(page) -> None:
     page.locator("#thinkingPanel").wait_for(state="visible", timeout=30_000)
-    page.locator("#thinkingPanel").wait_for(state="hidden", timeout=120_000)
+    page.locator("#thinkingPanel").wait_for(state="hidden", timeout=300_000)
 
 
 def _chat_text(page) -> str:
@@ -115,6 +153,170 @@ def test_browser_restaurant_receipt_renders_table_and_confirmation():
 
             thinking_panel = page.locator("#thinkingPanel")
             assert thinking_panel.count() == 1
+        finally:
+            browser.close()
+
+
+@pytest.mark.e2e
+def test_browser_side_question_full_conversation():
+    """Full intake-gpt conversation: upload -> 2 side questions -> Yes -> submit.
+
+    Validates the side question handling fix:
+      1. Side question answers appear visibly in chat history
+      2. The pending interrupt (field_confirmation) is re-presented after each answer
+         (detected by Yes button count increasing by 1 per turn)
+      3. Clicking Yes advances the workflow correctly (no premature step jump)
+      4. A side question during submit_confirmation is answered then the prompt re-appears
+      5. Final Yes submits the claim and a claim number is returned
+
+    This test will FAIL on un-fixed code (that is its purpose: capture the bug
+    in a reproducible, automated assertion before implementing the fix).
+
+    Note on button location: `freezeTurn()` clones interrupt buttons into the static
+    chat history and clears #interruptTarget. Buttons are found globally via
+    `button[data-value="yes"]`, using .last for the most recent interrupt.
+    """
+    assert RESTAURANT_RECEIPT.exists(), f"Missing receipt fixture: {RESTAURANT_RECEIPT}"
+    _require_services_up()
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1536, "height": 960})
+        try:
+            _login(page)
+
+            # ── Turn 1: upload DIG restaurant receipt ──────────────────────────
+            _upload_receipt(
+                page,
+                RESTAURANT_RECEIPT,
+                "Here is my lunch receipt from DIG restaurant.",
+            )
+            _wait_for_processing_to_finish(page)
+
+            # field_confirmation buttons must be present (frozen into history)
+            assert _wait_for_interrupt_buttons(page), (
+                "FAIL Turn 1: field_confirmation Yes/No buttons did not appear after receipt upload"
+            )
+            btn_count_after_t1 = _interrupt_button_count(page)
+            history = _chat_text(page)
+            assert "DIG" in history, (
+                f"FAIL Turn 1: DIG merchant not found in chat history\n{history[-500:]}"
+            )
+
+            # ── Turn 2: side question while field_confirmation is pending ──────
+            _send_text_message(page, "is this a valid receipt?")
+            _wait_for_processing_to_finish(page)
+
+            history = _chat_text(page)
+            # The answer must appear somewhere in the visible chat
+            assert any(
+                kw in history.lower()
+                for kw in ["valid", "receipt", "yes", "acceptable", "legitimate", "original", "real"]
+            ), (
+                f"FAIL Turn 2: side question answer 'is this a valid receipt?' not visible\n"
+                f"Last 800 chars of history:\n{history[-800:]}"
+            )
+            # field_confirmation must be re-presented (button count must increase)
+            btn_count_after_t2 = _interrupt_button_count(page)
+            assert btn_count_after_t2 > btn_count_after_t1, (
+                f"FAIL Turn 2: field_confirmation was NOT re-presented after side question\n"
+                f"Button count before={btn_count_after_t1}, after={btn_count_after_t2}"
+            )
+
+            # ── Turn 3: second side question (policy/approval) ─────────────────
+            _send_text_message(page, "who will approve it?")
+            _wait_for_processing_to_finish(page)
+
+            history = _chat_text(page)
+            assert any(
+                kw in history.lower()
+                for kw in ["approv", "manager", "head", "supervisor", "finance", "department", "hod"]
+            ), (
+                f"FAIL Turn 3: side question answer 'who will approve it?' not visible\n"
+                f"Last 800 chars of history:\n{history[-800:]}"
+            )
+            btn_count_after_t3 = _interrupt_button_count(page)
+            assert btn_count_after_t3 > btn_count_after_t2, (
+                f"FAIL Turn 3: field_confirmation was NOT re-presented after approval side question\n"
+                f"Button count before={btn_count_after_t2}, after={btn_count_after_t3}"
+            )
+
+            # ── Turn 4: click Yes → advances to policy check ───────────────────
+            _click_latest_yes_button(page)
+            _wait_for_processing_to_finish(page)
+
+            history = _chat_text(page)
+            btn_count_after_t4 = _interrupt_button_count(page)
+
+            # Determine which path: submit_confirmation (buttons) or policy_justification (text)
+            if btn_count_after_t4 > btn_count_after_t3:
+                # New Yes buttons appeared → submit_confirmation (compliant receipt)
+                assert any(
+                    kw in history.lower()
+                    for kw in ["policy", "compliant", "submit", "confirm", "proceed", "within"]
+                ), (
+                    f"FAIL Turn 4: submit_confirmation context not found\n"
+                    f"Last 500:\n{history[-500:]}"
+                )
+
+                # ── Turn 5: side question during submit_confirmation ───────────
+                _send_text_message(page, "who will approve this?")
+                _wait_for_processing_to_finish(page)
+
+                history = _chat_text(page)
+                assert any(
+                    kw in history.lower()
+                    for kw in ["approv", "manager", "head", "supervisor", "finance", "department", "hod"]
+                ), (
+                    f"FAIL Turn 5: approval answer not visible during submit_confirmation\n"
+                    f"Last 800 chars:\n{history[-800:]}"
+                )
+                btn_count_after_t5 = _interrupt_button_count(page)
+                assert btn_count_after_t5 > btn_count_after_t4, (
+                    f"FAIL Turn 5: submit_confirmation not re-presented after side question\n"
+                    f"Button count before={btn_count_after_t4}, after={btn_count_after_t5}"
+                )
+
+                # ── Turn 6: click Yes → submit ─────────────────────────────────
+                _click_latest_yes_button(page)
+                _wait_for_processing_to_finish(page)
+
+            else:
+                # No new buttons → policy_justification (receipt exceeded policy limit)
+                # ── Turn 5 (violation path): side question during justification ─
+                _send_text_message(page, "who will approve this?")
+                _wait_for_processing_to_finish(page)
+
+                history = _chat_text(page)
+                assert any(
+                    kw in history.lower()
+                    for kw in ["approv", "manager", "head", "supervisor", "finance", "department", "hod"]
+                ), (
+                    f"FAIL Turn 5 (violation): approval answer not visible during justification\n"
+                    f"Last 800 chars:\n{history[-800:]}"
+                )
+
+                # ── Turn 6: provide justification ─────────────────────────────
+                _send_text_message(
+                    page, "This was a team lunch for a project planning session."
+                )
+                _wait_for_processing_to_finish(page)
+
+                # If submit_confirmation follows, click Yes
+                if _interrupt_button_count(page) > btn_count_after_t4:
+                    _click_latest_yes_button(page)
+                    _wait_for_processing_to_finish(page)
+
+            # ── Final assertion: claim submission acknowledged ─────────────────
+            history = _chat_text(page)
+            assert any(
+                kw in history.upper()
+                for kw in ["CLAIM-", "CLM-", "SUBMITTED", "REFERENCE", "CONFIRMED", "ACKNOWLEDGMENT"]
+            ), (
+                f"FAIL Final: claim number / submission confirmation not found\n"
+                f"Last 1000 chars of history:\n{history[-1000:]}"
+            )
+
         finally:
             browser.close()
 

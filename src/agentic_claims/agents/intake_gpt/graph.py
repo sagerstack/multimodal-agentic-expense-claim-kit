@@ -1468,34 +1468,57 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
         messageCount=len(state.get("messages", [])),
         message="intake-gpt reason node invoking llm",
     )
-    # When a side question was just classified, inject an explicit directive
-    # so the LLM does not produce an empty response. General prompt rules are
-    # insufficient — the LLM needs an in-context instruction naming the exact
-    # situation and required steps.
+    # Side-question directive and LLM binding:
+    # - For policy_justification / submit_confirmation kinds: use bind_tools([]) so the
+    #   LLM physically cannot call requestHumanInput. The post-LLM re-emit block then
+    #   fires deterministically. This prevents the bug where the LLM ignores the directive
+    #   and calls requestHumanInput, creating a new interrupt whose resume path fails.
+    # - For field_confirmation (and other kinds): keep the full tool set with a directive
+    #   so the LLM can answer and optionally call searchPolicies when needed.
     sideQuestionDirective: list = []
     lastResolution = intakeState.get("lastResolution") or {}
-    if lastResolution.get("outcome") == "side_question":
+    isSideQuestion = lastResolution.get("outcome") == "side_question"
+    pendingKindForSideQ = str((intakeState.get("pendingInterrupt") or {}).get("kind") or "")
+    useNoToolLlm = isSideQuestion and pendingKindForSideQ in ("policy_justification", "submit_confirmation")
+    if isSideQuestion:
         pending = intakeState.get("pendingInterrupt") or {}
         sideQ = str(lastResolution.get("responseText") or "")
         pendingQuestion = str(pending.get("question") or "")
         pendingCtx = str(pending.get("contextMessage") or "")
         pendingKind = str(pending.get("kind") or "")
         pendingStep = str(pending.get("blockingStep") or pendingKind)
-        sideQuestionDirective = [
-            SystemMessage(
-                content=(
-                    f"The user has asked a follow-up question while a confirmation was pending.\n"
-                    f'Their question: "{sideQ}"\n\n'
-                    f"Answer the question directly and visibly in plain text using at least "
-                    f"2-3 sentences. If it is about policy, approvers, or expense rules, call "
-                    f"searchPolicies first and use the result to answer.\n\n"
-                    f"Do NOT call requestHumanInput — the system will automatically re-present "
-                    f"the pending prompt after your answer. Do not produce an empty response."
+        if useNoToolLlm:
+            sideQuestionDirective = [
+                SystemMessage(
+                    content=(
+                        f"The user has asked a follow-up question while a confirmation was pending.\n"
+                        f'Their question: "{sideQ}"\n\n'
+                        f"Answer the question directly and factually in 2-4 sentences.\n"
+                        f"- For receipt validity questions: refer to the extracted receipt fields in the runtime context.\n"
+                        f"- For approver/policy questions: explain that approval routing follows company expense policy.\n"
+                        f"Do NOT ask any questions back. Do NOT call any tools. "
+                        f"The system will automatically re-present the pending confirmation after your answer."
+                    )
                 )
-            )
-        ]
+            ]
+        else:
+            sideQuestionDirective = [
+                SystemMessage(
+                    content=(
+                        f"The user has asked a follow-up question while a confirmation was pending.\n"
+                        f'Their question: "{sideQ}"\n\n'
+                        f"Answer the question directly and visibly in plain text using at least "
+                        f"2-3 sentences. If it is about policy, approvers, or expense rules, call "
+                        f"searchPolicies first and use the result to answer.\n\n"
+                        f"Do NOT call requestHumanInput — the system will automatically re-present "
+                        f"the pending prompt after your answer. Do not produce an empty response."
+                    )
+                )
+            ]
 
-    response = await boundLlm.ainvoke(
+    activeLlm = llm.bind_tools([]) if useNoToolLlm else boundLlm
+
+    response = await activeLlm.ainvoke(
         [
             SystemMessage(content=INTAKE_GPT_SYSTEM_PROMPT),
             SystemMessage(content=runtimeContext),
@@ -1559,6 +1582,56 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
             "messages": [hydratedResponse, reInterruptMsg],
             "intakeGpt": intakeState,
         }
+
+    # Post-LLM policy violation fallback gate:
+    # The system prompt requires the LLM to write "-> VIOLATION" when it detects a
+    # policy violation. If the LLM complied with the text format but forgot to call
+    # requestHumanInput(policy_justification), inject the interrupt deterministically.
+    # This handles the case where _hasPolicyViolation (Gate 2, pre-LLM) cannot detect
+    # violations because policySearchResults is a list (MCP format), not a structured dict.
+    llmContent = str(getattr(hydratedResponse, "content", "") or "")
+    if (
+        intakeState["workflow"]["currentStep"] == "policy_answered"
+        and intakeState.get("pendingInterrupt") is None
+        and pendingInterrupt is None  # LLM did NOT call requestHumanInput
+        and "-> VIOLATION" in llmContent
+    ):
+        pjMsg = _buildPolicyJustificationAiMessage(intakeState)
+        if pjMsg is not None:
+            pjPending = _pendingInterruptFromToolCalls(pjMsg)
+            if pjPending is not None:
+                intakeState["pendingInterrupt"] = pjPending
+                intakeState["workflow"]["currentStep"] = (
+                    pjPending.get("blockingStep") or "policy_justification"
+                )
+                intakeState["workflow"]["status"] = "blocked"
+                logEvent(
+                    logger,
+                    "intake.gpt.runtime_policy_justification_fallback",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    message=(
+                        "LLM detected violation in text but did not call requestHumanInput; "
+                        "injecting policy_justification interrupt"
+                    ),
+                )
+                logEvent(
+                    logger,
+                    "intake.graph.node_exited",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    nodeName="reasonNode",
+                    workflowStep=intakeState["workflow"]["currentStep"],
+                    message="intake-gpt node exited",
+                )
+                return {
+                    "messages": [hydratedResponse, pjMsg],
+                    "intakeGpt": intakeState,
+                }
 
     logEvent(
         logger,
@@ -1940,8 +2013,24 @@ async def applyToolResultsNode(state: IntakeGptGraphState) -> dict:
     return updates
 
 
-async def sideQuestionResponderNode(state: IntakeGptGraphState) -> dict:
-    """Placeholder node kept for the planned topology."""
+async def sideQuestionResponderNode(state: IntakeGptGraphState, *, llm) -> dict:
+    """Isolated side-question answering node.
+
+    Answers the user's follow-up question using a zero-tool LLM call so that
+    no workflow state (currentStep, pendingInterrupt, policySearchResults) is
+    mutated. After answering, injects a synthetic re-interrupt message so
+    toolNode can re-present the original pending prompt to the user.
+
+    Routing:
+      interruptResolutionNode → sideQuestionResponderNode  (when outcome=side_question)
+      sideQuestionResponderNode → toolNode                 (re-interrupt has tool_calls)
+      toolNode → requestHumanInput → interrupt()           (graph suspends again)
+    """
+    intakeState = _normalizeIntakeState(state)
+    pending = intakeState.get("pendingInterrupt") or {}
+    resolution = intakeState.get("lastResolution") or {}
+    sideQ = str(resolution.get("responseText") or "")
+
     logEvent(
         logger,
         "intake.graph.node_entered",
@@ -1950,7 +2039,49 @@ async def sideQuestionResponderNode(state: IntakeGptGraphState) -> dict:
         claimId=state.get("claimId"),
         threadId=state.get("threadId"),
         nodeName="sideQuestionResponderNode",
+        sideQuestion=sideQ[:80],
+        pendingKind=str(pending.get("kind") or ""),
         message="intake-gpt node entered",
+    )
+
+    # Build receipt context so the LLM can give grounded answers
+    receiptContext = _buildExtractionContextMessage(intakeState)
+    systemContent = (
+        "You are answering a user's follow-up question during an expense claim review. "
+        "A confirmation prompt is pending and will be automatically re-presented after "
+        "your answer — you do NOT need to ask the user to confirm anything.\n\n"
+        "Guidelines:\n"
+        "- Answer directly and factually in 2-4 sentences.\n"
+        "- For receipt validity questions: refer to the extracted fields shown below.\n"
+        "- For approver/policy questions: explain that approval routing follows the company "
+        "expense policy — typically the direct manager for amounts within limit, and the "
+        "Department Head or Finance for amounts that exceed the limit or require exceptions.\n"
+        "- Do NOT call any tools. Do NOT produce an empty response."
+    )
+    if receiptContext:
+        systemContent += f"\n\nReceipt being reviewed:\n{receiptContext}"
+
+    noToolLlm = llm.bind_tools([])
+    response = await noToolLlm.ainvoke(
+        [
+            SystemMessage(content=systemContent),
+            HumanMessage(content=sideQ),
+        ]
+    )
+
+    # Synthetic re-interrupt so toolNode can re-present the pending prompt
+    reInterruptMsg = _buildReInterruptAiMessage(pending)
+
+    logEvent(
+        logger,
+        "intake.gpt.side_question_answered",
+        logCategory="agent",
+        agent="intake-gpt",
+        claimId=state.get("claimId"),
+        threadId=state.get("threadId"),
+        sideQuestion=sideQ[:80],
+        pendingKind=str(pending.get("kind") or ""),
+        message="sideQuestionResponderNode answered side question; re-interrupt injected",
     )
     logEvent(
         logger,
@@ -1960,9 +2091,13 @@ async def sideQuestionResponderNode(state: IntakeGptGraphState) -> dict:
         claimId=state.get("claimId"),
         threadId=state.get("threadId"),
         nodeName="sideQuestionResponderNode",
+        workflowStep=intakeState["workflow"]["currentStep"],
         message="intake-gpt node exited",
     )
-    return {"intakeGpt": _normalizeIntakeState(state)}
+    return {
+        "messages": [response, reInterruptMsg],
+        "intakeGpt": intakeState,
+    }
 
 
 def finalizeTurnNode(state: IntakeGptGraphState) -> dict:
@@ -1997,6 +2132,14 @@ def _routeAfterTurnEntry(state: IntakeGptGraphState) -> str:
     return "interruptResolutionNode" if pending else "reasonNode"
 
 
+def _routeAfterInterruptResolution(state: IntakeGptGraphState) -> str:
+    """Route side questions to the isolated responder; everything else to reasonNode."""
+    intakeState = _normalizeIntakeState(state)
+    if (intakeState.get("lastResolution") or {}).get("outcome") == "side_question":
+        return "sideQuestionResponderNode"
+    return "reasonNode"
+
+
 def _routeAfterReason(state: IntakeGptGraphState) -> str:
     messages = state.get("messages", [])
     if messages and isinstance(messages[-1], AIMessage) and messages[-1].tool_calls:
@@ -2011,12 +2154,15 @@ def buildIntakeGptSubgraph(llm):
     async def _reasonNodeWithLlm(state: IntakeGptGraphState) -> dict:
         return await reasonNode(state, llm=llm)
 
+    async def _sideQuestionResponderNodeWithLlm(state: IntakeGptGraphState) -> dict:
+        return await sideQuestionResponderNode(state, llm=llm)
+
     builder.add_node("turnEntryNode", turnEntryNode)
     builder.add_node("interruptResolutionNode", interruptResolutionNode)
     builder.add_node("reasonNode", _reasonNodeWithLlm)
     builder.add_node("toolNode", ToolNode(_INTAKE_GPT_TOOLS))
     builder.add_node("applyToolResultsNode", applyToolResultsNode)
-    builder.add_node("sideQuestionResponderNode", sideQuestionResponderNode)
+    builder.add_node("sideQuestionResponderNode", _sideQuestionResponderNodeWithLlm)
     builder.add_node("finalizeTurnNode", finalizeTurnNode)
 
     builder.add_edge(START, "turnEntryNode")
@@ -2028,7 +2174,15 @@ def buildIntakeGptSubgraph(llm):
             "reasonNode": "reasonNode",
         },
     )
-    builder.add_edge("interruptResolutionNode", "reasonNode")
+    # Route side questions to the isolated responder; all other outcomes go to reasonNode
+    builder.add_conditional_edges(
+        "interruptResolutionNode",
+        _routeAfterInterruptResolution,
+        {
+            "sideQuestionResponderNode": "sideQuestionResponderNode",
+            "reasonNode": "reasonNode",
+        },
+    )
     builder.add_conditional_edges(
         "reasonNode",
         _routeAfterReason,
@@ -2039,7 +2193,16 @@ def buildIntakeGptSubgraph(llm):
     )
     builder.add_edge("toolNode", "applyToolResultsNode")
     builder.add_edge("applyToolResultsNode", "reasonNode")
-    builder.add_edge("sideQuestionResponderNode", "finalizeTurnNode")
+    # sideQuestionResponderNode returns [answerMsg, reInterruptMsg]; reInterruptMsg has
+    # tool_calls so _routeAfterReason routes it to toolNode → requestHumanInput → interrupt()
+    builder.add_conditional_edges(
+        "sideQuestionResponderNode",
+        _routeAfterReason,
+        {
+            "toolNode": "toolNode",
+            "finalizeTurnNode": "finalizeTurnNode",
+        },
+    )
     builder.add_edge("finalizeTurnNode", END)
 
     return builder.compile()

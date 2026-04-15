@@ -277,28 +277,34 @@ function chatState() {
     },
 
     submitForm() {
-      // Capture current state before clearing
+      // Capture current state before any clearing.
       const text = this.messageText;
       const imageUrl = this.previewUrl;
       const imageName = this.fileName;
 
-      // Show user bubble immediately
+      // Show user bubble immediately so the UI feels responsive.
       this.appendUserBubble(text, imageUrl, imageName);
 
-      // Set processing state
+      // Set processing state.
       this.processing = true;
       this.thinkingCollapsed = false;
 
-      // Clear Alpine state immediately (visual only)
-      this.messageText = '';
+      // Clear non-message state synchronously (these are not serialized by HTMX).
       this.previewUrl = null;
       this.fileName = null;
       this.$refs.messageInput.style.height = 'auto';
 
-      // Clear DOM file input AFTER HTMX has serialized the form.
-      // HTMX processes submit synchronously, so by the time setTimeout
-      // fires the form data has already been captured and sent.
+      // IMPORTANT: Do NOT clear messageText here. Alpine's @submit listener
+      // fires before HTMX's submit listener. If we clear messageText now,
+      // x-model immediately empties the textarea DOM value — and HTMX reads
+      // empty string when it serializes the form milliseconds later.
+      //
+      // Instead, defer the clear to setTimeout(0). HTMX processes the form
+      // synchronously in its submit listener (which fires after this handler
+      // returns), so by the time setTimeout fires, HTMX has already captured
+      // the correct textarea value and sent the request.
       setTimeout(() => {
+        this.messageText = '';
         this.$refs.fileInput.value = '';
       }, 0);
       this.$nextTick(() => this.scrollChatToBottom());
