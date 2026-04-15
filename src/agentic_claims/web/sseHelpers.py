@@ -2005,6 +2005,48 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                                 yield ServerSentEvent(
                                     raw_data=contextHtml, event=SseEvent.MESSAGE
                                 )
+                        # Emit the LLM's side-question answer (if any) before the
+                        # interrupt re-renders. When a side question is classified,
+                        # reasonNode calls the LLM (which answers in plain text) and
+                        # then injects a synthetic re-interrupt. The LLM's answer
+                        # lands in finalResponse but the interrupt path would skip
+                        # the normal MESSAGE emission, leaving the answer only in
+                        # #tokenTarget — which freezeTurn() clears. Emitting here
+                        # moves it to #aiMessages so it survives the freeze.
+                        sideAnswerText = _stripToolCallExpressions(
+                            _stripThinkingTags(_stripToolCallJson(finalResponse or ""))
+                        ).strip()
+                        if sideAnswerText and _isUserFacingProse(sideAnswerText):
+                            try:
+                                template = templates.get_template(
+                                    "partials/message_bubble.html"
+                                )
+                                sideAnswerHtml = template.render(
+                                    content=sideAnswerText,
+                                    isAi=True,
+                                    confidenceScores=None,
+                                    violations=None,
+                                    timestamp=datetime.now(
+                                        ZoneInfo("Asia/Singapore")
+                                    ).strftime("%-I:%M %p"),
+                                )
+                            except Exception:
+                                sideAnswerHtml = (
+                                    f'<div class="ai-message">{sideAnswerText}</div>'
+                                )
+                            yield ServerSentEvent(
+                                raw_data=sideAnswerHtml, event=SseEvent.MESSAGE
+                            )
+                            logEvent(
+                                logger,
+                                "sse.side_question_answer_emitted",
+                                logCategory="sse",
+                                claimId=graphInput.get("claimId"),
+                                threadId=graphInput.get("threadId"),
+                                contentLength=len(sideAnswerText),
+                                kind=payload.get("kind") if isinstance(payload, dict) else None,
+                                message="Side question answer emitted as MESSAGE before interrupt re-render",
+                            )
                         # Dispatch on uiKind for interrupt-prompt rendering.
                         uiKind = str(payload.get("uiKind", "text"))
                         question = (
