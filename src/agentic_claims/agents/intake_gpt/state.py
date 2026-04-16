@@ -39,6 +39,7 @@ class InterruptResolution(TypedDict):
     outcome: Literal[
         "answer",
         "side_question",
+        "correction_requested",
         "cancel_claim",
         "reset_workflow",
         "start_new_claim",
@@ -59,6 +60,7 @@ class IntakeGptState(TypedDict):
     lastResolution: InterruptResolution | None
     toolTrace: dict
     protocolGuardCount: int
+    sessionReset: NotRequired[bool]  # set by submit_confirmation cancel path
 
 
 class IntakeGptSubgraphState(TypedDict):

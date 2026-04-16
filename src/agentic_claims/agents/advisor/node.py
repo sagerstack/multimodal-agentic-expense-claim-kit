@@ -272,7 +272,7 @@ async def _advisorErrorFallback(
             )
 
     return {
-        "messages": [AIMessage(content="**Advisor Decision**: ESCALATED FOR REVIEW\n\nAdvisor encountered an error and escalated the claim for manual review.")],
+        "messages": [AIMessage(content="**Advisor Decision**: ESCALATED FOR REVIEW\n\nAdvisor encountered an error and escalated the claim for manual review.", additional_kwargs={"agent": "advisor"})],
         "advisorDecision": "escalate_to_reviewer",
         "status": "escalated",
     }
@@ -602,7 +602,7 @@ async def advisorNode(state: ClaimState) -> dict:
     )
 
     return {
-        "messages": [AIMessage(content=summaryMsg)],
+        "messages": [AIMessage(content=summaryMsg, additional_kwargs={"agent": "advisor"})],
         "advisorDecision": advisorDecision,
         "status": newStatus,
     }

@@ -1,0 +1,30 @@
+{# Button-style interrupt prompt (Phase 14).
+   Server emits this via SseEvent.INTERRUPT when payload.uiKind == "buttons".
+   The container #interruptTarget in chat.html (sse-swap="interrupt",
+   hx-swap="innerHTML") replaces its children with this partial on arrival.
+
+   Buttons use plain onclick + fetch instead of HTMX forms. This bypasses
+   the htmx.process() requirement for dynamically injected content. The
+   onclick handler:
+     1. Dispatches 'button-submitted' so Alpine can show a user bubble
+        and set processing=true (same as textarea submit UX).
+     2. Clears #interruptTarget immediately for instant feedback.
+     3. POSTs to /chat/message via fetch with message + button_value.
+
+   data-label / data-value carry the values so Jinja template escaping
+   applies automatically (avoids XSS from inline JS string literals). #}
+<div class="space-y-3" role="group" aria-label="Confirmation response">
+  {% if question %}
+  <div class="text-sm text-on-surface leading-relaxed">{{ question }}</div>
+  {% endif %}
+  <div class="flex gap-2 flex-wrap">
+    {% for opt in options %}
+    <button type="button"
+            data-label="{{ opt.label }}"
+            data-value="{{ opt.value }}"
+            onclick="submitButtonInterrupt(this)"
+            aria-label="{{ opt.label }}"
+            class="px-5 py-2 rounded-xl bg-surface-container-lowest text-on-surface hover:bg-surface-bright active:scale-95 border border-outline-variant/30 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-secondary/50">{{ opt.label }}</button>
+    {% endfor %}
+  </div>
+</div>

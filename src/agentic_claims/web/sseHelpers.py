@@ -303,6 +303,10 @@ def _summarizeToolOutput(toolName: str, toolOutput) -> str:
         else:
             data = toolOutput
 
+        # searchPolicies returns a list directly (not a dict), so handle it before the dict guard.
+        if toolName == "searchPolicies" and isinstance(data, list):
+            return f"Found {len(data)} relevant policy clause(s)"
+
         if not isinstance(data, dict):
             return TOOL_COMPLETION_LABELS.get(toolName, "Step complete")
 
@@ -1665,14 +1669,16 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             }
                         )
                 elif toolName == "submitClaim":
-                    if tableClaims:
-                        tableClaims[-1]["status"] = "submitted"
-                    # submitClaim completion is the reliable cutover point from
-                    # intake chat UX to background post-submission agents. Arm
-                    # early termination here so parallel compliance/fraud token
-                    # streams never reach the user chat buffer.
-                    claimSubmittedFlag = True
-                    shouldTerminateEarly = True
+                    # Only arm early termination when submitClaim actually succeeded.
+                    # If insertion failed, toolOutput contains a Pydantic/error string —
+                    # _extractSubmitClaimIdentifiers returns (None, None) and we fall
+                    # through so the LLM's error response streams through to the user.
+                    _submitId, _ = _extractSubmitClaimIdentifiers(toolOutput)
+                    if _submitId is not None:
+                        if tableClaims:
+                            tableClaims[-1]["status"] = "submitted"
+                        claimSubmittedFlag = True
+                        shouldTerminateEarly = True
 
                 if toolName in ("extractReceiptFields", "submitClaim"):
                     try:
@@ -1793,20 +1799,15 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 if parsedClaimNumber:
                     claimNumber = parsedClaimNumber
 
-        if not (finalResponse or "").strip():
+        if not (finalResponse or "").strip() and (claimNumber or dbClaimId is not None):
             if claimNumber:
                 finalResponse = (
                     f"Your claim has been submitted successfully. Claim number: {claimNumber}. "
                     "Please click on New Claim if you would like to submit another receipt. Thank you."
                 )
-            elif dbClaimId is not None:
-                finalResponse = (
-                    f"Your claim has been submitted successfully. Claim ID: {dbClaimId}. "
-                    "Please click on New Claim if you would like to submit another receipt. Thank you."
-                )
             else:
                 finalResponse = (
-                    "Your claim has been submitted successfully. "
+                    f"Your claim has been submitted successfully. Claim ID: {dbClaimId}. "
                     "Please click on New Claim if you would like to submit another receipt. Thank you."
                 )
             logEvent(
@@ -2008,16 +2009,92 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                                 yield ServerSentEvent(
                                     raw_data=contextHtml, event=SseEvent.MESSAGE
                                 )
+                        # Emit the LLM's side-question answer (if any) before the
+                        # interrupt re-renders. When a side question is classified,
+                        # reasonNode calls the LLM (which answers in plain text) and
+                        # then injects a synthetic re-interrupt. The LLM's answer
+                        # lands in finalResponse but the interrupt path would skip
+                        # the normal MESSAGE emission, leaving the answer only in
+                        # #tokenTarget — which freezeTurn() clears. Emitting here
+                        # moves it to #aiMessages so it survives the freeze.
+                        sideAnswerText = _stripToolCallExpressions(
+                            _stripThinkingTags(_stripToolCallJson(finalResponse or ""))
+                        ).strip()
+                        # Use a lower length floor than _isUserFacingProse (40 chars) —
+                        # a brief side-question answer like "Yes, the receipt is valid." is
+                        # still valuable to surface even at 30 chars.
+                        if sideAnswerText and len(sideAnswerText) >= 10:
+                            try:
+                                template = templates.get_template(
+                                    "partials/message_bubble.html"
+                                )
+                                sideAnswerHtml = template.render(
+                                    content=sideAnswerText,
+                                    isAi=True,
+                                    confidenceScores=None,
+                                    violations=None,
+                                    timestamp=datetime.now(
+                                        ZoneInfo("Asia/Singapore")
+                                    ).strftime("%-I:%M %p"),
+                                )
+                            except Exception:
+                                sideAnswerHtml = (
+                                    f'<div class="ai-message">{sideAnswerText}</div>'
+                                )
+                            yield ServerSentEvent(
+                                raw_data=sideAnswerHtml, event=SseEvent.MESSAGE
+                            )
+                            logEvent(
+                                logger,
+                                "sse.side_question_answer_emitted",
+                                logCategory="sse",
+                                claimId=graphInput.get("claimId"),
+                                threadId=graphInput.get("threadId"),
+                                contentLength=len(sideAnswerText),
+                                kind=payload.get("kind") if isinstance(payload, dict) else None,
+                                message="Side question answer emitted as MESSAGE before interrupt re-render",
+                            )
+                        # Dispatch on uiKind for interrupt-prompt rendering.
+                        uiKind = str(payload.get("uiKind", "text"))
                         question = (
                             payload.get("question", str(payload))
                             if isinstance(payload, dict)
                             else str(payload)
                         )
-                        # Note: no session mutation here. The checkpointer
-                        # already persisted the pending interrupt when
-                        # interrupt() fired; the next POST reads state via
-                        # isPausedAtInterrupt(graph.aget_state(...)).
-                        yield ServerSentEvent(raw_data=question, event=SseEvent.INTERRUPT)
+                        logEvent(
+                            logger,
+                            "sse.interrupt_render",
+                            logCategory="sse",
+                            claimId=graphInput.get("claimId"),
+                            kind=payload.get("kind") if isinstance(payload, dict) else None,
+                            uiKind=uiKind,
+                            blockingStep=payload.get("blockingStep") if isinstance(payload, dict) else None,
+                            message="SSE interrupt render branch selected",
+                        )
+                        if uiKind == "buttons":
+                            options = payload.get("options") or []
+                            try:
+                                buttonTemplate = templates.get_template(
+                                    "partials/interrupt_buttons.html"
+                                )
+                                interruptHtml = buttonTemplate.render(
+                                    question=question,
+                                    options=options,
+                                )
+                            except Exception:
+                                # Fallback to plain text if template rendering fails.
+                                interruptHtml = str(question)
+                            yield ServerSentEvent(
+                                raw_data=interruptHtml, event=SseEvent.INTERRUPT
+                            )
+                        else:
+                            # Note: no session mutation here. The checkpointer
+                            # already persisted the pending interrupt when
+                            # interrupt() fired; the next POST reads state via
+                            # isPausedAtInterrupt(graph.aget_state(...)).
+                            yield ServerSentEvent(
+                                raw_data=str(question), event=SseEvent.INTERRUPT
+                            )
                         return
         except Exception as e:
             logEvent(

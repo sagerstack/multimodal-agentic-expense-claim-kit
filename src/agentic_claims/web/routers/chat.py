@@ -38,11 +38,23 @@ async def postMessage(
     request: Request,
     message: str = Form(default=""),
     receipt: UploadFile | None = File(default=None),
+    button_value: str = Form(default=""),
 ):
     """Accept a chat message, enqueue graph input, return 204."""
     sessionIds = getSessionIds(request)
     threadId = sessionIds["threadId"]
     claimId = sessionIds["claimId"]
+
+    if button_value:
+        logEvent(
+            logger,
+            "chat.button_reply",
+            logCategory="chat",
+            claimId=claimId,
+            threadId=threadId,
+            payload={"button_value": button_value, "message": message},
+            message="Structured button-value reply received",
+        )
 
     hasImage = False
     imageB64 = None
@@ -155,6 +167,54 @@ async def postMessage(
                 status="completed",
                 payload={"oldClaimId": oldClaimId, "oldThreadId": oldThreadId, "trigger": "claimSubmitted"},
                 message="Session auto-reset after claim submission",
+            )
+        # Also check for sessionReset flag (submit_confirmation cancel path).
+        # Same rotation logic as claimSubmitted, triggered by intakeGpt.sessionReset=True.
+        priorIntakeGpt = (priorState.values.get("intakeGpt") or {}) if priorState and priorState.values else {}
+        if not autoResetFired and priorIntakeGpt.get("sessionReset") is True:
+            oldClaimId = claimId
+            oldThreadId = threadId
+            oldDraftClaimId = request.session.get("draft_claim_id")
+            if oldClaimId:
+                clearImage(oldClaimId)
+            request.session["last_closed_thread_id"] = oldThreadId
+            request.session["last_closed_claim_id"] = oldClaimId
+            request.session["last_closed_draft_claim_id"] = oldDraftClaimId
+            newThreadId = str(uuid.uuid4())
+            request.session["thread_id"] = newThreadId
+            request.session["claim_id"] = str(uuid.uuid4())
+            request.session.pop("draft_created", None)
+            request.session.pop("draft_claim_id", None)
+            if oldThreadId:
+                oldQueue = popQueue(oldThreadId)
+                if oldQueue is not None:
+                    try:
+                        oldQueue.put_nowait(QueueRotationSignal(newThreadId=newThreadId))
+                    except asyncio.QueueFull:
+                        logEvent(
+                            logger,
+                            "sse.session_reset_sentinel_queue_full",
+                            logCategory="sse",
+                            threadId=oldThreadId,
+                            message="Old queue full on session_reset; rotation signal skipped",
+                        )
+            threadId = newThreadId
+            claimId = request.session["claim_id"]
+            draftClaimNumber = f"DRAFT-{claimId[:8]}"
+            autoResetFired = True
+            logEvent(
+                logger,
+                "chat.session_reset",
+                logCategory="chat",
+                actorType="app",
+                userId=username,
+                username=username,
+                employeeId=employeeId,
+                claimId=claimId,
+                threadId=threadId,
+                status="completed",
+                payload={"oldClaimId": oldClaimId, "oldThreadId": oldThreadId, "trigger": "sessionReset"},
+                message="Session reset after submit_confirmation cancel",
             )
     except Exception:
         pass  # If auto-reset decision fails, continue normally
@@ -532,6 +592,8 @@ async def exportChat(request: Request, scope: str = "auto"):
         "",
     ]
 
+    _POST_SUBMISSION_AGENTS = {"compliance", "fraud", "advisor"}
+
     turnCount = 0
     for msg in messages:
         content = getattr(msg, "content", None)
@@ -543,6 +605,11 @@ async def exportChat(request: Request, scope: str = "auto"):
             lines.append(text.strip() or "_(empty)_")
             lines.append("")
         elif isinstance(msg, AIMessage):
+            # Skip post-submission pipeline messages (compliance, fraud, advisor).
+            # They are internal agent outputs, not part of the intake conversation.
+            agentTag = (getattr(msg, "additional_kwargs", None) or {}).get("agent", "")
+            if agentTag in _POST_SUBMISSION_AGENTS:
+                continue
             text = content if isinstance(content, str) else ""
             toolCalls = getattr(msg, "tool_calls", None) or []
             # Surface askHuman questions as assistant prose (the user sees them
@@ -577,14 +644,25 @@ async def exportChat(request: Request, scope: str = "auto"):
                     lines.append(f"- `{name}` — `{args}`")
                 lines.append("")
         elif isinstance(msg, ToolMessage):
-            # Surface askHuman answers as user turns — they carry the user's
-            # reply to an interrupt-triggered question. Dropping them loses the
-            # majority of user content in the typical flow (only 1-2 messages
-            # arrive as HumanMessage; everything else is an askHuman resume).
-            # Source: CLAIM-022 export showed only the initial greeting + upload.
-            if getattr(msg, "name", None) != "askHuman":
+            # Surface interrupt answers as user turns.
+            # - askHuman (legacy intake agent): content is the raw user string.
+            # - requestHumanInput (intake-gpt): content is JSON {"response": "<text>"}
+            #   because the tool returns a dict which LangGraph serialises.
+            # Dropping these loses the majority of user content — only 1-2 messages
+            # arrive as HumanMessage; everything else is an interrupt resume.
+            msgName = getattr(msg, "name", None)
+            if msgName not in ("askHuman", "requestHumanInput"):
                 continue
-            text = content if isinstance(content, str) else str(content or "")
+            rawContent = content if isinstance(content, str) else str(content or "")
+            if msgName == "requestHumanInput":
+                try:
+                    import json as _json
+                    parsed = _json.loads(rawContent)
+                    text = str(parsed.get("response", rawContent))
+                except Exception:
+                    text = rawContent
+            else:
+                text = rawContent
             if not text.strip():
                 continue
             turnCount += 1

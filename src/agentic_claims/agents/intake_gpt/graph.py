@@ -47,7 +47,8 @@ _AFFIRMATIVE_TOKENS = {
     "confirmed",
     "confirm",
 }
-_NEGATIVE_TOKENS = {"no", "nope", "cancel", "not yet", "later", "wait"}
+_NEGATIVE_TOKENS = {"no", "nope", "cancel", "not yet", "later", "wait", "skip", "never mind"}
+_INTERROGATIVE_PREFIXES = ("what", "why", "how", "when", "who", "is", "can", "does", "will")
 _CURRENCY_SYMBOL_MAP = {
     "₫": "VND",
     "đ": "VND",
@@ -528,6 +529,34 @@ def _pendingInterruptFromToolCalls(response: AIMessage) -> dict | None:
     return None
 
 
+def _buildReInterruptAiMessage(pending: dict) -> AIMessage:
+    """Synthetic re-emit of a pending interrupt after the LLM answers a side question.
+
+    Used by the post-LLM hook in reasonNode when the LLM responded to a side
+    question without re-calling requestHumanInput. Mirrors the pending interrupt
+    exactly so the SSE INTERRUPT event fires again with the same uiKind/options.
+    """
+    toolCallId = f"rt-reInterrupt-{int(time.time() * 1000)}"
+    return AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "id": toolCallId,
+                "name": "requestHumanInput",
+                "args": {
+                    "kind": pending.get("kind", ""),
+                    "question": pending.get("question", ""),
+                    "contextMessage": "",  # already shown; don't re-show the context block
+                    "expectedResponseKind": pending.get("expectedResponseKind", "text"),
+                    "blockingStep": pending.get("blockingStep", ""),
+                    "allowSideQuestions": pending.get("allowSideQuestions", True),
+                    "category": pending.get("category", ""),
+                },
+            }
+        ],
+    )
+
+
 def _buildFieldConfirmationAiMessage(intakeState: IntakeGptState) -> AIMessage:
     question = "Does the above information look correct? Please confirm or let me know what needs changing."
     category = _normalizeCategory((intakeState.get("slots") or {}).get("category"))
@@ -546,6 +575,40 @@ def _buildFieldConfirmationAiMessage(intakeState: IntakeGptState) -> AIMessage:
                     "category": category or "",
                 },
                 "id": "call_field_confirmation_after_manual_fx",
+            }
+        ],
+    )
+
+
+def _buildSubmitConfirmationAiMessage(intakeState: IntakeGptState) -> AIMessage | None:
+    """Synthetic requestHumanInput(submit_confirmation) after a compliant policy check.
+
+    Used by the deterministic gate in reasonNode when policySearchResults shows
+    compliance but the LLM might otherwise ask in plain text (skipping the button UI).
+    Returns None if amountSgd is missing (gate should not fire).
+    """
+    slots = intakeState.get("slots") or {}
+    claimData = slots.get("claimData") or {}
+    amountSgd = claimData.get("amountSgd")
+    if amountSgd is None:
+        return None
+    category = (claimData.get("category") or slots.get("category") or "expense").capitalize()
+    contextMsg = f"{category} expense — SGD {float(amountSgd):.2f}. Policy check passed."
+    toolCallId = f"rt-submitConfirm-{int(time.time() * 1000)}"
+    return AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "id": toolCallId,
+                "name": "requestHumanInput",
+                "args": {
+                    "kind": "submit_confirmation",
+                    "blockingStep": "submit_confirmation",
+                    "question": "The expense is within policy. Would you like to submit this claim?",
+                    "contextMessage": contextMsg,
+                    "expectedResponseKind": "confirmation",
+                    "allowSideQuestions": True,
+                },
             }
         ],
     )
@@ -607,12 +670,241 @@ def _buildSubmissionAcknowledgement(intakeState: IntakeGptState) -> AIMessage | 
     )
 
 
+def _extractPolicyCapFromClauses(clauses: list, category: str | None = None) -> float | None:
+    """Parse the lowest SGD cap from a list of policy clause dicts returned by searchPolicies.
+
+    Each clause has a `text` field containing markdown policy text.  The cap is
+    written in the format "**SGD XX.XX**" or "SGD XX" (hard cap lines).  We look
+    for the minimum across all clauses so that per-meal caps (e.g. SGD 20 for
+    lunch) take precedence over the daily aggregate cap (SGD 50).
+
+    Returns the minimum cap found, or None if no numeric cap is parseable.
+    """
+    if not isinstance(clauses, list):
+        return None
+    _SGD_PATTERN = re.compile(r"SGD\s+([\d,]+(?:\.\d+)?)")
+    caps: list[float] = []
+    for clause in clauses:
+        if not isinstance(clause, dict):
+            continue
+        text = clause.get("text") or ""
+        # Only scan clauses that match the claim category when category is known
+        clauseCategory = clause.get("category") or ""
+        if category and clauseCategory and clauseCategory.lower() != category.lower():
+            continue
+        # Look for "hard cap" or "maximum reimbursable" lines — these are per-meal limits
+        hardCapLines = [
+            line for line in text.splitlines()
+            if any(kw in line.lower() for kw in ("hard cap", "maximum reimbursable", "maximum total"))
+        ]
+        targetLines = hardCapLines if hardCapLines else text.splitlines()
+        for line in targetLines:
+            for match in _SGD_PATTERN.finditer(line):
+                try:
+                    caps.append(float(match.group(1).replace(",", "")))
+                except ValueError:
+                    continue
+    return min(caps) if caps else None
+
+
+def _hasPolicyViolation(slots: dict) -> bool:
+    """Return True if policySearchResults indicates a policy violation.
+
+    Supports two formats:
+    - Legacy dict: {"violation": bool, "policyCap": float, ...}
+    - MCP list: raw list of clause dicts from searchPolicies; a pre-extracted
+      policyCapSgd float is stored alongside in slots by applyToolResultsNode.
+    """
+    claimData = slots.get("claimData") or {}
+    amount = claimData.get("amountSgd")
+
+    # Legacy dict format (retained for non-intake-gpt paths)
+    policyResults = slots.get("policySearchResults") or {}
+    if isinstance(policyResults, dict):
+        if policyResults.get("violation") is True:
+            return True
+        cap = policyResults.get("policyCap")
+        if isinstance(cap, (int, float)) and isinstance(amount, (int, float)):
+            return float(amount) > float(cap)
+        return False
+
+    # MCP list format: use pre-extracted cap stored by applyToolResultsNode
+    cap = slots.get("policyCapSgd")
+    if isinstance(cap, (int, float)) and isinstance(amount, (int, float)):
+        return float(amount) > float(cap)
+    return False
+
+
+def _buildSearchPoliciesAiMessage(intakeState: IntakeGptState) -> AIMessage | None:
+    """Build a synthetic searchPolicies tool_call from confirmed claimData slots."""
+    slots = intakeState.get("slots") or {}
+    claimData = slots.get("claimData") or {}
+    category = str(claimData.get("category") or slots.get("category") or "").strip()
+    amountSgd = claimData.get("amountSgd")
+    if not category or amountSgd is None:
+        return None
+    query = (
+        f"{category} expense policy limit for SGD {float(amountSgd):.2f}; "
+        f"approval thresholds and justification requirements"
+    )
+    toolCallId = f"rt-searchPolicies-{int(time.time() * 1000)}"
+    return AIMessage(
+        content="",
+        tool_calls=[{"id": toolCallId, "name": "searchPolicies", "args": {"query": query}}],
+    )
+
+
+def _buildPolicyJustificationAiMessage(intakeState: IntakeGptState) -> AIMessage | None:
+    """Build a synthetic requestHumanInput(policy_justification) tool_call when a violation is detected."""
+    slots = intakeState.get("slots") or {}
+    policyResults = slots.get("policySearchResults") or {}
+    claimData = slots.get("claimData") or {}
+    cap = policyResults.get("policyCap") if isinstance(policyResults, dict) else None
+    amount = claimData.get("amountSgd")
+    category = claimData.get("category") or slots.get("category") or "expense"
+    if amount is None:
+        return None
+    capText = f"SGD {float(cap):.2f}" if isinstance(cap, (int, float)) else "the policy cap"
+    amountText = f"SGD {float(amount):.2f}"
+    contextMessage = (
+        f"The {category} claim amount is {amountText}, which exceeds {capText}. "
+        f"A justification is required before the claim can be submitted."
+    )
+    question = "Please describe the business reason for this expense exceeding the policy cap."
+    toolCallId = f"rt-requestHumanInput-pj-{int(time.time() * 1000)}"
+    return AIMessage(
+        content="",
+        tool_calls=[{
+            "id": toolCallId,
+            "name": "requestHumanInput",
+            "args": {
+                "kind": "policy_justification",
+                "question": question,
+                "contextMessage": contextMessage,
+                "expectedResponseKind": "text",
+                "blockingStep": "policy_justification",
+                "allowSideQuestions": True,
+                "category": str(category) if category else "",
+            },
+        }],
+    )
+
+
+def _buildSubmitConfirmationAiMessage(intakeState: IntakeGptState) -> AIMessage | None:
+    """Build a synthetic requestHumanInput(submit_confirmation) tool_call before final submission."""
+    slots = intakeState.get("slots") or {}
+    claimData = slots.get("claimData") or {}
+    receiptData = slots.get("receiptData") or {}
+    findings = slots.get("intakeFindings") or {}
+    amount = claimData.get("amountSgd")
+    category = claimData.get("category") or slots.get("category") or "expense"
+    merchant = (receiptData.get("merchant") if isinstance(receiptData, dict) else "") or ""
+    justification = findings.get("justification") or ""
+    if amount is None:
+        return None
+    amountText = f"SGD {float(amount):.2f}"
+    parts = [f"Claim: {category}, {amountText}"]
+    if merchant:
+        parts.append(f"Merchant: {merchant}")
+    if justification:
+        parts.append(f"Justification: {justification}")
+    contextMessage = "\n".join(parts)
+    question = "Shall I submit this claim?"
+    toolCallId = f"rt-requestHumanInput-sc-{int(time.time() * 1000)}"
+    return AIMessage(
+        content="",
+        tool_calls=[{
+            "id": toolCallId,
+            "name": "requestHumanInput",
+            "args": {
+                "kind": "submit_confirmation",
+                "question": question,
+                "contextMessage": contextMessage,
+                "expectedResponseKind": "text",
+                "blockingStep": "submit_confirmation",
+                "allowSideQuestions": True,
+                "category": str(category) if category else "",
+            },
+        }],
+    )
+
+
+def _buildFieldCorrectionAiMessage() -> AIMessage:
+    """Build a synthetic requestHumanInput(field_correction) tool_call for the correction loop."""
+    question = "What looks incorrect? Please describe the field(s) and the corrected value(s)."
+    toolCallId = f"rt-requestHumanInput-fc-{int(time.time() * 1000)}"
+    return AIMessage(
+        content="",
+        tool_calls=[{
+            "id": toolCallId,
+            "name": "requestHumanInput",
+            "args": {
+                "kind": "field_correction",
+                "question": question,
+                "contextMessage": "",
+                "expectedResponseKind": "text",
+                "blockingStep": "field_correction",
+                "allowSideQuestions": False,
+                "category": "",
+            },
+        }],
+    )
+
+
+def _buildFieldConfirmationAfterCorrectionAiMessage(intakeState: IntakeGptState) -> AIMessage | None:
+    """Re-emit field_confirmation interrupt after a correction, appending the correction text to contextMessage."""
+    base = _buildFieldConfirmationAiMessage(intakeState)
+    if not base or not base.tool_calls:
+        return None
+    correctionText = (intakeState.get("slots") or {}).get("correctionText") or ""
+    toolCall = dict(base.tool_calls[0])
+    args = dict(toolCall.get("args") or {})
+    originalContext = str(args.get("contextMessage") or "")
+    if correctionText:
+        args["contextMessage"] = (
+            f"{originalContext}\n\nYou reported: \"{correctionText}\"\n"
+            "Does the updated extraction above look correct now?"
+        )
+    toolCall["args"] = args
+    # Assign a new toolCallId to avoid duplicate ID collisions
+    toolCall["id"] = f"rt-requestHumanInput-fca-{int(time.time() * 1000)}"
+    return AIMessage(content="", tool_calls=[toolCall])
+
+
+def _isSideQuestionText(text: str) -> bool:
+    """Pure-logic side-question detector: trailing '?' OR starts with an interrogative word."""
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if stripped.endswith("?"):
+        return True
+    firstWord = stripped.split(maxsplit=1)[0].lower().rstrip(",.!;:")
+    return firstWord in _INTERROGATIVE_PREFIXES
+
+
+def _containsNegativeToken(lowered: str) -> bool:
+    """True if the lowered text is or contains any negative token."""
+    if lowered in _NEGATIVE_TOKENS:
+        return True
+    return any(token in lowered for token in _NEGATIVE_TOKENS if " " in token)
+
+
+def _containsAffirmativeToken(lowered: str) -> bool:
+    if lowered in _AFFIRMATIVE_TOKENS:
+        return True
+    return any(token in lowered for token in _AFFIRMATIVE_TOKENS if " " in token)
+
+
 def _classifyInterruptReply(text: str, *, pendingKind: str, expectedCurrency: str = "") -> tuple[str, str, dict | None]:
     lowered = text.strip().lower()
     if not lowered:
         return "ambiguous", "No reply captured for the pending interrupt.", None
+
+    # End-of-conversation tokens apply to every interrupt kind.
     if lowered in _END_CONVERSATION_TOKENS:
         return "end_conversation", "User chose to end the conversation.", None
+
+    # manual_fx_rate: parse exchange rate (existing logic, unchanged).
     if pendingKind == "manual_fx_rate":
         parsedRate = _parseManualFxRate(text, expectedCurrency)
         if parsedRate is None:
@@ -622,20 +914,63 @@ def _classifyInterruptReply(text: str, *, pendingKind: str, expectedCurrency: st
                 None,
             )
         return "answer", "User provided a manual exchange rate to SGD.", parsedRate
-    if pendingKind == "submit_confirmation":
-        if lowered in _AFFIRMATIVE_TOKENS or any(
-            token in lowered for token in _AFFIRMATIVE_TOKENS if " " in token
-        ):
-            return "answer", "User confirmed that the claim should be submitted.", None
-        if lowered in _NEGATIVE_TOKENS or any(
-            token in lowered for token in _NEGATIVE_TOKENS if " " in token
-        ):
+
+    # Side-question detection runs BEFORE affirmative/negative token checks for
+    # kinds that allow free-form questions. An interrogative trumps a keyword
+    # match (e.g. "is this correct?" should be a side question, not "answer").
+    if pendingKind in {"field_confirmation", "policy_justification", "submit_confirmation"}:
+        if _isSideQuestionText(text):
+            return (
+                "side_question",
+                "User asked an interrogative — treating as a side question.",
+                None,
+            )
+
+    # Negative tokens:
+    #   field_confirmation No → user rejects the extraction → correction_requested
+    #   submit_confirmation No → user cancels the claim
+    #   policy_justification No → user declines to justify → cancel_claim
+    if _containsNegativeToken(lowered):
+        if pendingKind == "submit_confirmation":
             return "cancel_claim", "User declined claim submission.", None
-        return "ambiguous", "The user did not clearly confirm whether to submit the claim.", None
-    if lowered in _AFFIRMATIVE_TOKENS or any(
-        token in lowered for token in _AFFIRMATIVE_TOKENS if " " in token
-    ):
-        return "answer", "User confirmed the pending receipt details.", None
+        if pendingKind == "policy_justification":
+            return "cancel_claim", "User declined to provide a justification.", None
+        if pendingKind == "field_confirmation":
+            return (
+                "correction_requested",
+                "User indicated the extracted details are not correct.",
+                None,
+            )
+
+    # Affirmative tokens.
+    if _containsAffirmativeToken(lowered):
+        if pendingKind == "submit_confirmation":
+            return "answer", "User confirmed that the claim should be submitted.", None
+        if pendingKind == "field_confirmation":
+            return "answer", "User confirmed the extracted details.", None
+        # policy_justification with just "yes" is not a valid justification body —
+        # fall through so free-form rule below handles it as verbatim "answer".
+
+    # Free-form text:
+    #   policy_justification → the text IS the justification (answer, verbatim)
+    #   field_confirmation → treat as side_question (not a clear yes/no)
+    #   submit_confirmation → ambiguous (not a clear yes/no)
+    if pendingKind == "policy_justification":
+        return "answer", "User provided a justification.", None
+    if pendingKind == "field_confirmation":
+        return (
+            "side_question",
+            "User sent a free-form message during field confirmation.",
+            None,
+        )
+    if pendingKind == "submit_confirmation":
+        return (
+            "ambiguous",
+            "The user did not clearly confirm whether to submit the claim.",
+            None,
+        )
+
+    # Unknown pendingKind fallback.
     return "answer", "User replied to the pending interrupt.", None
 
 
@@ -716,7 +1051,7 @@ def turnEntryNode(state: IntakeGptGraphState) -> dict:
 
 
 async def interruptResolutionNode(state: IntakeGptGraphState) -> dict:
-    """Placeholder interrupt-resolution node for future slices."""
+    """Classify the latest user reply against the pending interrupt before reasonNode runs."""
     intakeState = _normalizeIntakeState(state)
     logEvent(
         logger,
@@ -728,6 +1063,80 @@ async def interruptResolutionNode(state: IntakeGptGraphState) -> dict:
         nodeName="interruptResolutionNode",
         message="intake-gpt node entered",
     )
+
+    pending = intakeState.get("pendingInterrupt")
+    if not pending:
+        logEvent(
+            logger,
+            "intake.graph.node_exited",
+            logCategory="agent",
+            agent="intake-gpt",
+            claimId=state.get("claimId"),
+            threadId=state.get("threadId"),
+            nodeName="interruptResolutionNode",
+            message="intake-gpt node exited",
+        )
+        return {"intakeGpt": intakeState}
+
+    latestText = _latestHumanText(state.get("messages", []))
+    expectedCurrency = ""
+    if pending.get("kind") == "manual_fx_rate":
+        expectedCurrency = _manualFxCurrencyLabel(intakeState)
+    outcome, summary, parsedAnswer = _classifyInterruptReply(
+        latestText,
+        pendingKind=str(pending.get("kind") or ""),
+        expectedCurrency=expectedCurrency,
+    )
+    intakeState["lastResolution"] = {
+        "outcome": outcome,
+        "responseText": latestText,
+        "summary": summary,
+    }
+
+    # manual_fx_rate answered via fresh turn (not LangGraph interrupt resume):
+    # applyToolResultsNode only runs after toolNode, so it never sees this reply.
+    # Apply the conversion here so _buildDraftClaimBundle gets amountSgd when
+    # field_confirmation fires on the same or next turn.
+    if pending.get("kind") == "manual_fx_rate" and outcome == "answer" and parsedAnswer:
+        slots = dict(intakeState.get("slots") or {})
+        manualConversion = _applyManualFxConversion(slots, parsedAnswer)
+        if manualConversion is not None:
+            slots["currencyConversion"] = manualConversion
+            intakeState["slots"] = slots
+            intakeState["pendingInterrupt"] = None
+            intakeState["workflow"]["currentStep"] = "currency_converted"
+            intakeState["workflow"]["status"] = "active"
+            logEvent(
+                logger,
+                "intake.gpt.manual_fx_applied_on_fresh_turn",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="manual_fx_rate answered via fresh turn — applied conversion in interruptResolutionNode",
+            )
+
+    # Status transitions — pendingInterrupt mutation is owned by applyToolResultsNode
+    # after the requestHumanInput ToolMessage is emitted. Here we only update status
+    # so reasonNode can route correctly.
+    if outcome == "side_question":
+        intakeState["workflow"]["status"] = "active"
+    elif outcome == "end_conversation":
+        intakeState["pendingInterrupt"] = None
+        intakeState["workflow"]["status"] = "completed"
+        intakeState["workflow"]["currentStep"] = "conversation_closed"
+
+    logEvent(
+        logger,
+        "intake.gpt.interrupt_resolution",
+        logCategory="agent",
+        agent="intake-gpt",
+        claimId=state.get("claimId"),
+        threadId=state.get("threadId"),
+        pendingKind=str(pending.get("kind") or ""),
+        outcome=outcome,
+        message="intake-gpt classified interrupt reply",
+    )
     logEvent(
         logger,
         "intake.graph.node_exited",
@@ -736,6 +1145,7 @@ async def interruptResolutionNode(state: IntakeGptGraphState) -> dict:
         claimId=state.get("claimId"),
         threadId=state.get("threadId"),
         nodeName="interruptResolutionNode",
+        workflowStep=intakeState["workflow"]["currentStep"],
         message="intake-gpt node exited",
     )
     return {"intakeGpt": intakeState}
@@ -758,9 +1168,10 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
     )
     conversion = intakeState.get("slots", {}).get("currencyConversion") or {}
     if (
-        intakeState["workflow"]["currentStep"] in {"submit_confirmation_answered", "policy_justification_answered"}
+        intakeState["workflow"]["currentStep"] == "submit_confirmation_answered"
         and intakeState.get("pendingInterrupt") is None
         and not intakeState.get("slots", {}).get("submissionResult")
+        and (intakeState.get("lastResolution") or {}).get("outcome") == "answer"
     ):
         response = _buildSubmitClaimAiMessage(state, intakeState)
         if response is not None:
@@ -774,6 +1185,48 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
                 claimId=state.get("claimId"),
                 threadId=state.get("threadId"),
                 message="runtime advanced intake-gpt flow directly to submitClaim",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {
+                "messages": [response],
+                "intakeGpt": intakeState,
+            }
+    # Gate: after searchPolicies returns compliant, deterministically emit
+    # requestHumanInput(submit_confirmation) so the button UI always fires.
+    # Without this gate, the LLM sometimes asks in plain text (skipping buttons).
+    _slots = intakeState.get("slots") or {}
+    if (
+        intakeState["workflow"]["currentStep"] == "field_confirmation_answered"
+        and isinstance(_slots.get("policySearchResults"), list)
+        and intakeState.get("pendingInterrupt") is None
+        and not _slots.get("submissionResult")
+        and _hasPolicyViolation(_slots) is False
+    ):
+        response = _buildSubmitConfirmationAiMessage(intakeState)
+        if response is not None:
+            pendingFromGate = _pendingInterruptFromToolCalls(response)
+            if pendingFromGate:
+                intakeState["pendingInterrupt"] = pendingFromGate
+                intakeState["workflow"]["currentStep"] = "submit_confirmation"
+                intakeState["workflow"]["status"] = "blocked"
+            logEvent(
+                logger,
+                "intake.gpt.runtime_submit_confirmation",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="runtime forced submit_confirmation interrupt after compliant policy check",
             )
             logEvent(
                 logger,
@@ -859,6 +1312,200 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
             "messages": [response],
             "intakeGpt": intakeState,
         }
+    # Gate 1: field_confirmation_answered -> searchPolicies (deterministic, no LLM)
+    if (
+        intakeState["workflow"]["currentStep"] == "field_confirmation_answered"
+        and intakeState.get("pendingInterrupt") is None
+        and not (intakeState.get("slots") or {}).get("policySearchResults")
+        and (intakeState.get("lastResolution") or {}).get("outcome") == "answer"
+    ):
+        response = _buildSearchPoliciesAiMessage(intakeState)
+        if response is not None:
+            intakeState["workflow"]["currentStep"] = "searching_policies"
+            intakeState["workflow"]["status"] = "active"
+            logEvent(
+                logger,
+                "intake.gpt.runtime_search_policies",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="runtime deterministically called searchPolicies",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {"messages": [response], "intakeGpt": intakeState}
+    # Gate 2: policy_answered with violations -> policy_justification requestHumanInput (deterministic, no LLM)
+    if (
+        intakeState["workflow"]["currentStep"] == "policy_answered"
+        and intakeState.get("pendingInterrupt") is None
+        and _hasPolicyViolation(intakeState.get("slots") or {})
+    ):
+        response = _buildPolicyJustificationAiMessage(intakeState)
+        pending = _pendingInterruptFromToolCalls(response) if response is not None else None
+        if response is not None and pending is not None:
+            intakeState["pendingInterrupt"] = pending
+            intakeState["workflow"]["currentStep"] = pending["blockingStep"] or "policy_justification"
+            intakeState["workflow"]["status"] = "blocked"
+            logEvent(
+                logger,
+                "intake.gpt.runtime_policy_justification_requested",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="runtime deterministically requested policy_justification",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {"messages": [response], "intakeGpt": intakeState}
+    # Gate 3: policy_justification_answered -> submit_confirmation (deterministic, no LLM)
+    if (
+        intakeState["workflow"]["currentStep"] == "policy_justification_answered"
+        and intakeState.get("pendingInterrupt") is None
+        and not (intakeState.get("slots") or {}).get("submissionResult")
+        and (intakeState.get("lastResolution") or {}).get("outcome") == "answer"
+    ):
+        response = _buildSubmitConfirmationAiMessage(intakeState)
+        pending = _pendingInterruptFromToolCalls(response) if response is not None else None
+        if response is not None and pending is not None:
+            intakeState["pendingInterrupt"] = pending
+            intakeState["workflow"]["currentStep"] = pending["blockingStep"] or "submit_confirmation"
+            intakeState["workflow"]["status"] = "blocked"
+            logEvent(
+                logger,
+                "intake.gpt.runtime_submit_confirmation_after_justification",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="runtime deterministically requested submit_confirmation after justification",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {"messages": [response], "intakeGpt": intakeState}
+    # Gate FC1: field_correction_requested → emit field_correction interrupt (no LLM needed)
+    if (
+        intakeState["workflow"]["currentStep"] == "field_correction_requested"
+        and intakeState.get("pendingInterrupt") is None
+    ):
+        response = _buildFieldCorrectionAiMessage()
+        pending = _pendingInterruptFromToolCalls(response)
+        if pending is not None:
+            intakeState["pendingInterrupt"] = pending
+            intakeState["workflow"]["currentStep"] = "field_correction"
+            intakeState["workflow"]["status"] = "blocked"
+            logEvent(
+                logger,
+                "intake.gpt.runtime_field_correction_requested",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="runtime emitted field_correction interrupt",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {"messages": [response], "intakeGpt": intakeState}
+    # Gate FC2: correction_received → re-emit field_confirmation with correction context (no LLM needed)
+    if (
+        intakeState["workflow"]["currentStep"] == "correction_received"
+        and intakeState.get("pendingInterrupt") is None
+    ):
+        response = _buildFieldConfirmationAfterCorrectionAiMessage(intakeState)
+        pending = _pendingInterruptFromToolCalls(response) if response is not None else None
+        if response is not None and pending is not None:
+            intakeState["pendingInterrupt"] = pending
+            intakeState["workflow"]["currentStep"] = pending.get("blockingStep") or "field_confirmation"
+            intakeState["workflow"]["status"] = "blocked"
+            logEvent(
+                logger,
+                "intake.gpt.runtime_field_confirmation_after_correction",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                message="runtime re-emitted field_confirmation after correction",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {"messages": [response], "intakeGpt": intakeState}
+    # Gate SC: submission_declined (cancelled) → emit plain acknowledgement, no LLM needed
+    if (
+        intakeState["workflow"]["currentStep"] == "submission_declined"
+        and intakeState["workflow"].get("status") == "cancelled"
+        and intakeState.get("pendingInterrupt") is None
+    ):
+        ack = AIMessage(content="Claim cancelled. Upload a new receipt to start a new claim.")
+        intakeState["workflow"]["currentStep"] = "submission_cancelled_acknowledged"
+        intakeState["workflow"]["status"] = "completed"
+        # Preserve sessionReset — do NOT overwrite; chat.py consumes it on the next POST
+        logEvent(
+            logger,
+            "intake.gpt.runtime_submission_cancelled_acknowledged",
+            logCategory="agent",
+            agent="intake-gpt",
+            claimId=state.get("claimId"),
+            threadId=state.get("threadId"),
+            message="runtime emitted submission_cancelled acknowledgement",
+        )
+        logEvent(
+            logger,
+            "intake.graph.node_exited",
+            logCategory="agent",
+            agent="intake-gpt",
+            claimId=state.get("claimId"),
+            threadId=state.get("threadId"),
+            nodeName="reasonNode",
+            workflowStep=intakeState["workflow"]["currentStep"],
+            message="intake-gpt node exited",
+        )
+        return {"messages": [ack], "intakeGpt": intakeState}
     boundLlm = llm.bind_tools(_INTAKE_GPT_TOOLS)
     runtimeContext = _buildRuntimeContext(state, intakeState)
     logEvent(
@@ -871,10 +1518,97 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
         messageCount=len(state.get("messages", [])),
         message="intake-gpt reason node invoking llm",
     )
-    response = await boundLlm.ainvoke(
+    # Side-question directive and LLM binding:
+    # - For policy_justification / submit_confirmation kinds: use bind_tools([]) so the
+    #   LLM physically cannot call requestHumanInput. The post-LLM re-emit block then
+    #   fires deterministically. This prevents the bug where the LLM ignores the directive
+    #   and calls requestHumanInput, creating a new interrupt whose resume path fails.
+    # - For field_confirmation (and other kinds): two-phase approach:
+    #   Phase 1 (first call): bind ONLY searchPolicies so the LLM is forced to call it.
+    #   Phase 2 (after searchPolicies result): bind no tools and generate the text answer.
+    #   This guarantees searchPolicies is called even on Instruct models that ignore
+    #   text directives asking them to "call searchPolicies first".
+    sideQuestionDirective: list = []
+    lastResolution = intakeState.get("lastResolution") or {}
+    isSideQuestion = lastResolution.get("outcome") == "side_question"
+    pendingKindForSideQ = str((intakeState.get("pendingInterrupt") or {}).get("kind") or "")
+    useNoToolLlm = isSideQuestion and pendingKindForSideQ in ("policy_justification", "submit_confirmation")
+    # Detect two-phase state for field_confirmation side questions.
+    useSearchForcedLlm = False
+    usePostSearchLlm = False
+    if isSideQuestion and not useNoToolLlm:
+        allMessages = state.get("messages", [])
+        # Find the last requestHumanInput ToolMessage (start of current side-question exchange).
+        lastHumanInputIdx = -1
+        for i in range(len(allMessages) - 1, -1, -1):
+            if isinstance(allMessages[i], ToolMessage) and allMessages[i].name == "requestHumanInput":
+                lastHumanInputIdx = i
+                break
+        # Check if searchPolicies was already called after that point in this turn.
+        searchPoliciesCalledThisTurn = any(
+            isinstance(m, ToolMessage) and m.name == "searchPolicies"
+            for m in allMessages[lastHumanInputIdx + 1 :]
+        )
+        if searchPoliciesCalledThisTurn:
+            usePostSearchLlm = True  # Phase 2: generate answer from results
+        else:
+            useSearchForcedLlm = True  # Phase 1: force searchPolicies call
+    if isSideQuestion:
+        pending = intakeState.get("pendingInterrupt") or {}
+        sideQ = str(lastResolution.get("responseText") or "")
+        pendingQuestion = str(pending.get("question") or "")
+        pendingCtx = str(pending.get("contextMessage") or "")
+        pendingKind = str(pending.get("kind") or "")
+        pendingStep = str(pending.get("blockingStep") or pendingKind)
+        if useNoToolLlm:
+            sideQuestionDirective = [
+                SystemMessage(
+                    content=(
+                        f"The user has asked a follow-up question while a confirmation was pending.\n"
+                        f'Their question: "{sideQ}"\n\n'
+                        f"Answer the question directly and factually in 2-4 sentences.\n"
+                        f"- For receipt validity questions: refer to the extracted receipt fields in the runtime context.\n"
+                        f"- For approver/policy questions: explain that approval routing follows company expense policy.\n"
+                        f"Do NOT ask any questions back. Do NOT call any tools. "
+                        f"The system will automatically re-present the pending confirmation after your answer."
+                    )
+                )
+            ]
+        elif useSearchForcedLlm:
+            # Phase 1: only searchPolicies is available — LLM must call it.
+            sideQuestionDirective = [
+                SystemMessage(
+                    content=(
+                        f'Call searchPolicies with query="{sideQ}" to look up the relevant policy.'
+                    )
+                )
+            ]
+        else:
+            # Phase 2: searchPolicies results are in the conversation — generate the answer.
+            sideQuestionDirective = [
+                SystemMessage(
+                    content=(
+                        f"The user asked: \"{sideQ}\"\n"
+                        f"The policy search results are in the conversation above. "
+                        f"Answer the question directly in 2-3 sentences based on those results. "
+                        f"Do NOT call any tools. "
+                        f"The system will automatically re-present the pending prompt after your answer."
+                    )
+                )
+            ]
+
+    if useNoToolLlm or usePostSearchLlm:
+        activeLlm = llm.bind_tools([])
+    elif useSearchForcedLlm:
+        activeLlm = llm.bind_tools([searchPolicies])
+    else:
+        activeLlm = boundLlm
+
+    response = await activeLlm.ainvoke(
         [
             SystemMessage(content=INTAKE_GPT_SYSTEM_PROMPT),
             SystemMessage(content=runtimeContext),
+            *sideQuestionDirective,
             *state.get("messages", []),
         ]
     )
@@ -898,6 +1632,97 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
         toolCallCount=len(getattr(hydratedResponse, "tool_calls", []) or []),
         message="intake-gpt reason node llm completed",
     )
+    # Post-LLM side-question re-emit:
+    # If the LLM answered a side question without re-calling requestHumanInput,
+    # deterministically inject a synthetic re-emit so the SSE INTERRUPT event
+    # fires again (causing the buttons/prompt to re-render in the UI).
+    # This covers Checkpoint D from Phase 14 UAT.
+    llmHasOtherToolCalls = bool(list(getattr(hydratedResponse, "tool_calls", []) or []))
+    if (
+        intakeState.get("pendingInterrupt") is not None
+        and (intakeState.get("lastResolution") or {}).get("outcome") == "side_question"
+        and pendingInterrupt is None  # LLM did NOT re-call requestHumanInput
+        and not llmHasOtherToolCalls  # LLM's response has no other pending tool calls
+        # If the LLM called a tool (e.g. searchPolicies), let toolNode execute it first.
+        # The re-emit will fire on the next reasonNode call after the tool result returns.
+    ):
+        reInterruptMsg = _buildReInterruptAiMessage(intakeState["pendingInterrupt"])
+        logEvent(
+            logger,
+            "intake.gpt.side_question_re_emit",
+            logCategory="agent",
+            agent="intake-gpt",
+            claimId=state.get("claimId"),
+            threadId=state.get("threadId"),
+            pendingKind=str(intakeState["pendingInterrupt"].get("kind")),
+            message="LLM answered side question without re-emitting interrupt; injecting re-emit",
+        )
+        logEvent(
+            logger,
+            "intake.graph.node_exited",
+            logCategory="agent",
+            agent="intake-gpt",
+            claimId=state.get("claimId"),
+            threadId=state.get("threadId"),
+            nodeName="reasonNode",
+            workflowStep=intakeState["workflow"]["currentStep"],
+            message="intake-gpt node exited",
+        )
+        return {
+            "messages": [hydratedResponse, reInterruptMsg],
+            "intakeGpt": intakeState,
+        }
+
+    # Post-LLM policy violation fallback gate:
+    # The system prompt requires the LLM to write "-> VIOLATION" when it detects a
+    # policy violation. If the LLM complied with the text format but forgot to call
+    # requestHumanInput(policy_justification), inject the interrupt deterministically.
+    # This handles the case where _hasPolicyViolation (Gate 2, pre-LLM) cannot detect
+    # violations because policySearchResults is a list (MCP format), not a structured dict.
+    llmContent = str(getattr(hydratedResponse, "content", "") or "")
+    if (
+        intakeState["workflow"]["currentStep"] == "policy_answered"
+        and intakeState.get("pendingInterrupt") is None
+        and pendingInterrupt is None  # LLM did NOT call requestHumanInput
+        and "-> VIOLATION" in llmContent
+    ):
+        pjMsg = _buildPolicyJustificationAiMessage(intakeState)
+        if pjMsg is not None:
+            pjPending = _pendingInterruptFromToolCalls(pjMsg)
+            if pjPending is not None:
+                intakeState["pendingInterrupt"] = pjPending
+                intakeState["workflow"]["currentStep"] = (
+                    pjPending.get("blockingStep") or "policy_justification"
+                )
+                intakeState["workflow"]["status"] = "blocked"
+                logEvent(
+                    logger,
+                    "intake.gpt.runtime_policy_justification_fallback",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    message=(
+                        "LLM detected violation in text but did not call requestHumanInput; "
+                        "injecting policy_justification interrupt"
+                    ),
+                )
+                logEvent(
+                    logger,
+                    "intake.graph.node_exited",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    nodeName="reasonNode",
+                    workflowStep=intakeState["workflow"]["currentStep"],
+                    message="intake-gpt node exited",
+                )
+                return {
+                    "messages": [hydratedResponse, pjMsg],
+                    "intakeGpt": intakeState,
+                }
+
     logEvent(
         logger,
         "intake.graph.node_exited",
@@ -998,7 +1823,99 @@ async def applyToolResultsNode(state: IntakeGptGraphState) -> dict:
                 "summary": summary,
             }
             slots["lastHumanInput"] = responseText
-            if pending.get("kind") == "field_confirmation":
+
+            # Correction-request guard: field_confirmation + negative token → correction loop.
+            # Clears pendingInterrupt and advances to field_correction_requested so reasonNode
+            # can emit a field_correction interrupt deterministically.
+            if outcome == "correction_requested" and pending.get("kind") == "field_confirmation":
+                intakeState["pendingInterrupt"] = None
+                intakeState["workflow"]["currentStep"] = "field_correction_requested"
+                intakeState["workflow"]["status"] = "active"
+                intakeState["slots"] = slots
+                updates["intakeGpt"] = intakeState
+                logEvent(
+                    logger,
+                    "intake.gpt.correction_requested",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    message="field_confirmation No — correction loop opened",
+                )
+                logEvent(
+                    logger,
+                    "intake.graph.node_exited",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    nodeName="applyToolResultsNode",
+                    workflowStep=intakeState["workflow"]["currentStep"],
+                    message="intake-gpt node exited",
+                )
+                return updates
+
+            # Side-question guard: applies to ALL interrupt kinds.
+            # The LLM will answer the question and re-present the original interrupt.
+            # Do NOT clear pendingInterrupt, do NOT advance currentStep.
+            if outcome == "side_question":
+                intakeState["pendingInterrupt"] = dict(pending)
+                intakeState["workflow"]["status"] = "active"
+                intakeState["slots"] = slots
+                updates["intakeGpt"] = intakeState
+                logEvent(
+                    logger,
+                    "intake.gpt.side_question_preserved",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    pendingKind=str(pending.get("kind") or ""),
+                    message="side_question outcome — pendingInterrupt preserved for re-presentation",
+                )
+                logEvent(
+                    logger,
+                    "intake.graph.node_exited",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    nodeName="applyToolResultsNode",
+                    workflowStep=intakeState["workflow"]["currentStep"],
+                    message="intake-gpt node exited",
+                )
+                return updates
+
+            if pending.get("kind") == "field_correction":
+                # Store the user's correction text verbatim and advance to correction_received
+                slots["correctionText"] = responseText
+                intakeState["pendingInterrupt"] = None
+                intakeState["workflow"]["currentStep"] = "correction_received"
+                intakeState["workflow"]["status"] = "active"
+                intakeState["slots"] = slots
+                updates["intakeGpt"] = intakeState
+                logEvent(
+                    logger,
+                    "intake.gpt.correction_received",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    message="field_correction reply received — looping back to field_confirmation",
+                )
+                logEvent(
+                    logger,
+                    "intake.graph.node_exited",
+                    logCategory="agent",
+                    agent="intake-gpt",
+                    claimId=state.get("claimId"),
+                    threadId=state.get("threadId"),
+                    nodeName="applyToolResultsNode",
+                    workflowStep=intakeState["workflow"]["currentStep"],
+                    message="intake-gpt node exited",
+                )
+                return updates
+            elif pending.get("kind") == "field_confirmation":
                 slots["fieldConfirmationResponse"] = responseText
                 draftBundle = _buildDraftClaimBundle(slots)
                 if draftBundle is not None:
@@ -1051,10 +1968,9 @@ async def applyToolResultsNode(state: IntakeGptGraphState) -> dict:
                 if pending.get("kind") == "policy_justification":
                     slots["justification"] = responseText
                     intakeFindings = dict(slots.get("intakeFindings") or {})
-                    if intakeFindings:
-                        intakeFindings["justification"] = responseText
-                        slots["intakeFindings"] = intakeFindings
-                        updates["intakeFindings"] = intakeFindings
+                    intakeFindings["justification"] = responseText
+                    slots["intakeFindings"] = intakeFindings
+                    updates["intakeFindings"] = intakeFindings
                 elif pending.get("kind") == "submit_confirmation":
                     slots["submitConfirmationResponse"] = responseText
                 if outcome == "ambiguous":
@@ -1069,9 +1985,18 @@ async def applyToolResultsNode(state: IntakeGptGraphState) -> dict:
                         pending.get("blockingStep") or pending.get("kind") or "awaiting_input"
                     )
                 else:
+                    isCancelOnSubmit = (
+                        outcome == "cancel_claim"
+                        and pending.get("kind") == "submit_confirmation"
+                    )
                     intakeState["pendingInterrupt"] = None
-                    intakeState["workflow"]["status"] = "completed" if outcome == "end_conversation" else "active"
-                    intakeState["workflow"]["readyForSubmission"] = outcome == "answer"
+                    if isCancelOnSubmit:
+                        intakeState["workflow"]["status"] = "cancelled"
+                        intakeState["workflow"]["readyForSubmission"] = False
+                        intakeState["sessionReset"] = True
+                    else:
+                        intakeState["workflow"]["status"] = "completed" if outcome == "end_conversation" else "active"
+                        intakeState["workflow"]["readyForSubmission"] = outcome == "answer"
                     intakeState["workflow"]["currentStep"] = (
                         "conversation_closed"
                         if outcome == "end_conversation"
@@ -1090,37 +2015,51 @@ async def applyToolResultsNode(state: IntakeGptGraphState) -> dict:
                         )
                     )
         elif latestTool.name == "searchPolicies":
-            slots["policySearchResults"] = parsed
-            query = _buildPolicySearchQuery(slots)
-            if query:
-                slots["policySearchQuery"] = query
-            intakeState["workflow"]["currentStep"] = "policy_answered"
-            results = []
-            if isinstance(parsed, dict):
-                candidateResults = parsed.get("results", parsed.get("policies", []))
-                if isinstance(candidateResults, list):
-                    results = candidateResults
-            sessionClaimId = state.get("claimId", "")
-            if sessionClaimId:
-                policyRefs = [
-                    {
-                        "section": result.get("section"),
-                        "category": result.get("category"),
-                        "score": result.get("score"),
-                    }
-                    for result in results
-                    if isinstance(result, dict)
-                ]
-                bufferStep(
-                    sessionClaimId=sessionClaimId,
-                    action="policy_check",
-                    details={
-                        "violations": [],
-                        "policyRefs": policyRefs,
-                        "compliant": True,
-                        "query": slots.get("policySearchQuery") or query or "intake policy check",
-                    },
-                )
+            # Only update policySearchResults when this is a workflow-level policy check
+            # (pendingInterrupt is None = user has already confirmed field_confirmation).
+            # If pendingInterrupt is set, searchPolicies was called as a side-question tool
+            # while an interrupt was still pending — do not overwrite workflow state so the
+            # real amount-vs-limit check runs after the user clicks Yes.
+            if intakeState.get("pendingInterrupt") is None:
+                slots["policySearchResults"] = parsed
+                query = _buildPolicySearchQuery(slots)
+                if query:
+                    slots["policySearchQuery"] = query
+                intakeState["workflow"]["currentStep"] = "policy_answered"
+                results = []
+                if isinstance(parsed, list):
+                    results = parsed
+                elif isinstance(parsed, dict):
+                    candidateResults = parsed.get("results", parsed.get("policies", []))
+                    if isinstance(candidateResults, list):
+                        results = candidateResults
+                # Extract and store the applicable SGD cap so _hasPolicyViolation can
+                # do a deterministic numeric comparison without relying on LLM arithmetic.
+                category = (slots.get("claimData") or {}).get("category") or slots.get("category")
+                capSgd = _extractPolicyCapFromClauses(results, category)
+                if capSgd is not None:
+                    slots["policyCapSgd"] = capSgd
+                sessionClaimId = state.get("claimId", "")
+                if sessionClaimId:
+                    policyRefs = [
+                        {
+                            "section": result.get("section"),
+                            "category": result.get("category"),
+                            "score": result.get("score"),
+                        }
+                        for result in results
+                        if isinstance(result, dict)
+                    ]
+                    bufferStep(
+                        sessionClaimId=sessionClaimId,
+                        action="policy_check",
+                        details={
+                            "violations": [],
+                            "policyRefs": policyRefs,
+                            "compliant": True,
+                            "query": slots.get("policySearchQuery") or query or "intake policy check",
+                        },
+                    )
         elif latestTool.name == "submitClaim" and isinstance(parsed, dict):
             slots["submissionResult"] = parsed
             claimRecord = parsed.get("claim") or {}
@@ -1178,8 +2117,24 @@ async def applyToolResultsNode(state: IntakeGptGraphState) -> dict:
     return updates
 
 
-async def sideQuestionResponderNode(state: IntakeGptGraphState) -> dict:
-    """Placeholder node kept for the planned topology."""
+async def sideQuestionResponderNode(state: IntakeGptGraphState, *, llm) -> dict:
+    """Isolated side-question answering node.
+
+    Answers the user's follow-up question using a zero-tool LLM call so that
+    no workflow state (currentStep, pendingInterrupt, policySearchResults) is
+    mutated. After answering, injects a synthetic re-interrupt message so
+    toolNode can re-present the original pending prompt to the user.
+
+    Routing:
+      interruptResolutionNode → sideQuestionResponderNode  (when outcome=side_question)
+      sideQuestionResponderNode → toolNode                 (re-interrupt has tool_calls)
+      toolNode → requestHumanInput → interrupt()           (graph suspends again)
+    """
+    intakeState = _normalizeIntakeState(state)
+    pending = intakeState.get("pendingInterrupt") or {}
+    resolution = intakeState.get("lastResolution") or {}
+    sideQ = str(resolution.get("responseText") or "")
+
     logEvent(
         logger,
         "intake.graph.node_entered",
@@ -1188,7 +2143,49 @@ async def sideQuestionResponderNode(state: IntakeGptGraphState) -> dict:
         claimId=state.get("claimId"),
         threadId=state.get("threadId"),
         nodeName="sideQuestionResponderNode",
+        sideQuestion=sideQ[:80],
+        pendingKind=str(pending.get("kind") or ""),
         message="intake-gpt node entered",
+    )
+
+    # Build receipt context so the LLM can give grounded answers
+    receiptContext = _buildExtractionContextMessage(intakeState)
+    systemContent = (
+        "You are answering a user's follow-up question during an expense claim review. "
+        "A confirmation prompt is pending and will be automatically re-presented after "
+        "your answer — you do NOT need to ask the user to confirm anything.\n\n"
+        "Guidelines:\n"
+        "- Answer directly and factually in 2-4 sentences.\n"
+        "- For receipt validity questions: refer to the extracted fields shown below.\n"
+        "- For approver/policy questions: explain that approval routing follows the company "
+        "expense policy — typically the direct manager for amounts within limit, and the "
+        "Department Head or Finance for amounts that exceed the limit or require exceptions.\n"
+        "- Do NOT call any tools. Do NOT produce an empty response."
+    )
+    if receiptContext:
+        systemContent += f"\n\nReceipt being reviewed:\n{receiptContext}"
+
+    noToolLlm = llm.bind_tools([])
+    response = await noToolLlm.ainvoke(
+        [
+            SystemMessage(content=systemContent),
+            HumanMessage(content=sideQ),
+        ]
+    )
+
+    # Synthetic re-interrupt so toolNode can re-present the pending prompt
+    reInterruptMsg = _buildReInterruptAiMessage(pending)
+
+    logEvent(
+        logger,
+        "intake.gpt.side_question_answered",
+        logCategory="agent",
+        agent="intake-gpt",
+        claimId=state.get("claimId"),
+        threadId=state.get("threadId"),
+        sideQuestion=sideQ[:80],
+        pendingKind=str(pending.get("kind") or ""),
+        message="sideQuestionResponderNode answered side question; re-interrupt injected",
     )
     logEvent(
         logger,
@@ -1198,9 +2195,13 @@ async def sideQuestionResponderNode(state: IntakeGptGraphState) -> dict:
         claimId=state.get("claimId"),
         threadId=state.get("threadId"),
         nodeName="sideQuestionResponderNode",
+        workflowStep=intakeState["workflow"]["currentStep"],
         message="intake-gpt node exited",
     )
-    return {"intakeGpt": _normalizeIntakeState(state)}
+    return {
+        "messages": [response, reInterruptMsg],
+        "intakeGpt": intakeState,
+    }
 
 
 def finalizeTurnNode(state: IntakeGptGraphState) -> dict:
@@ -1235,6 +2236,14 @@ def _routeAfterTurnEntry(state: IntakeGptGraphState) -> str:
     return "interruptResolutionNode" if pending else "reasonNode"
 
 
+def _routeAfterInterruptResolution(state: IntakeGptGraphState) -> str:
+    """Route side questions to the isolated responder; everything else to reasonNode."""
+    intakeState = _normalizeIntakeState(state)
+    if (intakeState.get("lastResolution") or {}).get("outcome") == "side_question":
+        return "sideQuestionResponderNode"
+    return "reasonNode"
+
+
 def _routeAfterReason(state: IntakeGptGraphState) -> str:
     messages = state.get("messages", [])
     if messages and isinstance(messages[-1], AIMessage) and messages[-1].tool_calls:
@@ -1249,12 +2258,15 @@ def buildIntakeGptSubgraph(llm):
     async def _reasonNodeWithLlm(state: IntakeGptGraphState) -> dict:
         return await reasonNode(state, llm=llm)
 
+    async def _sideQuestionResponderNodeWithLlm(state: IntakeGptGraphState) -> dict:
+        return await sideQuestionResponderNode(state, llm=llm)
+
     builder.add_node("turnEntryNode", turnEntryNode)
     builder.add_node("interruptResolutionNode", interruptResolutionNode)
     builder.add_node("reasonNode", _reasonNodeWithLlm)
     builder.add_node("toolNode", ToolNode(_INTAKE_GPT_TOOLS))
     builder.add_node("applyToolResultsNode", applyToolResultsNode)
-    builder.add_node("sideQuestionResponderNode", sideQuestionResponderNode)
+    builder.add_node("sideQuestionResponderNode", _sideQuestionResponderNodeWithLlm)
     builder.add_node("finalizeTurnNode", finalizeTurnNode)
 
     builder.add_edge(START, "turnEntryNode")
@@ -1266,7 +2278,15 @@ def buildIntakeGptSubgraph(llm):
             "reasonNode": "reasonNode",
         },
     )
-    builder.add_edge("interruptResolutionNode", "reasonNode")
+    # Route side questions to the isolated responder; all other outcomes go to reasonNode
+    builder.add_conditional_edges(
+        "interruptResolutionNode",
+        _routeAfterInterruptResolution,
+        {
+            "sideQuestionResponderNode": "sideQuestionResponderNode",
+            "reasonNode": "reasonNode",
+        },
+    )
     builder.add_conditional_edges(
         "reasonNode",
         _routeAfterReason,
@@ -1277,7 +2297,16 @@ def buildIntakeGptSubgraph(llm):
     )
     builder.add_edge("toolNode", "applyToolResultsNode")
     builder.add_edge("applyToolResultsNode", "reasonNode")
-    builder.add_edge("sideQuestionResponderNode", "finalizeTurnNode")
+    # sideQuestionResponderNode returns [answerMsg, reInterruptMsg]; reInterruptMsg has
+    # tool_calls so _routeAfterReason routes it to toolNode → requestHumanInput → interrupt()
+    builder.add_conditional_edges(
+        "sideQuestionResponderNode",
+        _routeAfterReason,
+        {
+            "toolNode": "toolNode",
+            "finalizeTurnNode": "finalizeTurnNode",
+        },
+    )
     builder.add_edge("finalizeTurnNode", END)
 
     return builder.compile()

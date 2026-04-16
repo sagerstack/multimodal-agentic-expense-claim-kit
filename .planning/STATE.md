@@ -9,13 +9,13 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 
 ## Current Position
 
-Phase: 13 — Intake Agent Hybrid Routing + Bug Fixes (gap closure in progress)
-Plan: 10/10 plans complete (13-01 through 13-10 done, gap closure plans ongoing)
-Status: Phase 13 gap closure. Plan 13-10 (Fix A) delivered: mid-stream MESSAGE bubble for AIMessage content+tool_calls via _isUserFacingProse gate. Extraction tables and policy summaries now route to chat channel instead of thinking panel. 324 tests passing, 7 pre-existing failures unchanged.
-Last activity: 2026-04-13 — Completed 13-10-PLAN.md (Fix A: SSE content routing)
+Phase: 14 — Intake GPT React Replacement (in progress)
+Plan: 6/7 plans complete (14-01, 14-02, 14-03, 14-04, 14-05, 14-06 done)
+Status: Phase 14 active. Plan 14-06 (No-path recovery flows) complete: correction loop + submit-cancel session reset, 37/37 tests pass.
+Last activity: 2026-04-14 — Completed 14-06-PLAN.md (No-path recovery: correction_requested outcome, field_correction loop, sessionReset flag + chat.py rotation)
 
 ```
-v2.0 Progress: [##################################] 33/38 plans
+v2.0 Progress: [###################################] 35/38 plans
 Phase 6:       [##########] 3/3 plans (complete)
 Phase 7:       [##########] 3/3 plans (complete)
 Phase 6.1:     [##########] complete
@@ -28,6 +28,7 @@ Phase 10:      [..........] 0/2 plans
 Phase 11:      [##########] 4/4 plans (complete)
 Phase 12:      [##########] 4/4 plans (complete — checkpoint pending)
 Phase 13:      [##########] 9/9 plans (complete)
+Phase 14:      [####......] 3/7 plans (in progress)
 ```
 
 ## Performance Metrics
@@ -130,8 +131,8 @@ From research (see .planning/research/PITFALLS.md):
 
 ## Session Continuity
 
-Last session: 2026-04-13
-Stopped at: Completed Phase 13 Plan 10 — Fix A (SSE content routing: mid-stream MESSAGE bubble for AIMessage content+tool_calls). 6 new tests green, 324 total passing, 7 pre-existing failures unchanged.
+Last session: 2026-04-14
+Stopped at: Completed Phase 14 Plan 06 — No-path recovery flows: correction_requested outcome, field_correction loop, sessionReset flag + chat.py session rotation. 37/37 tests pass.
 Resume file: None
 
 ### Roadmap Evolution

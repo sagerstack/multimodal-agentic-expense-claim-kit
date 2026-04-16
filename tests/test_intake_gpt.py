@@ -9,8 +9,11 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
 from agentic_claims.agents.intake_gpt.graph import (
+    _buildRuntimeContext,
+    _classifyInterruptReply,
     applyToolResultsNode,
     buildIntakeGptSubgraph,
+    interruptResolutionNode,
     reasonNode,
     turnEntryNode,
 )
@@ -579,8 +582,12 @@ async def test_reasonNodeSkipsLlmAndCallsSubmitClaimAfterSubmitConfirmation():
 
 
 @pytest.mark.asyncio
-async def test_reasonNodeSkipsLlmAndCallsSubmitClaimAfterPolicyJustificationWithoutPrebuiltDraft():
-    """A stored justification should be enough to rebuild the draft claim bundle and submit."""
+async def test_reasonNodeSkipsLlmAndRequestsSubmitConfirmationAfterPolicyJustification():
+    """Gate 3: after policy_justification_answered, runtime deterministically requests submit_confirmation.
+
+    NOTE: The original test (direct to submitClaim) is updated here because Gate 3 now intercepts
+    policy_justification_answered to first request submit_confirmation before submitting.
+    """
 
     class FakeLlm:
         def bind_tools(self, tools):
@@ -599,25 +606,16 @@ async def test_reasonNodeSkipsLlmAndCallsSubmitClaimAfterPolicyJustificationWith
                 "status": "active",
             },
             "slots": {
-                "category": "meals",
-                "justification": "it was a client dinner",
-                "extractedReceipt": {
-                    "fields": {
-                        "merchant": "DIG.",
-                        "date": "2024-05-28",
-                        "totalAmount": 16.2,
-                        "currency": "USD",
-                        "lineItems": [{"description": "Charred Chicken", "amount": 13.4}],
-                        "tax": 1.19,
-                        "paymentMethod": "VISA CREDIT",
-                    },
-                    "confidence": {
-                        "merchant": 0.95,
-                        "date": 0.92,
-                        "totalAmount": 0.98,
-                        "currency": 0.99,
-                    },
-                    "imagePath": "uploads/claim-gpt-submit-justification-001.jpg",
+                "claimData": {"category": "meals", "amountSgd": 20.68},
+                "receiptData": {
+                    "merchant": "DIG.",
+                    "date": "2024-05-28",
+                    "totalAmount": 16.2,
+                    "currency": "USD",
+                },
+                "intakeFindings": {
+                    "policyViolation": True,
+                    "justification": "it was a client dinner",
                 },
                 "currencyConversion": {
                     "supported": True,
@@ -645,11 +643,14 @@ async def test_reasonNodeSkipsLlmAndCallsSubmitClaimAfterPolicyJustificationWith
     message = result["messages"][-1]
     assert isinstance(message, AIMessage)
     assert message.tool_calls
-    assert message.tool_calls[0]["name"] == "submitClaim"
-    assert message.tool_calls[0]["args"]["sessionClaimId"] == "claim-gpt-submit-justification-001"
-    assert message.tool_calls[0]["args"]["intakeFindings"]["justification"] == "it was a client dinner"
-    assert result["intakeGpt"]["slots"]["claimData"]["category"] == "meals"
-    assert result["intakeGpt"]["workflow"]["currentStep"] == "submitting_claim"
+    assert message.tool_calls[0]["name"] == "requestHumanInput", (
+        f"Gate 3 must call requestHumanInput(submit_confirmation), got {message.tool_calls[0]['name']}"
+    )
+    assert message.tool_calls[0]["args"]["kind"] == "submit_confirmation"
+    pendingInterrupt = result["intakeGpt"].get("pendingInterrupt")
+    assert pendingInterrupt is not None
+    assert pendingInterrupt.get("kind") == "submit_confirmation"
+    assert result["intakeGpt"]["workflow"]["currentStep"] == "submit_confirmation"
 
 
 @pytest.mark.asyncio
@@ -1349,3 +1350,593 @@ async def test_intakeGptLogsWrapperLifecycle():
     assert "intake.agent_invoked" in names
     assert "intake.completed" in names
     assert "intake.turn.end" in names
+
+
+# ---------------------------------------------------------------------------
+# Phase 14 Plan 01 — RED phase: interrupt state machine contract tests
+# ---------------------------------------------------------------------------
+
+
+def test_classifyInterruptReplyRejectsNegativeTokenForFieldConfirmation():
+    for reply in ("no", "nope", "cancel"):
+        outcome, _summary, _parsed = _classifyInterruptReply(
+            reply, pendingKind="field_confirmation"
+        )
+        assert outcome != "answer", (
+            f"Negative token {reply!r} must NOT classify as 'answer' for field_confirmation"
+        )
+
+
+def test_classifyInterruptReplyRejectsNegativeTokenForPolicyJustification():
+    for reply in ("no", "nope", "skip", "never mind"):
+        outcome, _summary, _parsed = _classifyInterruptReply(
+            reply, pendingKind="policy_justification"
+        )
+        assert outcome in {"cancel_claim", "side_question"}, (
+            f"Negative token {reply!r} must be cancel_claim or side_question, got {outcome}"
+        )
+
+
+def test_classifyInterruptReplyDetectsSideQuestionForPolicyJustification():
+    # Ends with '?'
+    outcome1, _, _ = _classifyInterruptReply(
+        "what is the meal allowance cap?", pendingKind="policy_justification"
+    )
+    assert outcome1 == "side_question"
+
+    # Starts with interrogative word
+    for reply in (
+        "what approval level is required",
+        "why does this policy cap exist",
+        "how do I escalate this",
+        "when should I submit receipts",
+        "can this be overridden",
+        "is there an exception path",
+    ):
+        outcome, _, _ = _classifyInterruptReply(reply, pendingKind="policy_justification")
+        assert outcome == "side_question", f"{reply!r} → {outcome}"
+
+
+def test_classifyInterruptReplyPreservesJustificationTextVerbatim():
+    text = "Client dinner on-site, approved by my manager offline."
+    outcome, _summary, _parsed = _classifyInterruptReply(
+        text, pendingKind="policy_justification"
+    )
+    assert outcome == "answer", (
+        f"Free-form justification text must classify as 'answer', got {outcome}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_interruptResolutionNodePreservesPendingInterruptOnSideQuestion():
+    pendingInterrupt = {
+        "id": "int-1",
+        "kind": "field_confirmation",
+        "question": "Do these extracted details look correct?",
+        "contextMessage": "Merchant: Koufu...",
+        "expectedResponseKind": "text",
+        "blockingStep": "field_confirmation",
+        "status": "pending",
+        "retryCount": 0,
+        "allowSideQuestions": True,
+    }
+    state = {
+        "messages": [HumanMessage(content="what is the meal cap in SGD?")],
+        "claimId": "c1",
+        "threadId": "t1",
+        "status": "active",
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "field_confirmation",
+                "readyForSubmission": False,
+                "status": "blocked",
+            },
+            "slots": {},
+            "pendingInterrupt": pendingInterrupt,
+            "lastUserTurn": {"message": "what is the meal cap in SGD?", "hasImage": False},
+            "lastResolution": None,
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+    result = await interruptResolutionNode(state)
+    intake = result["intakeGpt"]
+    assert intake["pendingInterrupt"] is not None, (
+        "pendingInterrupt must remain set on side_question"
+    )
+    assert intake["lastResolution"] is not None, "lastResolution must be written"
+    assert intake["lastResolution"]["outcome"] == "side_question"
+    assert intake["lastResolution"]["responseText"] == "what is the meal cap in SGD?"
+
+
+@pytest.mark.asyncio
+async def test_applyToolResultsNodeStoresVerbatimJustificationText():
+    justificationText = "Client dinner with external auditors, no cheaper option available."
+    toolMsg = ToolMessage(
+        content=f'{{"response": "{justificationText}"}}',
+        name="requestHumanInput",
+        tool_call_id="tc-1",
+    )
+    pendingInterrupt = {
+        "id": "int-2",
+        "kind": "policy_justification",
+        "question": "Please provide a justification.",
+        "contextMessage": "Policy violation...",
+        "expectedResponseKind": "text",
+        "blockingStep": "policy_justification",
+        "status": "pending",
+        "retryCount": 0,
+        "allowSideQuestions": True,
+    }
+    state = {
+        "messages": [toolMsg],
+        "claimId": "c1",
+        "threadId": "t1",
+        "status": "active",
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "policy_justification",
+                "readyForSubmission": False,
+                "status": "blocked",
+            },
+            "slots": {"intakeFindings": {"justification": ""}},
+            "pendingInterrupt": pendingInterrupt,
+            "lastUserTurn": {"message": justificationText, "hasImage": False},
+            "lastResolution": None,
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+    result = await applyToolResultsNode(state)
+    intake = result["intakeGpt"]
+    assert intake["slots"]["justification"] == justificationText, (
+        f"Expected verbatim text; got {intake['slots']['justification']!r}"
+    )
+    findings = intake["slots"].get("intakeFindings") or {}
+    assert findings.get("justification") == justificationText, (
+        f"intakeFindings.justification must be verbatim; got {findings.get('justification')!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_reasonNodeDeterministicallyCallsSearchPoliciesAfterFieldConfirmationAnswered():
+    """Gate 1: after field_confirmation_answered with outcome=answer, runtime emits searchPolicies without LLM."""
+
+    class FakeLlm:
+        def bind_tools(self, tools):
+            raise AssertionError("LLM must NOT be invoked at the field_confirmation_answered gate")
+
+    state = {
+        "claimId": "claim-gpt-gate1-001",
+        "threadId": "thread-gpt-gate1-001",
+        "status": "draft",
+        "messages": [HumanMessage(content="yes that all looks correct")],
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "field_confirmation_answered",
+                "readyForSubmission": False,
+                "status": "active",
+            },
+            "slots": {
+                "claimData": {"category": "meals", "amountSgd": 45.00},
+                "receiptData": {
+                    "merchant": "Koufu",
+                    "date": "2024-05-28",
+                    "totalAmount": 45.00,
+                    "currency": "SGD",
+                },
+            },
+            "pendingInterrupt": None,
+            "lastUserTurn": {"message": "yes that all looks correct", "hasImage": False},
+            "lastResolution": {
+                "outcome": "answer",
+                "responseText": "yes that all looks correct",
+                "summary": "User confirmed extracted fields are correct.",
+            },
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+
+    result = await reasonNode(state, llm=FakeLlm())
+
+    message = result["messages"][-1]
+    assert isinstance(message, AIMessage), f"Expected AIMessage, got {type(message)}"
+    assert message.tool_calls, "Gate 1 must produce a tool_call (not a narration message)"
+    assert message.tool_calls[0]["name"] == "searchPolicies", (
+        f"Gate 1 must call searchPolicies, got {message.tool_calls[0]['name']}"
+    )
+    query = message.tool_calls[0]["args"].get("query", "")
+    assert "meals" in query.lower(), f"searchPolicies query must mention category 'meals'; got: {query!r}"
+    assert "45" in query, f"searchPolicies query must mention amount 45; got: {query!r}"
+    assert result["intakeGpt"]["workflow"]["currentStep"] == "searching_policies", (
+        f"currentStep must advance to 'searching_policies', got "
+        f"{result['intakeGpt']['workflow']['currentStep']!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_reasonNodeDeterministicallyRequestsPolicyJustificationWhenViolationsPresent():
+    """Gate 2: after policy_answered with violations, runtime emits requestHumanInput(policy_justification)."""
+
+    class FakeLlm:
+        def bind_tools(self, tools):
+            raise AssertionError("LLM must NOT be invoked at the policy_answered gate when violations present")
+
+    state = {
+        "claimId": "claim-gpt-gate2-001",
+        "threadId": "thread-gpt-gate2-001",
+        "status": "draft",
+        "messages": [HumanMessage(content="yes that looks right")],
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "policy_answered",
+                "readyForSubmission": False,
+                "status": "active",
+            },
+            "slots": {
+                "claimData": {"category": "meals", "amountSgd": 45.00},
+                "receiptData": {
+                    "merchant": "Koufu",
+                    "date": "2024-05-28",
+                    "totalAmount": 45.00,
+                    "currency": "SGD",
+                },
+                "policySearchResults": {
+                    "results": [
+                        {
+                            "section": "meals",
+                            "category": "meals",
+                            "score": 0.92,
+                            "text": "Daily meal cap is SGD 30. Claims above cap require justification.",
+                        }
+                    ],
+                    "violation": True,
+                    "policyCap": 30.00,
+                    "claimAmountSgd": 45.00,
+                },
+            },
+            "pendingInterrupt": None,
+            "lastUserTurn": {"message": "yes that looks right", "hasImage": False},
+            "lastResolution": {
+                "outcome": "answer",
+                "responseText": "yes that looks right",
+                "summary": "User confirmed fields.",
+            },
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+
+    result = await reasonNode(state, llm=FakeLlm())
+
+    message = result["messages"][-1]
+    assert isinstance(message, AIMessage), f"Expected AIMessage, got {type(message)}"
+    assert message.tool_calls, "Gate 2 must produce a tool_call"
+    assert message.tool_calls[0]["name"] == "requestHumanInput", (
+        f"Gate 2 must call requestHumanInput, got {message.tool_calls[0]['name']}"
+    )
+    args = message.tool_calls[0]["args"]
+    assert args.get("kind") == "policy_justification", (
+        f"kind must be 'policy_justification', got {args.get('kind')!r}"
+    )
+    assert args.get("blockingStep") == "policy_justification", (
+        f"blockingStep must be 'policy_justification', got {args.get('blockingStep')!r}"
+    )
+    assert args.get("question"), "question must be a non-empty string"
+    contextMsg = args.get("contextMessage", "")
+    assert contextMsg, "contextMessage must be non-empty"
+    pendingInterrupt = result["intakeGpt"].get("pendingInterrupt")
+    assert pendingInterrupt is not None, "pendingInterrupt must be set after Gate 2"
+    assert pendingInterrupt.get("kind") == "policy_justification", (
+        f"pendingInterrupt.kind must be 'policy_justification', got {pendingInterrupt.get('kind')!r}"
+    )
+    assert result["intakeGpt"]["workflow"]["currentStep"] == "policy_justification", (
+        f"currentStep must be 'policy_justification', got "
+        f"{result['intakeGpt']['workflow']['currentStep']!r}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_reasonNodeDeterministicallyRequestsSubmitConfirmationAfterPolicyJustificationAnswered():
+    """Gate 3: after policy_justification_answered (outcome=answer), runtime emits submit_confirmation."""
+
+    class FakeLlm:
+        def bind_tools(self, tools):
+            raise AssertionError("LLM must NOT be invoked at the policy_justification_answered gate")
+
+    state = {
+        "claimId": "claim-gpt-gate3-001",
+        "threadId": "thread-gpt-gate3-001",
+        "status": "draft",
+        "messages": [HumanMessage(content="it was a client dinner with external auditors")],
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "policy_justification_answered",
+                "readyForSubmission": False,
+                "status": "active",
+            },
+            "slots": {
+                "claimData": {"category": "meals", "amountSgd": 45.00},
+                "receiptData": {
+                    "merchant": "Koufu",
+                    "date": "2024-05-28",
+                    "totalAmount": 45.00,
+                    "currency": "SGD",
+                },
+                "intakeFindings": {
+                    "policyViolation": True,
+                    "justification": "Client dinner, external auditors",
+                },
+            },
+            "pendingInterrupt": None,
+            "lastUserTurn": {"message": "it was a client dinner with external auditors", "hasImage": False},
+            "lastResolution": {
+                "outcome": "answer",
+                "responseText": "it was a client dinner with external auditors",
+                "summary": "User provided justification for policy exception.",
+            },
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+
+    result = await reasonNode(state, llm=FakeLlm())
+
+    message = result["messages"][-1]
+    assert isinstance(message, AIMessage), f"Expected AIMessage, got {type(message)}"
+    assert message.tool_calls, "Gate 3 must produce a tool_call"
+    assert message.tool_calls[0]["name"] == "requestHumanInput", (
+        f"Gate 3 must call requestHumanInput, got {message.tool_calls[0]['name']}"
+    )
+    args = message.tool_calls[0]["args"]
+    assert args.get("kind") == "submit_confirmation", (
+        f"kind must be 'submit_confirmation', got {args.get('kind')!r}"
+    )
+    assert args.get("blockingStep") == "submit_confirmation", (
+        f"blockingStep must be 'submit_confirmation', got {args.get('blockingStep')!r}"
+    )
+    assert args.get("contextMessage"), "contextMessage must be non-empty"
+    pendingInterrupt = result["intakeGpt"].get("pendingInterrupt")
+    assert pendingInterrupt is not None, "pendingInterrupt must be set after Gate 3"
+    assert pendingInterrupt.get("kind") == "submit_confirmation", (
+        f"pendingInterrupt.kind must be 'submit_confirmation', got {pendingInterrupt.get('kind')!r}"
+    )
+
+
+def test_pendingInterruptFromToolCallsHandlesPolicyJustification():
+    """_pendingInterruptFromToolCalls must accept policy_justification kind."""
+    from agentic_claims.agents.intake_gpt.graph import _pendingInterruptFromToolCalls
+
+    msg = AIMessage(
+        content="",
+        tool_calls=[{
+            "id": "tc-1",
+            "name": "requestHumanInput",
+            "args": {
+                "kind": "policy_justification",
+                "question": "Why did this exceed?",
+                "contextMessage": "Claim exceeds cap",
+                "expectedResponseKind": "text",
+                "blockingStep": "policy_justification",
+                "allowSideQuestions": True,
+                "category": "meals",
+            },
+        }],
+    )
+    pending = _pendingInterruptFromToolCalls(msg)
+    assert pending is not None, "_pendingInterruptFromToolCalls must accept policy_justification kind"
+    assert pending.get("kind") == "policy_justification"
+
+
+def test_pendingInterruptFromToolCallsHandlesSubmitConfirmation():
+    """_pendingInterruptFromToolCalls must accept submit_confirmation kind."""
+    from agentic_claims.agents.intake_gpt.graph import _pendingInterruptFromToolCalls
+
+    msg = AIMessage(
+        content="",
+        tool_calls=[{
+            "id": "tc-2",
+            "name": "requestHumanInput",
+            "args": {
+                "kind": "submit_confirmation",
+                "question": "Shall I submit?",
+                "contextMessage": "Claim summary",
+                "expectedResponseKind": "text",
+                "blockingStep": "submit_confirmation",
+                "allowSideQuestions": True,
+                "category": "meals",
+            },
+        }],
+    )
+    pending = _pendingInterruptFromToolCalls(msg)
+    assert pending is not None, "_pendingInterruptFromToolCalls must accept submit_confirmation kind"
+    assert pending.get("kind") == "submit_confirmation"
+
+
+def test_buildRuntimeContextExposesPendingInterruptAndSideQuestionOutcome():
+    intakeState = {
+        "workflow": {
+            "goal": "assist_claimant",
+            "currentStep": "field_confirmation",
+            "readyForSubmission": False,
+            "status": "blocked",
+        },
+        "slots": {},
+        "pendingInterrupt": {
+            "id": "int-3",
+            "kind": "field_confirmation",
+            "question": "Do these extracted details look correct?",
+            "contextMessage": "",
+            "expectedResponseKind": "text",
+            "blockingStep": "field_confirmation",
+            "status": "pending",
+            "retryCount": 0,
+            "allowSideQuestions": True,
+        },
+        "lastUserTurn": {"message": "what is the meal cap?", "hasImage": False},
+        "lastResolution": {
+            "outcome": "side_question",
+            "responseText": "what is the meal cap?",
+            "summary": "User asked a side question",
+        },
+        "toolTrace": {},
+        "protocolGuardCount": 0,
+    }
+    graphState = {"messages": [], "claimId": "c1", "threadId": "t1", "status": "active"}
+    context = _buildRuntimeContext(graphState, intakeState)
+    assert "field_confirmation" in context, (
+        "runtime context must mention the pending interrupt kind"
+    )
+    assert "side_question" in context or "side question" in context.lower(), (
+        "runtime context must surface the side_question resolution outcome"
+    )
+    assert "Do these extracted details look correct?" in context, (
+        "runtime context must include the pending interrupt question verbatim for re-presentation"
+    )
+
+
+@pytest.mark.asyncio
+async def test_applyToolResultsNodeAfterFieldConfirmationNoTriggersCorrectionRequest():
+    toolMsg = ToolMessage(
+        content='{"response": "no"}',
+        name="requestHumanInput",
+        tool_call_id="tc-n1",
+    )
+    pendingInterrupt = {
+        "id": "int-n1",
+        "kind": "field_confirmation",
+        "question": "Do these extracted details look correct?",
+        "contextMessage": "Merchant: Koufu, Amount: SGD 12.50",
+        "expectedResponseKind": "text",
+        "blockingStep": "field_confirmation",
+        "status": "pending",
+        "retryCount": 0,
+        "allowSideQuestions": True,
+    }
+    state = {
+        "messages": [toolMsg],
+        "claimId": "c-n1",
+        "threadId": "t-n1",
+        "status": "active",
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "field_confirmation",
+                "readyForSubmission": False,
+                "status": "blocked",
+            },
+            "slots": {"claimData": {"merchant": "Koufu", "amountSgd": 12.50}},
+            "pendingInterrupt": pendingInterrupt,
+            "lastUserTurn": {"message": "no", "hasImage": False},
+            "lastResolution": None,
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+    result = await applyToolResultsNode(state)
+    intake = result["intakeGpt"]
+    assert intake["pendingInterrupt"] is None, "field_confirmation No must clear pendingInterrupt"
+    assert intake["workflow"]["currentStep"] == "field_correction_requested"
+    assert intake["workflow"]["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_applyToolResultsNodeAfterFieldCorrectionReplyLoopsBackToFieldConfirmation():
+    correctionText = "The merchant should be Toast Box, not Koufu"
+    toolMsg = ToolMessage(
+        content=f'{{"response": "{correctionText}"}}',
+        name="requestHumanInput",
+        tool_call_id="tc-n2",
+    )
+    pendingInterrupt = {
+        "id": "int-n2",
+        "kind": "field_correction",
+        "question": "What looks incorrect?",
+        "contextMessage": "",
+        "expectedResponseKind": "text",
+        "blockingStep": "field_correction",
+        "status": "pending",
+        "retryCount": 0,
+        "allowSideQuestions": False,
+    }
+    state = {
+        "messages": [toolMsg],
+        "claimId": "c-n2",
+        "threadId": "t-n2",
+        "status": "active",
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "field_correction",
+                "readyForSubmission": False,
+                "status": "blocked",
+            },
+            "slots": {"claimData": {"merchant": "Koufu", "amountSgd": 12.50}},
+            "pendingInterrupt": pendingInterrupt,
+            "lastUserTurn": {"message": correctionText, "hasImage": False},
+            "lastResolution": None,
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+    result = await applyToolResultsNode(state)
+    intake = result["intakeGpt"]
+    assert intake["pendingInterrupt"] is None, "field_correction must clear pendingInterrupt"
+    assert intake["workflow"]["currentStep"] == "correction_received"
+    assert intake["workflow"]["status"] == "active"
+    # correctionText must be stored (key: "correctionText")
+    assert intake["slots"].get("correctionText") == correctionText or correctionText in str(intake["slots"])
+
+
+@pytest.mark.asyncio
+async def test_applyToolResultsNodeAfterSubmitConfirmationNoCancelsClaimAndSetsSessionReset():
+    toolMsg = ToolMessage(
+        content='{"response": "no"}',
+        name="requestHumanInput",
+        tool_call_id="tc-n3",
+    )
+    pendingInterrupt = {
+        "id": "int-n3",
+        "kind": "submit_confirmation",
+        "question": "Shall I submit this claim?",
+        "contextMessage": "Claim: meals, SGD 45.00",
+        "expectedResponseKind": "text",
+        "blockingStep": "submit_confirmation",
+        "status": "pending",
+        "retryCount": 0,
+        "allowSideQuestions": True,
+    }
+    state = {
+        "messages": [toolMsg],
+        "claimId": "c-n3",
+        "threadId": "t-n3",
+        "status": "active",
+        "intakeGpt": {
+            "workflow": {
+                "goal": "assist_claimant",
+                "currentStep": "submit_confirmation",
+                "readyForSubmission": True,
+                "status": "blocked",
+            },
+            "slots": {"intakeFindings": {"justification": "Client dinner"}},
+            "pendingInterrupt": pendingInterrupt,
+            "lastUserTurn": {"message": "no", "hasImage": False},
+            "lastResolution": None,
+            "toolTrace": {},
+            "protocolGuardCount": 0,
+        },
+    }
+    result = await applyToolResultsNode(state)
+    intake = result["intakeGpt"]
+    assert intake["pendingInterrupt"] is None
+    assert intake["workflow"]["currentStep"] == "submission_declined"
+    assert intake["workflow"]["status"] == "cancelled"
+    assert intake.get("sessionReset") is True, "sessionReset must be True after submit_confirmation cancel"
+    resolution = intake.get("lastResolution") or {}
+    assert resolution.get("outcome") == "cancel_claim"

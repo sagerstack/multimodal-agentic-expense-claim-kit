@@ -9,6 +9,21 @@ from agentic_claims.core.logging import logEvent
 
 logger = logging.getLogger(__name__)
 
+_BUTTON_INTERRUPT_KINDS = {"field_confirmation", "submit_confirmation"}
+
+
+def _deriveUiKind(kind: str) -> str:
+    return "buttons" if kind in _BUTTON_INTERRUPT_KINDS else "text"
+
+
+def _deriveButtonOptions(kind: str) -> list[dict]:
+    if kind not in _BUTTON_INTERRUPT_KINDS:
+        return []
+    return [
+        {"label": "Yes", "value": "yes"},
+        {"label": "No", "value": "no"},
+    ]
+
 
 @tool
 def requestHumanInput(
@@ -26,6 +41,7 @@ def requestHumanInput(
     contextMessage as a normal assistant bubble and question as the active
     interrupt prompt.
     """
+    uiKind = _deriveUiKind(kind)
     logEvent(
         logger,
         "intake.gpt.interrupt.opened",
@@ -35,6 +51,7 @@ def requestHumanInput(
         kind=kind,
         blockingStep=blockingStep,
         expectedResponseKind=expectedResponseKind,
+        uiKind=uiKind,
     )
     payload = {
         "kind": kind,
@@ -44,6 +61,8 @@ def requestHumanInput(
         "blockingStep": blockingStep,
         "allowSideQuestions": allowSideQuestions,
         "category": category,
+        "uiKind": uiKind,
+        "options": _deriveButtonOptions(kind),
     }
     response = interrupt(payload)
     logEvent(
