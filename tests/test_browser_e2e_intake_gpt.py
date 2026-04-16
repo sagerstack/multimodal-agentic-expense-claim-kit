@@ -277,6 +277,41 @@ def test_browser_restaurant_receipt_renders_table_and_confirmation_with_early_po
                 f"FAIL Turn 2: field_confirmation was NOT re-presented after policy side question\n"
                 f"Button count before={btn_count_after_t1}, after={btn_count_after_t2}"
             )
+
+            # ── Turn 3: click Yes → policy check should detect a violation ────────
+            # The DIG receipt is USD 16.20 → SGD 20.62. The lunch cap is SGD 20.00.
+            # SGD 20.62 > SGD 20.00 is a violation — the agent must ask for justification,
+            # NOT present a submit_confirmation (Yes/No) prompt.
+            _click_latest_yes_button(page)
+            _wait_for_processing_to_finish(page)
+
+            history = _print_turn("Turn 3 — after Yes on field_confirmation", page)
+            btn_count_after_t3 = _interrupt_button_count(page)
+            print(f"[Turn 3] Yes-button count: {btn_count_after_t3} (was {btn_count_after_t2})")
+
+            # Assertion 4: violation detected.
+            # The agent must mention the violation — the converted amount SGD 20.62 exceeds
+            # the lunch cap SGD 20.00, so the response must contain language about exceeding
+            # the limit or requesting justification.
+            violation_keywords = [
+                "exceed", "violation", "violat", "justif", "over the", "above the",
+                "limit", "cap", "20.00", "20.62",
+            ]
+            flattened_t3 = history.lower()
+            assert any(kw in flattened_t3 for kw in violation_keywords), (
+                f"FAIL Turn 3: no violation language found — agent missed that SGD 20.62 > SGD 20 lunch cap\n"
+                f"Keywords checked: {violation_keywords}\n"
+                f"Last 600 chars of history:\n{history[-600:]}"
+            )
+
+            # Assertion 5: no new submit_confirmation Yes/No buttons.
+            # A violation should route to policy_justification (text response), NOT
+            # submit_confirmation (Yes/No buttons). Button count must NOT increase.
+            assert btn_count_after_t3 == btn_count_after_t2, (
+                f"FAIL Turn 3: submit_confirmation buttons appeared — violation was NOT detected\n"
+                f"(agent went straight to submit instead of asking for justification)\n"
+                f"Button count before={btn_count_after_t2}, after={btn_count_after_t3}"
+            )
         finally:
             browser.close()
 
