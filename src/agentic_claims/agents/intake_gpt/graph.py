@@ -670,16 +670,66 @@ def _buildSubmissionAcknowledgement(intakeState: IntakeGptState) -> AIMessage | 
     )
 
 
+def _extractPolicyCapFromClauses(clauses: list, category: str | None = None) -> float | None:
+    """Parse the lowest SGD cap from a list of policy clause dicts returned by searchPolicies.
+
+    Each clause has a `text` field containing markdown policy text.  The cap is
+    written in the format "**SGD XX.XX**" or "SGD XX" (hard cap lines).  We look
+    for the minimum across all clauses so that per-meal caps (e.g. SGD 20 for
+    lunch) take precedence over the daily aggregate cap (SGD 50).
+
+    Returns the minimum cap found, or None if no numeric cap is parseable.
+    """
+    if not isinstance(clauses, list):
+        return None
+    _SGD_PATTERN = re.compile(r"SGD\s+([\d,]+(?:\.\d+)?)")
+    caps: list[float] = []
+    for clause in clauses:
+        if not isinstance(clause, dict):
+            continue
+        text = clause.get("text") or ""
+        # Only scan clauses that match the claim category when category is known
+        clauseCategory = clause.get("category") or ""
+        if category and clauseCategory and clauseCategory.lower() != category.lower():
+            continue
+        # Look for "hard cap" or "maximum reimbursable" lines — these are per-meal limits
+        hardCapLines = [
+            line for line in text.splitlines()
+            if any(kw in line.lower() for kw in ("hard cap", "maximum reimbursable", "maximum total"))
+        ]
+        targetLines = hardCapLines if hardCapLines else text.splitlines()
+        for line in targetLines:
+            for match in _SGD_PATTERN.finditer(line):
+                try:
+                    caps.append(float(match.group(1).replace(",", "")))
+                except ValueError:
+                    continue
+    return min(caps) if caps else None
+
+
 def _hasPolicyViolation(slots: dict) -> bool:
-    """Return True if policySearchResults indicates a policy violation."""
-    policyResults = slots.get("policySearchResults") or {}
-    if not isinstance(policyResults, dict):
-        return False
-    if policyResults.get("violation") is True:
-        return True
-    cap = policyResults.get("policyCap")
+    """Return True if policySearchResults indicates a policy violation.
+
+    Supports two formats:
+    - Legacy dict: {"violation": bool, "policyCap": float, ...}
+    - MCP list: raw list of clause dicts from searchPolicies; a pre-extracted
+      policyCapSgd float is stored alongside in slots by applyToolResultsNode.
+    """
     claimData = slots.get("claimData") or {}
     amount = claimData.get("amountSgd")
+
+    # Legacy dict format (retained for non-intake-gpt paths)
+    policyResults = slots.get("policySearchResults") or {}
+    if isinstance(policyResults, dict):
+        if policyResults.get("violation") is True:
+            return True
+        cap = policyResults.get("policyCap")
+        if isinstance(cap, (int, float)) and isinstance(amount, (int, float)):
+            return float(amount) > float(cap)
+        return False
+
+    # MCP list format: use pre-extracted cap stored by applyToolResultsNode
+    cap = slots.get("policyCapSgd")
     if isinstance(cap, (int, float)) and isinstance(amount, (int, float)):
         return float(amount) > float(cap)
     return False
@@ -1160,7 +1210,7 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
         and isinstance(_slots.get("policySearchResults"), list)
         and intakeState.get("pendingInterrupt") is None
         and not _slots.get("submissionResult")
-        and _hasPolicyViolation(intakeState) is False
+        and _hasPolicyViolation(_slots) is False
     ):
         response = _buildSubmitConfirmationAiMessage(intakeState)
         if response is not None:
@@ -1965,37 +2015,51 @@ async def applyToolResultsNode(state: IntakeGptGraphState) -> dict:
                         )
                     )
         elif latestTool.name == "searchPolicies":
-            slots["policySearchResults"] = parsed
-            query = _buildPolicySearchQuery(slots)
-            if query:
-                slots["policySearchQuery"] = query
-            intakeState["workflow"]["currentStep"] = "policy_answered"
-            results = []
-            if isinstance(parsed, dict):
-                candidateResults = parsed.get("results", parsed.get("policies", []))
-                if isinstance(candidateResults, list):
-                    results = candidateResults
-            sessionClaimId = state.get("claimId", "")
-            if sessionClaimId:
-                policyRefs = [
-                    {
-                        "section": result.get("section"),
-                        "category": result.get("category"),
-                        "score": result.get("score"),
-                    }
-                    for result in results
-                    if isinstance(result, dict)
-                ]
-                bufferStep(
-                    sessionClaimId=sessionClaimId,
-                    action="policy_check",
-                    details={
-                        "violations": [],
-                        "policyRefs": policyRefs,
-                        "compliant": True,
-                        "query": slots.get("policySearchQuery") or query or "intake policy check",
-                    },
-                )
+            # Only update policySearchResults when this is a workflow-level policy check
+            # (pendingInterrupt is None = user has already confirmed field_confirmation).
+            # If pendingInterrupt is set, searchPolicies was called as a side-question tool
+            # while an interrupt was still pending — do not overwrite workflow state so the
+            # real amount-vs-limit check runs after the user clicks Yes.
+            if intakeState.get("pendingInterrupt") is None:
+                slots["policySearchResults"] = parsed
+                query = _buildPolicySearchQuery(slots)
+                if query:
+                    slots["policySearchQuery"] = query
+                intakeState["workflow"]["currentStep"] = "policy_answered"
+                results = []
+                if isinstance(parsed, list):
+                    results = parsed
+                elif isinstance(parsed, dict):
+                    candidateResults = parsed.get("results", parsed.get("policies", []))
+                    if isinstance(candidateResults, list):
+                        results = candidateResults
+                # Extract and store the applicable SGD cap so _hasPolicyViolation can
+                # do a deterministic numeric comparison without relying on LLM arithmetic.
+                category = (slots.get("claimData") or {}).get("category") or slots.get("category")
+                capSgd = _extractPolicyCapFromClauses(results, category)
+                if capSgd is not None:
+                    slots["policyCapSgd"] = capSgd
+                sessionClaimId = state.get("claimId", "")
+                if sessionClaimId:
+                    policyRefs = [
+                        {
+                            "section": result.get("section"),
+                            "category": result.get("category"),
+                            "score": result.get("score"),
+                        }
+                        for result in results
+                        if isinstance(result, dict)
+                    ]
+                    bufferStep(
+                        sessionClaimId=sessionClaimId,
+                        action="policy_check",
+                        details={
+                            "violations": [],
+                            "policyRefs": policyRefs,
+                            "compliant": True,
+                            "query": slots.get("policySearchQuery") or query or "intake policy check",
+                        },
+                    )
         elif latestTool.name == "submitClaim" and isinstance(parsed, dict):
             slots["submissionResult"] = parsed
             claimRecord = parsed.get("claim") or {}

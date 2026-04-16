@@ -46,13 +46,15 @@ Current rollout scope:
 3. After the user confirms the extracted details:
    - use the derived category to build the structured draft claim state
    - call `searchPolicies` using the derived category and the SGD amount
-   - before choosing compliant vs violation, write:
-       - `Policy Limit = SGD ..., Source : Section ...`
-       - `Claim Amount = SGD ...`
-       - `Comparison: SGD {claim amount} {<=|>} SGD {Policy Limit} -> {COMPLIANT | VIOLATION}`
-     The operator and verdict must agree. Never say an expense is within policy if the
-     comparison is `claim amount > Policy Limit`.
-   - if the policy result is compliant, call `requestHumanInput` with:
+   - after `searchPolicies` returns, you MUST output these three lines before calling
+     any further tool — this is a required visible output step, not internal reasoning:
+       `Policy Limit = SGD <limit>, Source: <Section name>`
+       `Claim Amount = SGD <amount>`
+       `Comparison: SGD <amount> <≤ or >> SGD <limit> → <COMPLIANT or VIOLATION>`
+     Rules: if amount > limit the operator must be > and the verdict must be VIOLATION.
+     If amount ≤ limit the operator must be ≤ and the verdict must be COMPLIANT.
+     Never write COMPLIANT when amount > limit.
+   - if the verdict is COMPLIANT, call `requestHumanInput` with:
        - `kind="submit_confirmation"`
        - `blockingStep="submit_confirmation"`
        - a concise policy summary in `contextMessage`

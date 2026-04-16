@@ -29,7 +29,7 @@ def _getIntakeGptSubgraph():
         llm = buildAgentLlm(
             settings,
             temperature=0.1,
-            reasoning={"enabled": True, "summary": "concise"},
+            reasoning={"effort": "medium", "summary": "concise"},
         )
         _intakeGptSubgraphSingleton = buildIntakeGptSubgraph(llm)
     return _intakeGptSubgraphSingleton

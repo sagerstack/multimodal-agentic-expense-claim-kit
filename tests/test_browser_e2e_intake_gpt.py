@@ -305,12 +305,48 @@ def test_browser_restaurant_receipt_renders_table_and_confirmation_with_early_po
             )
 
             # Assertion 5: no new submit_confirmation Yes/No buttons.
-            # A violation should route to policy_justification (text response), NOT
-            # submit_confirmation (Yes/No buttons). Button count must NOT increase.
-            assert btn_count_after_t3 == btn_count_after_t2, (
-                f"FAIL Turn 3: submit_confirmation buttons appeared — violation was NOT detected\n"
-                f"(agent went straight to submit instead of asking for justification)\n"
-                f"Button count before={btn_count_after_t2}, after={btn_count_after_t3}"
+            # On the violation path the agent emits policy_justification (a text
+            # prompt, no Yes/No buttons).  Clicking Yes on field_confirmation removes
+            # the active interruptTarget button (−1); freezeTurn() may copy it into
+            # static history (+1), giving a net-zero change.  Either way the count
+            # must NOT INCREASE — if it does, submit_confirmation fired instead
+            # (wrong path, violation was not detected).
+            assert btn_count_after_t3 <= btn_count_after_t2, (
+                f"FAIL Turn 3: button count INCREASED — violation was NOT detected\n"
+                f"(expected policy_justification text prompt with no new Yes/No buttons)\n"
+                f"Button count before={btn_count_after_t2}, after={btn_count_after_t3}\n"
+                f"Last 600 chars of history:\n{history[-600:]}"
+            )
+
+            # ── Turn 4: provide justification → submit_confirmation appears ────────
+            _send_text_message(
+                page, "This was a team lunch for a project meeting — expenses exceeded cap."
+            )
+            _wait_for_processing_to_finish(page)
+
+            history = _print_turn("Turn 4 — after justification", page)
+            btn_count_after_t4 = _interrupt_button_count(page)
+            print(f"[Turn 4] Yes-button count: {btn_count_after_t4}")
+
+            # After justification, the agent should present submit_confirmation (Yes/No).
+            # Button count must have increased from Turn 3.
+            assert btn_count_after_t4 > btn_count_after_t3, (
+                f"FAIL Turn 4: submit_confirmation buttons did not appear after justification\n"
+                f"Button count before={btn_count_after_t3}, after={btn_count_after_t4}\n"
+                f"Last 600 chars of history:\n{history[-600:]}"
+            )
+
+            # ── Turn 5: click Yes on submit_confirmation → CLAIM number returned ──
+            _click_latest_yes_button(page)
+            _wait_for_processing_to_finish(page)
+
+            history = _print_turn("Turn 5 — after submit_confirmation Yes", page)
+
+            # Acceptance criteria: a CLAIM-XXX number must appear in the chat history.
+            # This confirms the claim was persisted to the database.
+            assert any(kw in history.upper() for kw in ["CLAIM-", "CLM-"]), (
+                f"FAIL Turn 5: no CLAIM number in chat history — claim was not submitted to DB\n"
+                f"Last 800 chars of history:\n{history[-800:]}"
             )
         finally:
             browser.close()
