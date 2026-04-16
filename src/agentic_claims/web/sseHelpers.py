@@ -303,6 +303,10 @@ def _summarizeToolOutput(toolName: str, toolOutput) -> str:
         else:
             data = toolOutput
 
+        # searchPolicies returns a list directly (not a dict), so handle it before the dict guard.
+        if toolName == "searchPolicies" and isinstance(data, list):
+            return f"Found {len(data)} relevant policy clause(s)"
+
         if not isinstance(data, dict):
             return TOOL_COMPLETION_LABELS.get(toolName, "Step complete")
 

@@ -1473,13 +1473,36 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
     #   LLM physically cannot call requestHumanInput. The post-LLM re-emit block then
     #   fires deterministically. This prevents the bug where the LLM ignores the directive
     #   and calls requestHumanInput, creating a new interrupt whose resume path fails.
-    # - For field_confirmation (and other kinds): keep the full tool set with a directive
-    #   so the LLM can answer and optionally call searchPolicies when needed.
+    # - For field_confirmation (and other kinds): two-phase approach:
+    #   Phase 1 (first call): bind ONLY searchPolicies so the LLM is forced to call it.
+    #   Phase 2 (after searchPolicies result): bind no tools and generate the text answer.
+    #   This guarantees searchPolicies is called even on Instruct models that ignore
+    #   text directives asking them to "call searchPolicies first".
     sideQuestionDirective: list = []
     lastResolution = intakeState.get("lastResolution") or {}
     isSideQuestion = lastResolution.get("outcome") == "side_question"
     pendingKindForSideQ = str((intakeState.get("pendingInterrupt") or {}).get("kind") or "")
     useNoToolLlm = isSideQuestion and pendingKindForSideQ in ("policy_justification", "submit_confirmation")
+    # Detect two-phase state for field_confirmation side questions.
+    useSearchForcedLlm = False
+    usePostSearchLlm = False
+    if isSideQuestion and not useNoToolLlm:
+        allMessages = state.get("messages", [])
+        # Find the last requestHumanInput ToolMessage (start of current side-question exchange).
+        lastHumanInputIdx = -1
+        for i in range(len(allMessages) - 1, -1, -1):
+            if isinstance(allMessages[i], ToolMessage) and allMessages[i].name == "requestHumanInput":
+                lastHumanInputIdx = i
+                break
+        # Check if searchPolicies was already called after that point in this turn.
+        searchPoliciesCalledThisTurn = any(
+            isinstance(m, ToolMessage) and m.name == "searchPolicies"
+            for m in allMessages[lastHumanInputIdx + 1 :]
+        )
+        if searchPoliciesCalledThisTurn:
+            usePostSearchLlm = True  # Phase 2: generate answer from results
+        else:
+            useSearchForcedLlm = True  # Phase 1: force searchPolicies call
     if isSideQuestion:
         pending = intakeState.get("pendingInterrupt") or {}
         sideQ = str(lastResolution.get("responseText") or "")
@@ -1501,22 +1524,35 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
                     )
                 )
             ]
-        else:
+        elif useSearchForcedLlm:
+            # Phase 1: only searchPolicies is available — LLM must call it.
             sideQuestionDirective = [
                 SystemMessage(
                     content=(
-                        f"The user has asked a follow-up question while a confirmation was pending.\n"
-                        f'Their question: "{sideQ}"\n\n'
-                        f"Answer the question directly and visibly in plain text using at least "
-                        f"2-3 sentences. If it is about policy, approvers, or expense rules, call "
-                        f"searchPolicies first and use the result to answer.\n\n"
-                        f"Do NOT call requestHumanInput — the system will automatically re-present "
-                        f"the pending prompt after your answer. Do not produce an empty response."
+                        f'Call searchPolicies with query="{sideQ}" to look up the relevant policy.'
+                    )
+                )
+            ]
+        else:
+            # Phase 2: searchPolicies results are in the conversation — generate the answer.
+            sideQuestionDirective = [
+                SystemMessage(
+                    content=(
+                        f"The user asked: \"{sideQ}\"\n"
+                        f"The policy search results are in the conversation above. "
+                        f"Answer the question directly in 2-3 sentences based on those results. "
+                        f"Do NOT call any tools. "
+                        f"The system will automatically re-present the pending prompt after your answer."
                     )
                 )
             ]
 
-    activeLlm = llm.bind_tools([]) if useNoToolLlm else boundLlm
+    if useNoToolLlm or usePostSearchLlm:
+        activeLlm = llm.bind_tools([])
+    elif useSearchForcedLlm:
+        activeLlm = llm.bind_tools([searchPolicies])
+    else:
+        activeLlm = boundLlm
 
     response = await activeLlm.ainvoke(
         [
@@ -1551,10 +1587,14 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
     # deterministically inject a synthetic re-emit so the SSE INTERRUPT event
     # fires again (causing the buttons/prompt to re-render in the UI).
     # This covers Checkpoint D from Phase 14 UAT.
+    llmHasOtherToolCalls = bool(list(getattr(hydratedResponse, "tool_calls", []) or []))
     if (
         intakeState.get("pendingInterrupt") is not None
         and (intakeState.get("lastResolution") or {}).get("outcome") == "side_question"
         and pendingInterrupt is None  # LLM did NOT re-call requestHumanInput
+        and not llmHasOtherToolCalls  # LLM's response has no other pending tool calls
+        # If the LLM called a tool (e.g. searchPolicies), let toolNode execute it first.
+        # The re-emit will fire on the next reasonNode call after the tool result returns.
     ):
         reInterruptMsg = _buildReInterruptAiMessage(intakeState["pendingInterrupt"])
         logEvent(
