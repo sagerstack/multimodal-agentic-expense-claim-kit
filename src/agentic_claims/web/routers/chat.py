@@ -592,6 +592,8 @@ async def exportChat(request: Request, scope: str = "auto"):
         "",
     ]
 
+    _POST_SUBMISSION_AGENTS = {"compliance", "fraud", "advisor"}
+
     turnCount = 0
     for msg in messages:
         content = getattr(msg, "content", None)
@@ -603,6 +605,11 @@ async def exportChat(request: Request, scope: str = "auto"):
             lines.append(text.strip() or "_(empty)_")
             lines.append("")
         elif isinstance(msg, AIMessage):
+            # Skip post-submission pipeline messages (compliance, fraud, advisor).
+            # They are internal agent outputs, not part of the intake conversation.
+            agentTag = (getattr(msg, "additional_kwargs", None) or {}).get("agent", "")
+            if agentTag in _POST_SUBMISSION_AGENTS:
+                continue
             text = content if isinstance(content, str) else ""
             toolCalls = getattr(msg, "tool_calls", None) or []
             # Surface askHuman questions as assistant prose (the user sees them
@@ -637,14 +644,25 @@ async def exportChat(request: Request, scope: str = "auto"):
                     lines.append(f"- `{name}` — `{args}`")
                 lines.append("")
         elif isinstance(msg, ToolMessage):
-            # Surface askHuman answers as user turns — they carry the user's
-            # reply to an interrupt-triggered question. Dropping them loses the
-            # majority of user content in the typical flow (only 1-2 messages
-            # arrive as HumanMessage; everything else is an askHuman resume).
-            # Source: CLAIM-022 export showed only the initial greeting + upload.
-            if getattr(msg, "name", None) != "askHuman":
+            # Surface interrupt answers as user turns.
+            # - askHuman (legacy intake agent): content is the raw user string.
+            # - requestHumanInput (intake-gpt): content is JSON {"response": "<text>"}
+            #   because the tool returns a dict which LangGraph serialises.
+            # Dropping these loses the majority of user content — only 1-2 messages
+            # arrive as HumanMessage; everything else is an interrupt resume.
+            msgName = getattr(msg, "name", None)
+            if msgName not in ("askHuman", "requestHumanInput"):
                 continue
-            text = content if isinstance(content, str) else str(content or "")
+            rawContent = content if isinstance(content, str) else str(content or "")
+            if msgName == "requestHumanInput":
+                try:
+                    import json as _json
+                    parsed = _json.loads(rawContent)
+                    text = str(parsed.get("response", rawContent))
+                except Exception:
+                    text = rawContent
+            else:
+                text = rawContent
             if not text.strip():
                 continue
             turnCount += 1

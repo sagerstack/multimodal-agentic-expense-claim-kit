@@ -247,7 +247,7 @@ async def fraudNode(state: ClaimState) -> dict:
         await _writeAuditLog(settings, dbClaimId, claimId, fraudFindings)
         return {
             "messages": [
-                AIMessage(content=f"**Fraud Check**: DUPLICATE — {fraudFindings['summary']}")
+                AIMessage(content=f"**Fraud Check**: DUPLICATE — {fraudFindings['summary']}", additional_kwargs={"agent": "fraud"})
             ],
             "fraudFindings": fraudFindings,
         }
@@ -420,7 +420,7 @@ async def fraudNode(state: ClaimState) -> dict:
     await _writeAuditLog(settings, dbClaimId, claimId, fraudFindings)
 
     return {
-        "messages": [AIMessage(content=f"**Fraud Check**: {verdict} — {summary}")],
+        "messages": [AIMessage(content=f"**Fraud Check**: {verdict} — {summary}", additional_kwargs={"agent": "fraud"})],
         "fraudFindings": fraudFindings,
     }
 

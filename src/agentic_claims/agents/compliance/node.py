@@ -363,7 +363,7 @@ async def complianceNode(state: ClaimState) -> dict:
                 pass
 
         return {
-            "messages": [AIMessage(content="**Compliance Check**: ERROR — LLM unavailable. Manual review required.")],
+            "messages": [AIMessage(content="**Compliance Check**: ERROR — LLM unavailable. Manual review required.", additional_kwargs={"agent": "compliance"})],
             "complianceFindings": complianceFindings,
         }
 
@@ -431,6 +431,6 @@ async def complianceNode(state: ClaimState) -> dict:
     summaryMsg = f"**Compliance Check**: {verdict} — {summary}"
 
     return {
-        "messages": [AIMessage(content=summaryMsg)],
+        "messages": [AIMessage(content=summaryMsg, additional_kwargs={"agent": "compliance"})],
         "complianceFindings": complianceFindings,
     }
