@@ -45,27 +45,35 @@ async def extractReceiptFields(claimId: str) -> dict:
         # Decode base64 to bytes
         imageBytes = base64.b64decode(imageB64)
 
-        # Step 1: Check image quality
-        # Disabled: always continue to VLM extraction even for low-resolution or blurry images.
-        # qualityCheck = checkImageQuality(
-        #     imageBytes=imageBytes,
-        #     threshold=settings.image_quality_threshold,
-        #     minWidth=settings.image_min_width,
-        #     minHeight=settings.image_min_height,
-        # )
-        #
-        # if not qualityCheck["acceptable"]:
-        #     return {
-        #         "error": f"Image quality check failed: {qualityCheck['reason']}. Please upload a clearer, higher-resolution image."
-        #     }
-        #
-        # logger.info(
-        #     "extractReceiptFields quality check passed",
-        #     extra={
-        #         "elapsed": f"{time.time() - toolStart:.2f}s",
-        #         "qualityScore": qualityCheck.get("score"),
-        #     },
-        # )
+        # Step 1: Check image quality before calling VLM
+        qualityCheck = checkImageQuality(
+            imageBytes=imageBytes,
+            threshold=settings.image_quality_threshold,
+            minWidth=settings.image_min_width,
+            minHeight=settings.image_min_height,
+        )
+
+        if not qualityCheck["acceptable"]:
+            logEvent(
+                logger,
+                "tool.extractReceiptFields.quality_failed",
+                level=logging.WARNING,
+                logCategory="tool",
+                toolName="extractReceiptFields",
+                claimId=claimId,
+                reason=qualityCheck["reason"],
+            )
+            return {"error": "image_quality_failure", "reason": qualityCheck["reason"]}
+
+        logEvent(
+            logger,
+            "tool.extractReceiptFields.quality_passed",
+            logCategory="tool",
+            toolName="extractReceiptFields",
+            claimId=claimId,
+            elapsed=f"{time.time() - toolStart:.2f}s",
+            qualityScore=qualityCheck.get("score"),
+        )
 
         # Step 3: Instantiate VLM using ChatOpenRouter
         vlm = ChatOpenRouter(
@@ -148,6 +156,36 @@ async def extractReceiptFields(claimId: str) -> dict:
 
         try:
             result = json.loads(rawContent)
+
+            # Gate: reject non-receipt documents before any further processing
+            if not result.get("isReceipt", True):
+                documentType = result.get("documentType", "unknown")
+                logEvent(
+                    logger,
+                    "tool.extractReceiptFields.not_a_receipt",
+                    level=logging.WARNING,
+                    logCategory="tool",
+                    toolName="extractReceiptFields",
+                    claimId=claimId,
+                    documentType=documentType,
+                )
+                return {"error": "not_a_receipt", "documentType": documentType}
+
+            # Gate: reject unreadable receipts (VLM judgment on blur/legibility)
+            if result.get("isReadable") is False:
+                logEvent(
+                    logger,
+                    "tool.extractReceiptFields.unreadable",
+                    level=logging.WARNING,
+                    logCategory="tool",
+                    toolName="extractReceiptFields",
+                    claimId=claimId,
+                )
+                return {
+                    "error": "image_quality_failure",
+                    "reason": "Receipt text is not legible. Please re-upload a clearer image.",
+                }
+
             logEvent(
                 logger,
                 "tool.extractReceiptFields.completed",

@@ -76,6 +76,22 @@ def testStripToolCallJsonPreservesCleanText():
     assert result == text
 
 
+def testStripToolCallJsonRemovesTrailingArrayWithIdType():
+    # CLAIM-187: Qwen leaked serialized tool_calls array into the content field.
+    text = (
+        "This claim is for SGD 165.40. It will be automatically approved. "
+        '[{"id":"call_0bcda30c04b546fc9e2911","type":"function","function":{}}]'
+    )
+    result = _stripToolCallJson(text)
+    assert result == "This claim is for SGD 165.40. It will be automatically approved."
+
+
+def testStripToolCallJsonRemovesTrailingObjectWithIdKey():
+    text = 'Done. {"id":"call_abc","type":"function","function":{}}'
+    result = _stripToolCallJson(text)
+    assert result == "Done."
+
+
 def testStripThinkingTagsRemovesTags():
     text = "Hello <think>internal</think> world"
     result = _stripThinkingTags(text)

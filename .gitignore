@@ -223,3 +223,12 @@ eval/results/*.json
 
 # Upload artifacts
 static/uploads/
+
+# Office temp/lock files
+**/~$*
+
+# Claude Code runtime
+.claude/scheduled_tasks.lock
+
+# DeepEval cache
+.deepeval/

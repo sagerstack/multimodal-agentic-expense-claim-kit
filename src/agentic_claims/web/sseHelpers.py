@@ -35,6 +35,27 @@ async def fetchClaimsForTable(employeeId: str | None = None) -> list[dict]:
     return await _fetchClaimsForTable(employeeId=employeeId)
 
 
+_TRAILING_TOOL_CALL_JSON_PATTERN = re.compile(
+    r"""
+    \[?                  # optional leading bracket for array form
+    \s*
+    \{                   # opening brace
+    \s*
+    "(?:
+        name|            # {"name": "..."} QwQ/generic
+        id|              # {"id": "call_..."} OpenAI/Qwen tool_calls
+        type|            # {"type": "function", ...}
+        function|        # {"function": {...}}
+        arguments|       # {"arguments": {...}}
+        tool_call_id|    # {"tool_call_id": "..."}
+        tool_calls       # {"tool_calls": [...]}
+    )"
+    \s*:
+    """,
+    re.VERBOSE,
+)
+
+
 TOOL_LABELS = {
     "getClaimSchema": "Loading claim schema...",
     "extractReceiptFields": "Extracting receipt fields...",
@@ -182,11 +203,9 @@ def _stripToolCallJson(text: str) -> str:
         except (ValueError, TypeError):
             pass
 
-    idx = text.find('{"name":')
-    if idx == -1:
-        idx = text.find('{"name" :')
-    if idx > 0:
-        return text[:idx].strip()
+    match = _TRAILING_TOOL_CALL_JSON_PATTERN.search(text)
+    if match and match.start() > 0:
+        return text[:match.start()].rstrip()
     return text
 
 

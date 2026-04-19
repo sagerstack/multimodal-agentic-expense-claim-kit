@@ -7,8 +7,6 @@ import pytest
 from agentic_claims.agents.intake.utils.imageQuality import checkImageQuality
 
 
-pytestmark = pytest.mark.skip(reason="Image quality gate disabled in extractReceiptFields.")
-
 
 @pytest.fixture
 def sharpImageBytes() -> bytes:
@@ -44,15 +42,19 @@ def testSharpImageAccepted(sharpImageBytes):
     assert result["variance"] > 150.0, "Sharp image variance should exceed threshold"
 
 
-def testBlurryImageRejected(blurryImageBytes):
-    """Verify blurry image with low variance is rejected."""
+def testBlurryImageAcceptedAtResolutionGate(blurryImageBytes):
+    """Readability judgment is delegated to the VLM — a blurry image that passes
+    resolution must still be accepted at this layer; the VLM decides whether
+    the text is legible via the isReadable field."""
     result = checkImageQuality(
         imageBytes=blurryImageBytes, threshold=150.0, minWidth=800, minHeight=600
     )
 
-    assert result["acceptable"] is False, "Blurry image should be rejected"
-    assert "blurry" in result["reason"].lower(), "Reason should mention blur"
-    assert result["variance"] < 150.0, "Blurry image variance should be below threshold"
+    assert result["acceptable"] is True, (
+        "Blurry image with adequate resolution must pass the resolution gate; "
+        "readability is judged by the VLM, not by Laplacian variance."
+    )
+    assert result["reason"] == "", "Accepted images return empty reason"
 
 
 def testLowResolutionRejected(lowResolutionImageBytes):

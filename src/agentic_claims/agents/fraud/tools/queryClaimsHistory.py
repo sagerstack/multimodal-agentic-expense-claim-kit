@@ -115,7 +115,11 @@ async def exactDuplicateCheck(
     return result if isinstance(result, list) else []
 
 
-async def recentClaimsByEmployee(employeeId: str, days: int = 30) -> list[dict]:
+async def recentClaimsByEmployee(
+    employeeId: str,
+    days: int = 30,
+    excludeClaimId: int | None = None,
+) -> list[dict]:
     """Fetch all claims submitted by the employee in the last N days.
 
     Used to detect frequency anomalies (e.g. many meals claims in one week).
@@ -123,6 +127,8 @@ async def recentClaimsByEmployee(employeeId: str, days: int = 30) -> list[dict]:
     Args:
         employeeId: Employee ID to filter by
         days: Look-back window in days (default 30)
+        excludeClaimId: Integer DB primary key of the current claim to exclude,
+            preventing the claim from appearing in its own history context.
 
     Returns:
         List of claim rows with receipt info, newest first.
@@ -131,6 +137,7 @@ async def recentClaimsByEmployee(employeeId: str, days: int = 30) -> list[dict]:
 
     safeEmployeeId = _sanitize(employeeId)
     safeDays = int(days)
+    excludeClause = f"AND c.id != {int(excludeClaimId)}" if excludeClaimId is not None else ""
 
     query = f"""
         SELECT
@@ -148,13 +155,14 @@ async def recentClaimsByEmployee(employeeId: str, days: int = 30) -> list[dict]:
         LEFT JOIN receipts r ON r.claim_id = c.id
         WHERE c.employee_id = '{safeEmployeeId}'
           AND c.created_at >= NOW() - INTERVAL '{safeDays} days'
+          {excludeClause}
         ORDER BY c.created_at DESC
         LIMIT 50
     """
 
     logger.info(
         "recentClaimsByEmployee query",
-        extra={"employeeId": employeeId, "days": days},
+        extra={"employeeId": employeeId, "days": days, "excludeClaimId": excludeClaimId},
     )
 
     result = await mcpCallTool(
@@ -170,7 +178,11 @@ async def recentClaimsByEmployee(employeeId: str, days: int = 30) -> list[dict]:
     return result if isinstance(result, list) else []
 
 
-async def claimsByMerchantAndEmployee(employeeId: str, merchant: str) -> list[dict]:
+async def claimsByMerchantAndEmployee(
+    employeeId: str,
+    merchant: str,
+    excludeClaimId: int | None = None,
+) -> list[dict]:
     """Fetch all prior claims from this employee at the same merchant.
 
     Used to compute average spend and detect amount anomalies.
@@ -178,6 +190,8 @@ async def claimsByMerchantAndEmployee(employeeId: str, merchant: str) -> list[di
     Args:
         employeeId: Employee ID
         merchant: Merchant name (ILIKE match)
+        excludeClaimId: Integer DB primary key of the current claim to exclude,
+            preventing the claim from appearing in its own history context.
 
     Returns:
         List of claim rows ordered by date descending, max 20 rows.
@@ -186,6 +200,7 @@ async def claimsByMerchantAndEmployee(employeeId: str, merchant: str) -> list[di
 
     safeEmployeeId = _sanitize(employeeId)
     safeMerchant = _sanitize(merchant)
+    excludeClause = f"AND c.id != {int(excludeClaimId)}" if excludeClaimId is not None else ""
 
     query = f"""
         SELECT
@@ -202,13 +217,14 @@ async def claimsByMerchantAndEmployee(employeeId: str, merchant: str) -> list[di
         LEFT JOIN receipts r ON r.claim_id = c.id
         WHERE c.employee_id = '{safeEmployeeId}'
           AND r.merchant ILIKE '{safeMerchant}'
+          {excludeClause}
         ORDER BY c.created_at DESC
         LIMIT 20
     """
 
     logger.info(
         "claimsByMerchantAndEmployee query",
-        extra={"employeeId": employeeId, "merchant": merchant},
+        extra={"employeeId": employeeId, "merchant": merchant, "excludeClaimId": excludeClaimId},
     )
 
     result = await mcpCallTool(

@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expense AI | Agentic Evaluation Report</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #cc97ff;
+      --primary-dim: #9c48ea;
+      --secondary: #62fae3;
+      --secondary-dim: #50ebd5;
+      --tertiary: #ff97b5;
+      --error: #ff6e84;
+      --success: #62fae3;
+
+      --surface: #060e20;
+      --surface-container-lowest: #000000;
+      --surface-container-low: #091328;
+      --surface-container: #0f1930;
+      --surface-container-high: #141f38;
+      --surface-container-highest: #192540;
+      --surface-bright: #1f2b49;
+
+      --on-surface: #dee5ff;
+      --on-surface-variant: #a3aac4;
+      --outline: #6d758c;
+      --outline-variant: #40485d;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--surface);
+      color: var(--on-surface);
+      font-family: "Inter", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: "Manrope", sans-serif;
+      font-weight: 700;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+
+    code, pre {
+      font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    a { color: var(--secondary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .material-symbols-outlined {
+      font-family: "Material Symbols Outlined";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 20px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-feature-settings: 'liga';
+      -webkit-font-smoothing: antialiased;
+      vertical-align: middle;
+      font-variation-settings: "FILL" 0, "wght" 400;
+    }
+
+    .page {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem 4rem;
+    }
+
+    /* ── Header ── */
+    .report-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--outline-variant);
+      margin-bottom: 2rem;
+    }
+
+    .logo-mark {
+      width: 2.75rem;
+      height: 2.75rem;
+      border-radius: 0.75rem;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dim));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(156, 72, 234, 0.35);
+    }
+
+    .logo-mark .material-symbols-outlined {
+      color: #47007c;
+      font-size: 22px;
+      font-variation-settings: "FILL" 1;
+    }
+
+    .brand {
+      font-family: "Manrope", sans-serif;
+      font-weight: 800;
+      font-size: 1.5rem;
+      background: linear-gradient(90deg, #cc97ff, #62fae3);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -0.02em;
+    }
+
+    .meta-chip {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.5rem 0.875rem;
+      background: var(--surface-container);
+      border: 1px solid var(--outline-variant);
+      border-radius: 999px;
+      font-size: 0.75rem;
+      color: var(--on-surface-variant);
+    }
+
+    .meta-chip .material-symbols-outlined { font-size: 14px; }
+
+    /* ── Hero KPI ── */
+    .hero {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } }
+
+    .kpi-card {
+      background: linear-gradient(135deg, var(--surface-container-high), var(--surface-container));
+      border: 1px solid var(--outline-variant);
+      border-radius: 1.25rem;
+      padding: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-card::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      right: -20%;
+      width: 60%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(98, 250, 227, 0.1), transparent 70%);
+      pointer-events: none;
+    }
+
+    .kpi-eyebrow {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--on-surface-variant);
+      margin-bottom: 0.75rem;
+    }
+
+    .kpi-value {
+      font-family: "Manrope", sans-serif;
+      font-weight: 800;
+      font-size: 4rem;
+      line-height: 1;
+      background: linear-gradient(90deg, #cc97ff, #62fae3);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -0.03em;
+    }
+
+    .kpi-sub {
+      margin-top: 0.75rem;
+      color: var(--on-surface-variant);
+      font-size: 0.875rem;
+    }
+
+    .kpi-stats {
+      display: flex;
+      gap: 2rem;
+      margin-top: 1.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--outline-variant);
+    }
+
+    .kpi-stat-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--on-surface-variant);
+      margin-bottom: 0.25rem;
+    }
+
+    .kpi-stat-value {
+      font-family: "Manrope", sans-serif;
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: var(--on-surface);
+    }
+
+    .kpi-stat-value.ok { color: var(--secondary); }
+    .kpi-stat-value.bad { color: var(--error); }
+
+    /* ── Category bars ── */
+    .panel {
+      background: var(--surface-container);
+      border: 1px solid var(--outline-variant);
+      border-radius: 1.25rem;
+      padding: 1.75rem;
+    }
+
+    .panel-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .panel-title .material-symbols-outlined {
+      color: var(--secondary);
+      font-size: 18px;
+    }
+
+    .cat-row {
+      display: grid;
+      grid-template-columns: 7rem 1fr 4rem 3rem;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.625rem 0;
+    }
+
+    .cat-name {
+      font-weight: 600;
+      text-transform: capitalize;
+      color: var(--on-surface);
+    }
+
+    .cat-bar-track {
+      height: 0.5rem;
+      background: var(--surface-container-lowest);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .cat-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      transition: width 0.3s ease;
+    }
+
+    .cat-score {
+      text-align: right;
+      font-weight: 700;
+      color: var(--on-surface);
+    }
+
+    .cat-weight {
+      text-align: right;
+      font-size: 0.75rem;
+      color: var(--on-surface-variant);
+    }
+
+    /* ── Primary targets ── */
+    .targets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .target-card {
+      background: var(--surface-container);
+      border: 1px solid var(--outline-variant);
+      border-radius: 1rem;
+      padding: 1.25rem;
+      position: relative;
+    }
+
+    .target-card.pass { border-color: rgba(98, 250, 227, 0.4); }
+    .target-card.fail { border-color: rgba(255, 110, 132, 0.4); }
+
+    .target-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.75rem;
+    }
+
+    .target-card-name {
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: var(--on-surface);
+      max-width: 70%;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.2rem 0.625rem;
+      border-radius: 999px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .badge .material-symbols-outlined { font-size: 12px; }
+
+    .badge.pass {
+      background: rgba(98, 250, 227, 0.12);
+      color: var(--secondary);
+      border: 1px solid rgba(98, 250, 227, 0.3);
+    }
+
+    .badge.fail {
+      background: rgba(255, 110, 132, 0.12);
+      color: var(--error);
+      border: 1px solid rgba(255, 110, 132, 0.3);
+    }
+
+    .target-actual {
+      font-family: "Manrope", sans-serif;
+      font-weight: 800;
+      font-size: 1.75rem;
+      color: var(--on-surface);
+      margin-bottom: 0.25rem;
+    }
+
+    .target-threshold {
+      font-size: 0.75rem;
+      color: var(--on-surface-variant);
+    }
+
+    .target-detail {
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--outline);
+      font-family: "SF Mono", Menlo, monospace;
+    }
+
+    /* ── Benchmarks table ── */
+    .benchmarks {
+      background: var(--surface-container);
+      border: 1px solid var(--outline-variant);
+      border-radius: 1.25rem;
+      overflow: hidden;
+    }
+
+    .benchmarks-header {
+      display: grid;
+      grid-template-columns: 5rem 1fr 8rem 5rem 5rem 2rem;
+      padding: 1rem 1.5rem;
+      background: var(--surface-container-low);
+      border-bottom: 1px solid var(--outline-variant);
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--on-surface-variant);
+    }
+
+    .benchmark-row {
+      border-bottom: 1px solid rgba(64, 72, 93, 0.3);
+    }
+
+    .benchmark-row:last-child { border-bottom: none; }
+
+    .benchmark-summary {
+      display: grid;
+      grid-template-columns: 5rem 1fr 8rem 5rem 5rem 2rem;
+      padding: 1rem 1.5rem;
+      align-items: center;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      user-select: none;
+    }
+
+    .benchmark-summary:hover { background: var(--surface-container-high); }
+
+    .bench-id {
+      font-family: "SF Mono", Menlo, monospace;
+      font-weight: 600;
+      color: var(--secondary);
+      font-size: 0.8125rem;
+    }
+
+    .bench-name {
+      font-weight: 500;
+      color: var(--on-surface);
+    }
+
+    .bench-category {
+      text-transform: capitalize;
+      color: var(--on-surface-variant);
+      font-size: 0.8125rem;
+    }
+
+    .bench-score {
+      font-family: "Manrope", sans-serif;
+      font-weight: 700;
+      text-align: right;
+      color: var(--on-surface);
+    }
+
+    .bench-score.low { color: var(--error); }
+    .bench-score.mid { color: var(--tertiary); }
+    .bench-score.high { color: var(--secondary); }
+
+    .bench-chevron {
+      color: var(--outline);
+      transition: transform 0.2s ease;
+    }
+
+    details[open] .bench-chevron { transform: rotate(90deg); }
+
+    .benchmark-detail {
+      padding: 1.25rem 1.5rem 1.75rem 1.5rem;
+      background: var(--surface-container-lowest);
+      border-top: 1px solid var(--outline-variant);
+    }
+
+    .detail-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .detail-section:last-child { margin-bottom: 0; }
+
+    .detail-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--on-surface-variant);
+      margin-bottom: 0.5rem;
+    }
+
+    .detail-value {
+      color: var(--on-surface);
+      font-size: 0.875rem;
+    }
+
+    .metric-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+    }
+
+    .metric-item {
+      display: grid;
+      grid-template-columns: auto 4rem 1fr;
+      gap: 1rem;
+      align-items: flex-start;
+      padding: 0.75rem 1rem;
+      background: var(--surface-container);
+      border-radius: 0.625rem;
+      border: 1px solid var(--outline-variant);
+    }
+
+    .metric-name {
+      font-weight: 600;
+      color: var(--on-surface);
+      font-size: 0.8125rem;
+    }
+
+    .metric-score {
+      font-family: "Manrope", sans-serif;
+      font-weight: 700;
+      text-align: right;
+      color: var(--on-surface);
+    }
+
+    .metric-reason {
+      color: var(--on-surface-variant);
+      font-size: 0.8125rem;
+      line-height: 1.5;
+    }
+
+    .transcript {
+      background: var(--surface-container);
+      border-radius: 0.625rem;
+      border: 1px solid var(--outline-variant);
+      padding: 0.875rem 1rem;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .turn {
+      padding: 0.5rem 0;
+      border-bottom: 1px dashed rgba(64, 72, 93, 0.35);
+    }
+
+    .turn:last-child { border-bottom: none; }
+
+    .turn-role {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.375rem;
+    }
+
+    .turn-role.user { color: var(--primary); }
+    .turn-role.assistant { color: var(--secondary); }
+
+    .turn-content {
+      font-size: 0.8125rem;
+      color: var(--on-surface);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .kv-grid {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 0.375rem 1rem;
+      font-size: 0.8125rem;
+    }
+
+    .kv-grid dt {
+      color: var(--on-surface-variant);
+      font-weight: 500;
+    }
+
+    .kv-grid dd {
+      margin: 0;
+      color: var(--on-surface);
+      font-family: "SF Mono", Menlo, monospace;
+      word-break: break-word;
+    }
+
+    /* ── Section headers ── */
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin: 2.5rem 0 1rem 0;
+    }
+
+    .section-head h2 {
+      font-size: 1.125rem;
+      color: var(--on-surface);
+    }
+
+    .section-head .hint {
+      font-size: 0.75rem;
+      color: var(--on-surface-variant);
+    }
+
+    /* Reset default details/summary styling */
+    details > summary { list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+
+    footer {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--outline-variant);
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--outline);
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Header ── -->
+  <header class="report-header">
+    <div class="logo-mark">
+      <span class="material-symbols-outlined">bolt</span>
+    </div>
+    <div>
+      <div class="brand">Expense AI</div>
+      <div style="font-size: 0.75rem; color: var(--on-surface-variant); margin-top: 0.125rem;">
+        Agentic Evaluation Report
+      </div>
+    </div>
+    <div class="meta-chip">
+      <span class="material-symbols-outlined">schedule</span>
+      <span>{{ generatedAt }}</span>
+    </div>
+    <div class="meta-chip">
+      <span class="material-symbols-outlined">psychology</span>
+      <span>{{ judgeModel }}</span>
+    </div>
+  </header>
+
+  <!-- ── Hero KPI + category bars ── -->
+  <section class="hero">
+    <div class="kpi-card">
+      <div class="kpi-eyebrow">Weighted overall</div>
+      <div class="kpi-value">{{ "%.1f"|format(overallScore * 100) }}%</div>
+      <div class="kpi-sub">
+        Average across {{ totalBenchmarks }} benchmarks, weighted by preset category coefficients.
+      </div>
+      <div class="kpi-stats">
+        <div>
+          <div class="kpi-stat-label">Passed</div>
+          <div class="kpi-stat-value ok">{{ passedCount }}</div>
+        </div>
+        <div>
+          <div class="kpi-stat-label">Failed</div>
+          <div class="kpi-stat-value bad">{{ failedCount }}</div>
+        </div>
+        <div>
+          <div class="kpi-stat-label">Targets met</div>
+          <div class="kpi-stat-value {% if targetsMet == targetsTotal %}ok{% else %}bad{% endif %}">
+            {{ targetsMet }}<span style="color: var(--on-surface-variant); font-size: 0.9rem;"> / {{ targetsTotal }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">
+        <span class="material-symbols-outlined">bar_chart</span>
+        Category scores
+      </div>
+      {% for row in categoryRows %}
+        <div class="cat-row">
+          <div class="cat-name">{{ row.name }}</div>
+          <div class="cat-bar-track">
+            <div class="cat-bar-fill" style="width: {{ (row.score * 100)|round(1) }}%;"></div>
+          </div>
+          <div class="cat-score">{{ "%.1f"|format(row.score * 100) }}%</div>
+          <div class="cat-weight">{{ (row.weight * 100)|round|int }}%</div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- ── Primary targets ── -->
+  <div class="section-head">
+    <h2>Primary targets</h2>
+    <span class="hint">Preset performance targets</span>
+  </div>
+  <section class="targets-grid">
+    {% for t in targets %}
+      <div class="target-card {% if t.passed %}pass{% else %}fail{% endif %}">
+        <div class="target-card-head">
+          <div class="target-card-name">{{ t.target }}</div>
+          <span class="badge {% if t.passed %}pass{% else %}fail{% endif %}">
+            <span class="material-symbols-outlined">{% if t.passed %}check{% else %}close{% endif %}</span>
+            {% if t.passed %}Pass{% else %}Fail{% endif %}
+          </span>
+        </div>
+        <div class="target-actual">
+          {% if 'rate' in t.target.lower() %}{{ "%.2f"|format(t.actual * 100) }}%{% else %}{{ "%.1f"|format(t.actual * 100) }}%{% endif %}
+        </div>
+        <div class="target-threshold">Target {{ t.threshold }}</div>
+        <div class="target-detail">{{ t.detail }}</div>
+      </div>
+    {% endfor %}
+  </section>
+
+  <!-- ── Per-benchmark table ── -->
+  <div class="section-head">
+    <h2>Benchmarks ({{ totalBenchmarks }})</h2>
+    <span class="hint">Click a row to expand details</span>
+  </div>
+  <section class="benchmarks">
+    <div class="benchmarks-header">
+      <div>ID</div>
+      <div>Benchmark</div>
+      <div>Category</div>
+      <div style="text-align: right;">Score</div>
+      <div style="text-align: right;">Pass</div>
+      <div></div>
+    </div>
+    {% for b in benchmarkRows %}
+      <div class="benchmark-row">
+        <details>
+          <summary class="benchmark-summary">
+            <div class="bench-id">{{ b.benchmarkId }}</div>
+            <div class="bench-name">{{ b.benchmark }}</div>
+            <div class="bench-category">{{ b.category }}</div>
+            <div class="bench-score {{ b.scoreClass }}">{{ "%.0f"|format(b.score * 100) }}%</div>
+            <div style="text-align: right;">
+              <span class="badge {% if b.passed %}pass{% else %}fail{% endif %}">
+                {% if b.passed %}Pass{% else %}Fail{% endif %}
+              </span>
+            </div>
+            <div class="bench-chevron">
+              <span class="material-symbols-outlined">chevron_right</span>
+            </div>
+          </summary>
+          <div class="benchmark-detail">
+
+            {% if b.metrics %}
+            <div class="detail-section">
+              <div class="detail-label">Metrics</div>
+              <div class="metric-list">
+                {% for m in b.metrics %}
+                  <div class="metric-item">
+                    <div class="metric-name">{{ m.metric }}</div>
+                    <div class="metric-score">{{ "%.0f"|format(m.score * 100) }}%</div>
+                    <div class="metric-reason">{{ m.reason or '—' }}</div>
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+
+            <div class="detail-section">
+              <div class="detail-label">Expected</div>
+              <dl class="kv-grid">
+                <dt>Decision</dt>
+                <dd>{{ b.expectedDecision or '—' }}</dd>
+                <dt>Criteria</dt>
+                <dd>{{ b.passCriteria or '—' }}</dd>
+                {% if b.expectedFields %}
+                <dt>Fields</dt>
+                <dd>{{ b.expectedFields }}</dd>
+                {% endif %}
+              </dl>
+            </div>
+
+            <div class="detail-section">
+              <div class="detail-label">Agent decision</div>
+              <div class="detail-value">{{ b.agentDecision or '—' }}</div>
+            </div>
+
+            {% if b.extractedFields %}
+            <div class="detail-section">
+              <div class="detail-label">Extracted fields</div>
+              <dl class="kv-grid">
+                {% for k, v in b.extractedFields.items() %}
+                  <dt>{{ k }}</dt>
+                  <dd>{{ v }}</dd>
+                {% endfor %}
+              </dl>
+            </div>
+            {% endif %}
+
+            {% if b.transcript %}
+            <div class="detail-section">
+              <div class="detail-label">Conversation transcript ({{ b.transcript|length }} turns)</div>
+              <div class="transcript">
+                {% for turn in b.transcript %}
+                  <div class="turn">
+                    <div class="turn-role {{ turn.role }}">{{ turn.role }}</div>
+                    <div class="turn-content">{{ turn.content }}</div>
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+
+          </div>
+        </details>
+      </div>
+    {% endfor %}
+  </section>
+
+  <footer>
+    Generated by <code>eval/src/report.py</code> · {{ generatedAt }}
+  </footer>
+
+</div>
+</body>
+</html>

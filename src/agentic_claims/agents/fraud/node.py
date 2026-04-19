@@ -465,7 +465,7 @@ async def _runDbQueries(
         duplicates = []
 
     try:
-        recentClaims = await recentClaimsByEmployee(employeeId, days=30)
+        recentClaims = await recentClaimsByEmployee(employeeId, days=30, excludeClaimId=excludeClaimId)
     except Exception as e:
         logEvent(
             logger,
@@ -480,7 +480,7 @@ async def _runDbQueries(
         recentClaims = []
 
     try:
-        merchantHistory = await claimsByMerchantAndEmployee(employeeId, merchant)
+        merchantHistory = await claimsByMerchantAndEmployee(employeeId, merchant, excludeClaimId=excludeClaimId)
     except Exception as e:
         logEvent(
             logger,
