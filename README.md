@@ -1,6 +1,6 @@
 # Agentic Expense Claims
 
-Multi-agent multimodal system that automates SUTD expense claim processing. Replaces the manual SAP Concur workflow (15–25 min per claim) with an AI-driven pipeline targeting <3 min submission time and >95% field extraction accuracy.
+Multi-agent multimodal system that automates corporate expense claim processing. Replaces the manual SAP Concur workflow (15–25 min per claim) with an AI-driven pipeline targeting <3 min submission time and >95% field extraction accuracy.
 
 An employee uploads a receipt, chats briefly with the Intake agent, and the system handles the rest: VLM extraction, currency conversion, policy retrieval, submission, fraud scoring, compliance review, and final routing (auto-approve / return / escalate).
 
