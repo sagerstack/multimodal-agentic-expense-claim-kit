@@ -21,7 +21,6 @@ class EvalConfig:
     invoicesDir: Path
     evalUsername: str
     evalPassword: str
-    anthropicApiKey: str
 
 
 def getEvalConfig() -> EvalConfig:
@@ -29,7 +28,6 @@ def getEvalConfig() -> EvalConfig:
 
     Required env vars:
       OPENROUTER_API_KEY   -- judge LLM authentication
-      ANTHROPIC_API_KEY    -- Claude subagent invocation
 
     Optional env vars (have defaults):
       EVAL_APP_URL         -- default http://localhost:8000
@@ -43,12 +41,6 @@ def getEvalConfig() -> EvalConfig:
             "OPENROUTER_API_KEY environment variable is required for the judge model"
         )
 
-    anthropicApiKey = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not anthropicApiKey:
-        raise ValueError(
-            "ANTHROPIC_API_KEY environment variable is required for Claude subagent invocation"
-        )
-
     judgeModel = LiteLLMModel(
         model="openrouter/openai/gpt-4o",
         api_key=openrouterApiKey,
@@ -60,8 +52,8 @@ def getEvalConfig() -> EvalConfig:
         "DATABASE_URL",
         "postgresql://agentic:agentic_password@localhost:5432/agentic_claims",
     )
-    evalUsername = os.environ.get("EVAL_USERNAME", "employee1")
-    evalPassword = os.environ.get("EVAL_PASSWORD", "password123")
+    evalUsername = os.environ.get("EVAL_USERNAME", "sagar")
+    evalPassword = os.environ.get("EVAL_PASSWORD", "sagar123")
 
     return EvalConfig(
         judgeModel=judgeModel,
@@ -71,5 +63,4 @@ def getEvalConfig() -> EvalConfig:
         invoicesDir=_EVAL_DIR / "invoices",
         evalUsername=evalUsername,
         evalPassword=evalPassword,
-        anthropicApiKey=anthropicApiKey,
     )

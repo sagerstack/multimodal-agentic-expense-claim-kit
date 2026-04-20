@@ -170,36 +170,68 @@ async def complianceNode(state: ClaimState) -> dict:
 
     # ------------------------------------------------------------------
     # 2. Fetch relevant policy rules via RAG MCP
+    # Primary: getPolicyByCategory pins the lookup to the correct policy
+    # document, preventing cross-category contamination (e.g. transport
+    # policy being applied to a general expense).
+    # Fallback: free-text searchPolicies if the category returns nothing.
     # ------------------------------------------------------------------
-    policyQuery = f"{category} expense policy spending limit approval threshold budget {merchant}"
     logEvent(
         logger,
         "compliance.rag_query",
         logCategory="agent",
         agent="compliance",
         claimId=claimId,
-        query=policyQuery,
-        message="Querying RAG MCP for policy rules",
+        category=category,
+        message="Querying RAG MCP for policy rules by category",
     )
 
     policyResults = await mcpCallTool(
         serverUrl=settings.rag_mcp_url,
-        toolName="searchPolicies",
-        arguments={"query": policyQuery, "limit": 8},
+        toolName="getPolicyByCategory",
+        arguments={"category": category},
     )
 
     if isinstance(policyResults, dict) and "error" in policyResults:
         logEvent(
             logger,
-            "compliance.rag_error",
+            "compliance.rag_category_error",
             level=logging.WARNING,
             logCategory="agent",
             agent="compliance",
             claimId=claimId,
             error=policyResults["error"],
-            message="RAG MCP returned error — proceeding with empty policy context",
+            message="getPolicyByCategory failed — falling back to searchPolicies",
         )
         policyResults = []
+
+    if not policyResults:
+        policyQuery = f"{category} expense policy spending limit approval threshold {merchant}"
+        logEvent(
+            logger,
+            "compliance.rag_fallback",
+            logCategory="agent",
+            agent="compliance",
+            claimId=claimId,
+            query=policyQuery,
+            message="Category lookup empty — falling back to searchPolicies",
+        )
+        policyResults = await mcpCallTool(
+            serverUrl=settings.rag_mcp_url,
+            toolName="searchPolicies",
+            arguments={"query": policyQuery, "limit": 8},
+        )
+        if isinstance(policyResults, dict) and "error" in policyResults:
+            logEvent(
+                logger,
+                "compliance.rag_error",
+                level=logging.WARNING,
+                logCategory="agent",
+                agent="compliance",
+                claimId=claimId,
+                error=policyResults["error"],
+                message="RAG MCP returned error — proceeding with empty policy context",
+            )
+            policyResults = []
 
     # ------------------------------------------------------------------
     # 3. Build evaluation context and LLM prompt

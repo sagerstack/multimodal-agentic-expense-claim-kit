@@ -29,12 +29,12 @@ def _extractScore(result: dict) -> float:
     Returns:
         Float score in range [0.0, 1.0].
     """
-    if "score" in result:
+    if "score" in result and result["score"] is not None:
         return float(result["score"])
     metrics = result.get("metrics")
     if isinstance(metrics, list) and metrics:
         firstMetric = metrics[0]
-        if isinstance(firstMetric, dict) and "score" in firstMetric:
+        if isinstance(firstMetric, dict) and "score" in firstMetric and firstMetric["score"] is not None:
             return float(firstMetric["score"])
     return 0.0
 

@@ -47,6 +47,7 @@ async def _fetchClaimRow(
                 await cur.execute(
                     """
                     SELECT
+                        intake_findings,
                         compliance_findings,
                         fraud_findings,
                         advisor_decision,
@@ -60,8 +61,9 @@ async def _fetchClaimRow(
                 row = await cur.fetchone()
                 if row is None:
                     return None
-                complianceFindings, fraudFindings, advisorDecision, advisorFindings = row
+                intakeFindings, complianceFindings, fraudFindings, advisorDecision, advisorFindings = row
                 return {
+                    "intakeFindings": intakeFindings,
                     "complianceFindings": complianceFindings,
                     "fraudFindings": fraudFindings,
                     "advisorDecision": advisorDecision,
@@ -70,6 +72,70 @@ async def _fetchClaimRow(
     except Exception as exc:
         logger.warning(
             "enrichment: DB query failed for claim %s: %s",
+            claimNumber,
+            exc,
+        )
+        return None
+
+
+async def _fetchReceiptFields(
+    claimNumber: str, dbUrl: str
+) -> Optional[dict[str, Any]]:
+    """Query the receipts table for structured extracted fields by claim_number.
+
+    Returns a normalized dict suitable for FieldExtractionMetric / AmountReconciliationMetric,
+    or None if the claim has no linked receipt.
+    """
+    try:
+        async with await psycopg.AsyncConnection.connect(dbUrl) as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    SELECT
+                        r.merchant,
+                        r.date,
+                        r.total_amount,
+                        r.currency,
+                        r.line_items,
+                        r.original_amount,
+                        r.original_currency,
+                        r.converted_amount_sgd
+                    FROM receipts r
+                    JOIN claims c ON r.claim_id = c.id
+                    WHERE c.claim_number = %s
+                    ORDER BY r.id DESC
+                    LIMIT 1
+                    """,
+                    (claimNumber,),
+                )
+                row = await cur.fetchone()
+                if row is None:
+                    return None
+                (
+                    merchant, date, totalAmount, currency, lineItems,
+                    originalAmount, originalCurrency, convertedAmountSgd,
+                ) = row
+                fields: dict[str, Any] = {}
+                if merchant is not None:
+                    fields["merchant"] = merchant
+                if date is not None:
+                    fields["date"] = str(date)
+                if totalAmount is not None:
+                    fields["total"] = float(totalAmount)
+                if currency is not None:
+                    fields["currency"] = currency
+                if lineItems is not None:
+                    fields["lineItems"] = lineItems
+                if originalAmount is not None:
+                    fields["originalAmount"] = float(originalAmount)
+                if originalCurrency is not None:
+                    fields["originalCurrency"] = originalCurrency
+                if convertedAmountSgd is not None:
+                    fields["convertedAmountSgd"] = float(convertedAmountSgd)
+                return fields if fields else None
+    except Exception as exc:
+        logger.warning(
+            "enrichment: receipts query failed for claim %s: %s",
             claimNumber,
             exc,
         )
@@ -219,6 +285,31 @@ def _parseAdvisorReasoning(advisorFindings: Any) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# DB reset
+# ---------------------------------------------------------------------------
+
+
+async def resetEvalDatabase(dbUrl: str) -> None:
+    """Truncate all claim data before a full eval run to prevent cross-run contamination.
+
+    The fraud agent detects duplicates by querying claims history. Without a reset,
+    repeated eval runs accumulate identical receipts and the fraud agent flags every
+    re-submitted benchmark as a duplicate, poisoning advisor decisions.
+
+    Truncates: audit_log, receipts, claims (cascade order respects FK constraints).
+    Leaves intact: alembic_version, users, LangGraph checkpoint tables.
+    """
+    try:
+        async with await psycopg.AsyncConnection.connect(dbUrl) as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("TRUNCATE TABLE audit_log, receipts, claims RESTART IDENTITY CASCADE")
+            await conn.commit()
+        logger.info("resetEvalDatabase: claims/receipts/audit_log truncated")
+    except Exception as exc:
+        raise RuntimeError(f"resetEvalDatabase: failed to truncate eval tables: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -272,24 +363,74 @@ async def enrichCapturedResult(
         )
         return capturedResult
 
-    # --- 1. Query claims table ---
-    claimRow = await _fetchClaimRow(claimId, dbUrl)
+    # --- 1. Query claims table, polling until advisor_decision is populated ---
+    # The post-submission pipeline (compliance → fraud → advisor) runs asynchronously
+    # after intake. Poll every 30s for up to 3 minutes so we capture the full verdict.
+    POLL_INTERVAL_S = 30
+    POLL_MAX_ATTEMPTS = 6  # 6 × 30s = 3 minutes
+    claimRow = None
+    for attempt in range(1, POLL_MAX_ATTEMPTS + 1):
+        claimRow = await _fetchClaimRow(claimId, dbUrl)
+        if claimRow is not None and claimRow.get("advisorDecision"):
+            logger.info(
+                "enrichment: advisor_decision ready for %s after %d poll(s)",
+                benchmarkId,
+                attempt,
+            )
+            break
+        if attempt < POLL_MAX_ATTEMPTS:
+            logger.info(
+                "enrichment: advisor_decision not yet set for %s (attempt %d/%d) — waiting %ds",
+                benchmarkId,
+                attempt,
+                POLL_MAX_ATTEMPTS,
+                POLL_INTERVAL_S,
+            )
+            import asyncio as _asyncio
+            await _asyncio.sleep(POLL_INTERVAL_S)
+        else:
+            logger.warning(
+                "enrichment: advisor_decision still null for %s after %d attempts — proceeding with partial data",
+                benchmarkId,
+                POLL_MAX_ATTEMPTS,
+            )
+
     if claimRow is None:
         logger.warning(
             "enrichment: claim '%s' not found in DB for benchmark %s",
             claimId,
             benchmarkId,
         )
-        # Leave findings as None (already the default from subagent)
     else:
+        capture["intakeFindings"] = claimRow["intakeFindings"]
         capture["complianceFindings"] = claimRow["complianceFindings"]
         capture["fraudFindings"] = claimRow["fraudFindings"]
-        # Override agentDecision with authoritative DB value if present
-        if claimRow["advisorDecision"]:
-            capture["agentDecision"] = claimRow["advisorDecision"]
+        # Store advisor decision in a separate field — do NOT override agentDecision.
+        # agentDecision is the intake-stage browser capture; keeping them separate
+        # allows routing actual_output correctly per benchmark stage.
+        capture["advisorDecision"] = claimRow["advisorDecision"]
         capture["advisorReasoning"] = _parseAdvisorReasoning(
             claimRow["advisorFindings"]
         )
+
+    # --- 1b. Query receipts table for structured extracted fields ---
+    receiptFields = await _fetchReceiptFields(claimId, dbUrl)
+    if receiptFields:
+        # Start with receipts table fields (merchant, date, total, currency, lineItems)
+        mergedFields: dict = dict(receiptFields)
+
+        # Merge richer fields from intakeFindings.extractedFields (VLM raw output).
+        # intakeFindings may include subtotal, serviceCharge, gst, paymentMethod,
+        # passenger, etc. that the receipts table schema does not store.
+        intakeFindings = capture.get("intakeFindings")
+        if isinstance(intakeFindings, dict):
+            vlmFields = intakeFindings.get("extractedFields", {})
+            if isinstance(vlmFields, dict):
+                for k, v in vlmFields.items():
+                    if k not in mergedFields and v is not None:
+                        mergedFields[k] = v
+
+        capture["extractedFields"] = mergedFields
 
     # --- 2. Query audit_log for policy section references ---
     sectionRefs = await _fetchPolicyCheckRefs(claimId, dbUrl)

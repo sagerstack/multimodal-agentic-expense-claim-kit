@@ -36,19 +36,40 @@ TOOL_LABELS = {
 }
 
 
+_TOOL_CALL_JSON_PATTERN = re.compile(
+    r"""
+    \[?                  # optional leading bracket for array form
+    \s*
+    \{                   # opening brace
+    \s*
+    "(?:
+        name|            # {"name": "..."} QwQ/generic
+        id|              # {"id": "call_..."} OpenAI/Qwen tool_calls
+        type|            # {"type": "function", ...}
+        function|        # {"function": {...}}
+        arguments|       # {"arguments": {...}}
+        tool_call_id|    # {"tool_call_id": "..."}
+        tool_calls       # {"tool_calls": [...]}
+    )"
+    \s*:
+    """,
+    re.VERBOSE,
+)
+
+
 def _stripToolCallJson(text: str) -> str:
     """Strip raw tool call JSON that reasoning models include in text content.
 
-    QwQ-32B and similar models output tool call specifications as text
-    alongside proper function calling. This removes trailing JSON blocks
-    matching {"name": "...", "arguments": {...}} patterns.
+    QwQ-32B, Qwen, and similar models sometimes output tool_call
+    specifications as text alongside proper function calling. Handles
+    both object form (``{"name": "...", "arguments": {...}}``) and
+    array form (``[{"id": "call_...", "type": "function", ...}]``).
     """
-    idx = text.find('{"name":')
-    if idx == -1:
-        idx = text.find('{"name" :')
-    if idx > 0:
-        return text[:idx].strip()
-    return text
+    match = _TOOL_CALL_JSON_PATTERN.search(text)
+    if not match:
+        return text
+    idx = match.start()
+    return text[:idx].rstrip()
 
 
 def _stripThinkingTags(text: str) -> str:

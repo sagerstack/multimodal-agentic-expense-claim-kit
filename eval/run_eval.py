@@ -31,9 +31,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from deepeval import evaluate  # noqa: E402
-
-from eval.src.capture.enrichment import enrichCapturedResult  # noqa: E402
+from eval.src.capture.enrichment import enrichCapturedResult, resetEvalDatabase  # noqa: E402
 from eval.src.capture.runner import runCapture  # noqa: E402
 from eval.src.capture.subagent import (  # noqa: E402
     loadAllCapturedResults,
@@ -43,6 +41,7 @@ from eval.src.capture.subagent import (  # noqa: E402
 from eval.src.config import getEvalConfig  # noqa: E402
 from eval.src.dataset import BENCHMARKS, getBenchmarkById  # noqa: E402
 from eval.src.metrics import buildTestCase, getMetricsForBenchmark  # noqa: E402
+from eval.src.report import generateHtmlReport  # noqa: E402
 from eval.src.scoring import (  # noqa: E402
     calculateCategoryScores,
     calculateWeightedOverall,
@@ -207,53 +206,53 @@ def stepScore(
 
     print(f"Scoring {len(testCases)} test case(s)...")
 
-    try:
-        evalResults = evaluate(
-            test_cases=testCases,
-            metrics=[m for metricList in testCaseMetrics for m in metricList],
-            identifier="MMGA-Evaluation-Run",
-            hyperparameters={
-                "judgeModel": "openrouter/openai/gpt-4o",
-                "appVersion": "phase-12",
-            },
-        )
-    except Exception as exc:
-        logger.error("deepeval evaluate() failed: %s", exc)
-        return results
-
-    # Extract scores back into result dicts
-    # evalResults is EvaluationResult in deepeval 3.x; iterate over test_results
-    testResultsList = []
-    if hasattr(evalResults, "test_results"):
-        testResultsList = evalResults.test_results or []
-    elif hasattr(evalResults, "__iter__"):
-        testResultsList = list(evalResults)
-
+    # Call metric.measure(test_case) directly per benchmark — this is the correct
+    # architecture for deepeval 3.x.  The old evaluate() approach flattened all
+    # metrics into one list which caused every metric to evaluate every test case.
     for i, benchmarkId in enumerate(testCaseBenchmarkIds):
         result = resultById.get(benchmarkId)
         if result is None:
             continue
 
-        # Collect metrics for this test case
-        metricsForThisCase = testCaseMetrics[i]
+        testCase = testCases[i]
+        metricsForCase = testCaseMetrics[i]
         metricSummaries = []
-        for metric in metricsForThisCase:
-            metricScore = getattr(metric, "score", 0.0)
-            metricReason = getattr(metric, "reason", "")
+
+        for metric in metricsForCase:
             metricName = getattr(metric, "__name__", type(metric).__name__)
-            metricSummaries.append({
-                "metric": metricName,
-                "score": metricScore,
-                "reason": metricReason,
-            })
+            try:
+                score = metric.measure(testCase)
+                metricScore = score if score is not None else 0.0
+                metricReason = getattr(metric, "reason", "") or ""
+                metricSummaries.append({
+                    "metric": metricName,
+                    "score": metricScore,
+                    "reason": metricReason,
+                })
+                if verbose and metricReason:
+                    print(f"  [{benchmarkId}] {metricName}: {metricScore:.2f} — {metricReason}")
+            except Exception as exc:
+                logger.error(
+                    "metric.measure() failed for %s / %s: %s",
+                    benchmarkId, metricName, exc,
+                )
+                metricSummaries.append({
+                    "metric": metricName,
+                    "score": 0.0,
+                    "reason": f"Error: {exc}",
+                })
 
-            if verbose and metricReason:
-                print(f"  [{benchmarkId}] {metricName}: {metricScore:.2f} — {metricReason}")
-
-        # Primary score = first metric
         primaryScore = metricSummaries[0]["score"] if metricSummaries else 0.0
         result["score"] = primaryScore
         result["metrics"] = metricSummaries
+        print(f"  [{benchmarkId}] {metricSummaries[0]['metric'] if metricSummaries else 'n/a'}: {primaryScore:.2f}")
+
+        # Persist scores back to disk so the HTML report and future --skip-capture
+        # runs can use them without re-invoking the judge LLM.
+        try:
+            saveCapturedResult(result, config.resultsDir)
+        except Exception as exc:
+            logger.error("Failed to persist scores for %s: %s", benchmarkId, exc)
 
     print(f"Scoring complete for {len(testCaseBenchmarkIds)} benchmark(s).")
     return results
@@ -278,7 +277,6 @@ async def main() -> None:
         print(f"\nERROR: {exc}")
         print("\nRequired environment variables:")
         print("  OPENROUTER_API_KEY  -- judge LLM (gpt-4o via OpenRouter)")
-        print("  ANTHROPIC_API_KEY   -- Claude subagent invocation")
         sys.exit(1)
 
     # Determine which benchmarks to run
@@ -293,6 +291,15 @@ async def main() -> None:
     else:
         benchmarksToRun = list(BENCHMARKS)
         print(f"Full suite mode: {len(benchmarksToRun)} benchmarks")
+
+    # -----------------------------------------------------------------------
+    # Step 0: RESET (full runs only — prevents cross-run fraud contamination)
+    # -----------------------------------------------------------------------
+    if not args.skip_capture and not args.benchmark:
+        print("\n=== STEP 0: RESET ===")
+        print("Resetting database (truncating claims, receipts, audit_log)...")
+        await resetEvalDatabase(config.dbUrl)
+        print("Database reset complete.")
 
     # -----------------------------------------------------------------------
     # Step 1: CAPTURE
@@ -353,6 +360,29 @@ async def main() -> None:
     overallScore = calculateWeightedOverall(categoryScores)
     printSummaryTable(results, categoryScores, overallScore)
 
+    # -----------------------------------------------------------------------
+    # Step 6: HTML REPORT
+    # -----------------------------------------------------------------------
+    print("\n=== STEP 6: HTML REPORT ===")
+    htmlPath = config.resultsDir / "expense-ai-deepeval-report.html"
+    try:
+        generateHtmlReport(
+            results=results,
+            categoryScores=categoryScores,
+            overallScore=overallScore,
+            outputPath=htmlPath,
+            judgeModel=config.judgeModel,
+        )
+        print(f"HTML report written to {htmlPath}")
+    except Exception as exc:
+        logger.error("HTML report generation failed: %s", exc, exc_info=True)
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except RuntimeError as exc:
+        # Suppress spurious Python 3.14 / nest_asyncio cleanup error:
+        # "Timeout should be used inside a task" from loop.shutdown_default_executor
+        if "Timeout should be used inside a task" not in str(exc):
+            raise
