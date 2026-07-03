@@ -4,6 +4,17 @@ Multi-agent multimodal system that automates corporate expense claim processing.
 
 An employee uploads a receipt, chats briefly with the Intake agent, and the system handles the rest: VLM extraction, currency conversion, policy retrieval, submission, fraud scoring, compliance review, and final routing (auto-approve / return / escalate).
 
+## Demo
+
+### Claimant Workflow
+
+https://github.com/user-attachments/assets/dec0a7e3-481b-4e54-b12d-310a86f80813
+
+### Admin Workflow
+
+https://github.com/user-attachments/assets/d1435e35-e5b3-4a04-ab3c-a5d6cc2e1151
+
+
 ## How It Works
 
 Four LangGraph agents process claims through a pipeline:
