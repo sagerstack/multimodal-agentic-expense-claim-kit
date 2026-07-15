@@ -8,6 +8,9 @@
 
 set -e  # Exit on error
 
+# Add Poetry to PATH (for Windows installations via official installer)
+export PATH="$PATH:/c/Users/charlesfoo/AppData/Roaming/Python/Scripts"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -64,10 +67,20 @@ echo -e "${GREEN}✓ Containers stopped${NC}"
 echo -e "\n${YELLOW}[2/9] Reconciling poetry.lock with pyproject.toml...${NC}"
 if ! command -v poetry >/dev/null 2>&1; then
     echo -e "${RED}✗ poetry not found on PATH — install poetry to run startup${NC}"
+    echo -e "${YELLOW}Install poetry: https://python-poetry.org/docs/#installation${NC}"
     exit 1
 fi
 poetry lock
 echo -e "${GREEN}✓ poetry.lock up to date${NC}"
+
+# Step 1c: Install dependencies locally (enables running scripts from host)
+echo -e "\n${YELLOW}[2b/9] Installing Python dependencies locally...${NC}"
+echo -e "${YELLOW}  This may take several minutes on first run (installing PyTorch, ML libs)${NC}"
+if poetry install 2>&1 | grep -q "Installing"; then
+    echo -e "${GREEN}✓ Dependencies installed${NC}"
+else
+    echo -e "${GREEN}✓ Dependencies already up to date${NC}"
+fi
 
 # Step 2: Handle reset mode
 if [ "$RESET_MODE" = true ]; then
@@ -177,9 +190,9 @@ else
 fi
 
 # Step 7: Ingest policies (always run - script is idempotent)
-# Run via mcp-rag container (has sentence-transformers + qdrant-client deps)
+# Run from host using locally installed dependencies
 echo -e "\n${YELLOW}[8/9] Ingesting policies...${NC}"
-docker compose exec -T -e POLICY_DIR=/app/policy mcp-rag python /app/scripts/ingest_policies.py
+poetry run python scripts/ingest_policies.py
 echo -e "${GREEN}✓ Policies ingested${NC}"
 
 # Step 8: Verify routes and MCP servers

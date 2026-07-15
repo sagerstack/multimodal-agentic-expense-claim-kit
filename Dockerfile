@@ -19,12 +19,13 @@ RUN poetry export --without dev -f requirements.txt -o requirements.txt \
     && pip install --no-cache-dir -r requirements.txt \
     && rm requirements.txt
 
-# Copy source code, config, Alembic migrations, and web assets
+# Copy source code, config, Alembic migrations, web assets, and scripts
 COPY src/ ./src/
 COPY alembic.ini ./
 COPY alembic/ ./alembic/
 COPY templates/ ./templates/
 COPY static/ ./static/
+COPY scripts/ ./scripts/
 
 # Install root project (no deps — already installed above)
 RUN pip install --no-cache-dir --no-deps .

@@ -29,6 +29,8 @@ langchain-openrouter = "^0.2.0"
 openrouter = "0.7.11"
 itsdangerous = "^2.2.0"
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+qdrant-client = ">=1.7.0"
+sentence-transformers = ">=2.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0"
