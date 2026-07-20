@@ -70,6 +70,14 @@ class Settings(BaseSettings):
 
     # Streaming configuration
     enable_response_streaming: bool = Field(default=False, description="Enable token-level response streaming in chat")
+    sse_stream_inactivity_timeout: int = Field(
+        default=180,
+        description=(
+            "Max seconds the intake SSE stream will wait for the next graph event "
+            "before giving up. Bounds a hung/stalled LLM call so a submitted claim "
+            "can still be committed and its post-submission pipeline triggered."
+        ),
+    )
 
     # Logging configuration
     log_level: str = Field(..., description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)")

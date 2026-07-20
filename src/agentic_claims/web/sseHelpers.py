@@ -5,6 +5,7 @@ _summarizeToolOutput, TOOL_LABELS) are ported verbatim from the Chainlit app.py.
 runGraph translates LangGraph astream_events into SSE events.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -938,14 +939,32 @@ def _buildGraphInput(graphInput: dict) -> dict:
 async def runPostSubmissionAgents(graph, threadId: str, claimId: str):
     """Run compliance, fraud, and advisor agents in the background.
 
-    Resumes the graph from its last checkpoint (after intake node with
-    claimSubmitted=True). The evaluatorGate routes to postSubmission ->
-    compliance || fraud -> markAiReviewed -> advisor.
+    The post-submission agents are invoked DIRECTLY here rather than by
+    resuming the graph. Submission happens via the submitClaim tool inside the
+    interruptible intake ReAct node; when the stream is terminated early the
+    checkpoint is left parked at next=('intake',) with a live askHuman
+    Interrupt task. graph.ainvoke(None) would resume that interrupted intake
+    task (re-running intake and re-submitting) instead of routing to
+    postSubmission, so we cannot rely on graph resume here.
+
+    Instead we read the checkpoint's state values, run compliance || fraud in
+    parallel, then markAiReviewed -> advisor (which persists the decision and
+    findings to the claims table via the DB MCP), mirroring the graph's
+    postSubmission topology. Finally we write the results back to the checkpoint
+    so the UI's state snapshot reflects the outcome.
     """
+    import asyncio
+
+    from agentic_claims.agents.advisor.node import advisorNode
+    from agentic_claims.agents.compliance.node import complianceNode
+    from agentic_claims.agents.fraud.node import fraudNode
+    from agentic_claims.core.graph import markAiReviewedNode
+
     config = {"configurable": {"thread_id": threadId}}
     try:
         currentState = await graph.aget_state(config)
-        if not currentState.values.get("claimSubmitted"):
+        values = dict(currentState.values)
+        if not values.get("claimSubmitted"):
             logEvent(
                 logger,
                 "sse.post_submission_guard_failed",
@@ -963,13 +982,116 @@ async def runPostSubmissionAgents(graph, threadId: str, claimId: str):
             claimId=claimId,
             message="Background post-submission started",
         )
-        await graph.ainvoke(None, config=config)
+
+        # The early-termination path skips intake post-processing, so the
+        # checkpoint may lack extractedReceipt (the receipt fields never get
+        # written into state). Reconstruct it from the persisted claim/receipt
+        # rows so compliance/fraud evaluate the real claim rather than empty
+        # data (category defaulting to "general", amount 0).
+        receiptFields = (values.get("extractedReceipt") or {}).get("fields") or {}
+        if not receiptFields and values.get("dbClaimId") is not None:
+            from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
+
+            settings = getSettings()
+            dbId = int(values["dbClaimId"])
+            rows = await mcpCallTool(
+                serverUrl=settings.db_mcp_url,
+                toolName="executeQuery",
+                arguments={
+                    "query": (
+                        "SELECT c.category, c.total_amount, c.currency, "
+                        "r.merchant, r.date FROM claims c "
+                        "LEFT JOIN receipts r ON r.claim_id = c.id "
+                        f"WHERE c.id = {dbId} LIMIT 1"
+                    )
+                },
+            )
+            if isinstance(rows, dict):
+                rows = rows.get("result", rows.get("rows", []))
+            if isinstance(rows, list) and rows:
+                row = rows[0]
+                amount = float(row.get("total_amount") or 0)
+                values["extractedReceipt"] = {
+                    "fields": {
+                        "category": row.get("category") or "general",
+                        "merchant": row.get("merchant") or "unknown",
+                        "totalAmount": amount,
+                        "totalAmountSgd": amount,
+                        "currency": row.get("currency") or "SGD",
+                        "date": str(row.get("date") or ""),
+                    }
+                }
+                logEvent(
+                    logger,
+                    "sse.post_submission_receipt_reconstructed",
+                    logCategory="sse",
+                    claimId=claimId,
+                    dbClaimId=dbId,
+                    message="Reconstructed extractedReceipt from DB for post-submission",
+                    payload={"category": row.get("category"), "amount": amount},
+                )
+
+        # compliance || fraud (parallel fan-out, same LangGraph superstep)
+        complianceUpdate, fraudUpdate = await asyncio.gather(
+            complianceNode(values),
+            fraudNode(values),
+        )
+        # Merge findings into the working state (skip 'messages' — the reducer
+        # only matters inside the graph; the advisor reads *Findings keys).
+        for update in (complianceUpdate, fraudUpdate):
+            for key, val in update.items():
+                if key != "messages":
+                    values[key] = val
+
+        # markAiReviewed -> advisor (advisor persists status + findings to DB)
+        markUpdate = await markAiReviewedNode(values)
+        for key, val in markUpdate.items():
+            if key != "messages":
+                values[key] = val
+
+        advisorUpdate = await advisorNode(values)
+        for key, val in advisorUpdate.items():
+            if key != "messages":
+                values[key] = val
+
+        # Reflect the outcome in the checkpoint so the UI state snapshot updates.
+        # Non-fatal: the advisor already persisted status + findings to the DB
+        # (the source of truth). aupdate_state can fail on a checkpoint that
+        # still holds the intake askHuman Interrupt task, so we must not let a
+        # checkpoint-write error mask the successful decision above.
+        try:
+            await graph.aupdate_state(
+                config=config,
+                values={
+                    "complianceFindings": values.get("complianceFindings"),
+                    "fraudFindings": values.get("fraudFindings"),
+                    "advisorDecision": values.get("advisorDecision"),
+                    "status": values.get("status"),
+                },
+            )
+        except Exception as e:
+            logEvent(
+                logger,
+                "sse.post_submission_checkpoint_update_skipped",
+                level=logging.WARNING,
+                logCategory="sse",
+                claimId=claimId,
+                error=str(e),
+                message="Checkpoint snapshot update failed (DB already persisted) — continuing",
+            )
+
         logEvent(
             logger,
             "sse.post_submission_completed",
             logCategory="sse",
             claimId=claimId,
             message="Background post-submission completed",
+            payload={
+                "complianceVerdict": (values.get("complianceFindings") or {}).get("verdict"),
+                "fraudVerdict": (values.get("fraudFindings") or {}).get("verdict"),
+                "advisorDecision": values.get("advisorDecision"),
+                "status": values.get("status"),
+            },
         )
     except Exception as e:
         logEvent(
@@ -981,6 +1103,131 @@ async def runPostSubmissionAgents(graph, threadId: str, claimId: str):
             error=str(e),
             message="Background post-submission failed",
         )
+
+
+def _synthesizeSubmissionAck(claimNumber: str | None, dbClaimId: int | None) -> str:
+    """Build the fallback confirmation message when the intake agent never produced one.
+
+    Used whenever submitClaim succeeded but the post-submit LLM confirmation call
+    did not complete (stalled, timed out, or errored) — so the user still sees a
+    success acknowledgement instead of a spinner or a raw error.
+    """
+    identifier = f"Claim number: {claimNumber}" if claimNumber else f"Claim ID: {dbClaimId}"
+    return (
+        f"Your claim has been submitted successfully. {identifier}. "
+        "Please click on New Claim if you would like to submit another receipt. Thank you."
+    )
+
+
+async def _commitAndQueuePostSubmission(
+    graph,
+    config: dict,
+    request: Request,
+    sessionClaimId: str,
+    thinkingEntries: list,
+) -> tuple[int | None, str | None]:
+    """Durably commit a submitted claim and queue its post-submission pipeline.
+
+    This runs the critical, non-UI steps that MUST happen once submitClaim has
+    succeeded, on every stream exit path — normal completion, inactivity timeout,
+    or an exception raised by a later (e.g. confirmation) LLM call. Because the
+    submitClaim DB row is written mid-stream but the checkpoint flag + pipeline
+    trigger live after the stream, deferring these to a clean exit only is what
+    lets a hung/failed post-submit call strand the claim at `pending`.
+
+    Steps:
+      1. Force `claimSubmitted=True` (+ dbClaimId/claimNumber) onto the checkpoint
+         so runPostSubmissionAgents' guard passes.
+      2. Flush buffered audit steps and write the `claim_submitted` audit entry.
+      3. Queue the background post-submission task on request.state.
+
+    Idempotent-safe: only one stream exit path calls this per turn. Returns
+    (dbClaimId, claimNumber) parsed from the submitClaim tool output.
+    """
+    threadId = config.get("configurable", {}).get("thread_id")
+
+    dbClaimId = None
+    claimNumber = None
+    for entry in thinkingEntries:
+        if entry.get("name") == "submitClaim" and entry.get("type") == "tool":
+            parsedDbClaimId, parsedClaimNumber = _extractSubmitClaimIdentifiers(
+                entry.get("output", "")
+            )
+            if parsedDbClaimId is not None:
+                dbClaimId = parsedDbClaimId
+            if parsedClaimNumber:
+                claimNumber = parsedClaimNumber
+
+    # 1. Force checkpoint claimSubmitted=True so the post-submission guard passes.
+    if dbClaimId is not None:
+        try:
+            updateValues = {"claimSubmitted": True, "dbClaimId": int(dbClaimId)}
+            if claimNumber:
+                updateValues["claimNumber"] = claimNumber
+            await graph.aupdate_state(config=config, values=updateValues)
+            logEvent(
+                logger,
+                "sse.graph_state_force_updated",
+                logCategory="sse",
+                claimId=sessionClaimId,
+                dbClaimId=dbClaimId,
+                message="Force-updated graph state: claimSubmitted=True",
+            )
+        except Exception as e:
+            logEvent(
+                logger,
+                "sse.graph_state_force_update_error",
+                level=logging.ERROR,
+                logCategory="sse",
+                claimId=sessionClaimId,
+                error=str(e),
+                message="Failed to force-update graph state",
+            )
+
+    # 2. Flush buffered audit steps and write the claim_submitted entry.
+    if dbClaimId and sessionClaimId:
+        try:
+            parsedDbClaimId = int(dbClaimId)
+            await flushSteps(sessionClaimId=sessionClaimId, dbClaimId=parsedDbClaimId)
+            await logIntakeStep(
+                claimId=parsedDbClaimId,
+                action="claim_submitted",
+                details={"claimNumber": claimNumber or "", "status": "pending"},
+            )
+            logEvent(
+                logger,
+                "sse.audit_steps_flushed",
+                logCategory="sse",
+                claimId=sessionClaimId,
+                dbClaimId=dbClaimId,
+                message="Flushed audit steps for claim",
+            )
+        except Exception as e:
+            logEvent(
+                logger,
+                "sse.audit_steps_flush_error",
+                level=logging.ERROR,
+                logCategory="sse",
+                claimId=sessionClaimId,
+                error=str(e),
+                message="Failed to flush audit steps",
+            )
+
+    # 3. Queue the background post-submission task (launched by the chat router
+    #    once the SSE generator returns).
+    request.state.backgroundTask = {
+        "graph": graph,
+        "threadId": threadId,
+        "claimId": sessionClaimId,
+    }
+    logEvent(
+        logger,
+        "sse.background_task_queued",
+        logCategory="sse",
+        claimId=sessionClaimId,
+        message="Background task queued for post-submission agents",
+    )
+    return dbClaimId, claimNumber
 
 
 async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2Templates):
@@ -1145,8 +1392,46 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     # when the LLM doesn't pass sessionClaimId as a tool argument
     sessionClaimIdVar.set(graphInput.get("claimId", None))
 
+    streamTimedOut = False
     try:
-        async for event in graph.astream_events(invokeInput, config=config, version="v2"):
+        # Drive the event stream manually with a per-event inactivity timeout so a
+        # stalled LLM/tool call can never block the generator forever. The old
+        # `async for` had no timeout and only checked is_disconnected() between
+        # events, so a hang between events was invisible — a submitted claim could
+        # be stranded at `pending` because the post-loop commit + pipeline trigger
+        # were never reached. On timeout we break cleanly and fall through to the
+        # finalize block, which commits the claim if submitClaim already succeeded.
+        eventStream = graph.astream_events(invokeInput, config=config, version="v2")
+        streamIterator = eventStream.__aiter__()
+        while True:
+            try:
+                event = await asyncio.wait_for(
+                    streamIterator.__anext__(),
+                    timeout=settings.sse_stream_inactivity_timeout,
+                )
+            except StopAsyncIteration:
+                break
+            except asyncio.TimeoutError:
+                streamTimedOut = True
+                logEvent(
+                    logger,
+                    "sse.stream_inactivity_timeout",
+                    level=logging.ERROR,
+                    logCategory="sse",
+                    claimId=graphInput.get("claimId"),
+                    threadId=threadId,
+                    timeoutSeconds=settings.sse_stream_inactivity_timeout,
+                    claimSubmitted=claimSubmittedFlag,
+                    message="Intake stream stalled — no graph event within inactivity window; breaking out",
+                )
+                closer = getattr(eventStream, "aclose", None)
+                if closer is not None:
+                    try:
+                        await asyncio.wait_for(closer(), timeout=5)
+                    except Exception:
+                        pass
+                break
+
             if await request.is_disconnected():
                 break
 
@@ -1739,6 +2024,43 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             error=str(e),
             message="Error during graph streaming",
         )
+        # If submitClaim already succeeded before this error, the DB row exists but
+        # the checkpoint flag + pipeline trigger have not run yet. Commit + queue
+        # here so the claim is never stranded at `pending`, and acknowledge success
+        # rather than surfacing the post-submit error to the claimant.
+        if shouldTerminateEarly:
+            dbClaimId, claimNumber = await _commitAndQueuePostSubmission(
+                graph, config, request, graphInput.get("claimId", ""), thinkingEntries
+            )
+            ackMessage = _stripToolCallExpressions(
+                _stripThinkingTags(
+                    _stripToolCallJson(
+                        (finalResponse or "").strip()
+                        or _synthesizeSubmissionAck(claimNumber, dbClaimId)
+                    )
+                )
+            ).strip()
+            if ackMessage:
+                try:
+                    template = templates.get_template("partials/message_bubble.html")
+                    ackHtml = template.render(
+                        content=ackMessage,
+                        isAi=True,
+                        confidenceScores=None,
+                        violations=None,
+                        timestamp=datetime.now(ZoneInfo("Asia/Singapore")).strftime("%-I:%M %p"),
+                    )
+                except Exception:
+                    ackHtml = f'<div class="ai-message">{ackMessage}</div>'
+                yield ServerSentEvent(raw_data=ackHtml, event=SseEvent.MESSAGE)
+            logEvent(
+                logger,
+                "sse.stream_error_submission_recovered",
+                logCategory="sse",
+                claimId=graphInput.get("claimId"),
+                message="Stream errored after submitClaim succeeded — committed claim and queued post-submission pipeline",
+            )
+            return
         yield ServerSentEvent(raw_data=str(e), event=SseEvent.ERROR)
         return
 
@@ -1805,30 +2127,15 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     if shouldTerminateEarly:
         sessionClaimId = graphInput.get("claimId", "")
 
-        # Extract dbClaimId from the submitClaim tool output captured during streaming
-        dbClaimId = None
-        claimNumber = None
-        for entry in thinkingEntries:
-            if entry.get("name") == "submitClaim" and entry.get("type") == "tool":
-                parsedDbClaimId, parsedClaimNumber = _extractSubmitClaimIdentifiers(
-                    entry.get("output", "")
-                )
-                if parsedDbClaimId is not None:
-                    dbClaimId = parsedDbClaimId
-                if parsedClaimNumber:
-                    claimNumber = parsedClaimNumber
+        # Commit the submitted claim and queue its post-submission pipeline. This
+        # is the single durable path, shared with the timeout/error exit branches,
+        # so a submitted claim is always advanced past `pending`.
+        dbClaimId, claimNumber = await _commitAndQueuePostSubmission(
+            graph, config, request, sessionClaimId, thinkingEntries
+        )
 
         if not (finalResponse or "").strip() and (claimNumber or dbClaimId is not None):
-            if claimNumber:
-                finalResponse = (
-                    f"Your claim has been submitted successfully. Claim number: {claimNumber}. "
-                    "Please click on New Claim if you would like to submit another receipt. Thank you."
-                )
-            else:
-                finalResponse = (
-                    f"Your claim has been submitted successfully. Claim ID: {dbClaimId}. "
-                    "Please click on New Claim if you would like to submit another receipt. Thank you."
-                )
+            finalResponse = _synthesizeSubmissionAck(claimNumber, dbClaimId)
             logEvent(
                 logger,
                 "sse.submission_acknowledgement_synthesized",
@@ -1839,77 +2146,6 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 message="Synthesized submission acknowledgement from submitClaim output",
             )
 
-        # BUG-029: Force-update graph checkpoint with claimSubmitted=True so
-        # runPostSubmissionAgents checkpoint guard passes
-        if dbClaimId is not None:
-            try:
-                updateValues = {"claimSubmitted": True, "dbClaimId": int(dbClaimId)}
-                if claimNumber:
-                    updateValues["claimNumber"] = claimNumber
-                await graph.aupdate_state(config=config, values=updateValues)
-                logEvent(
-                    logger,
-                    "sse.graph_state_force_updated",
-                    logCategory="sse",
-                    claimId=sessionClaimId,
-                    dbClaimId=dbClaimId,
-                    message="Force-updated graph state: claimSubmitted=True",
-                )
-            except Exception as e:
-                logEvent(
-                    logger,
-                    "sse.graph_state_force_update_error",
-                    level=logging.ERROR,
-                    logCategory="sse",
-                    claimId=sessionClaimId,
-                    error=str(e),
-                    message="Failed to force-update graph state",
-                )
-
-        # BUG-027: Flush buffered audit steps and write claim_submitted entry
-        if dbClaimId and sessionClaimId:
-            try:
-                parsedDbClaimId = int(dbClaimId)
-                await flushSteps(sessionClaimId=sessionClaimId, dbClaimId=parsedDbClaimId)
-                await logIntakeStep(
-                    claimId=parsedDbClaimId,
-                    action="claim_submitted",
-                    details={"claimNumber": claimNumber or "", "status": "pending"},
-                )
-                logEvent(
-                    logger,
-                    "sse.audit_steps_flushed",
-                    logCategory="sse",
-                    claimId=sessionClaimId,
-                    dbClaimId=dbClaimId,
-                    message="Flushed audit steps for claim",
-                )
-            except Exception as e:
-                logEvent(
-                    logger,
-                    "sse.audit_steps_flush_error",
-                    level=logging.ERROR,
-                    logCategory="sse",
-                    claimId=sessionClaimId,
-                    error=str(e),
-                    message="Failed to flush audit steps",
-                )
-
-            # Queue background task for post-submission agents
-        if not hasattr(request.state, "backgroundTask"):
-            request.state.backgroundTask = None
-        request.state.backgroundTask = {
-            "graph": graph,
-            "threadId": threadId,
-            "claimId": sessionClaimId,
-        }
-        logEvent(
-            logger,
-            "sse.background_task_queued",
-            logCategory="sse",
-            claimId=sessionClaimId,
-            message="Background task queued for post-submission agents",
-        )
         submissionMessage = _stripToolCallExpressions(
             _stripThinkingTags(_stripToolCallJson(finalResponse or ""))
         ).strip()
@@ -2153,6 +2389,23 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                     break
         if not finalText:
             finalText = await _getFallbackMessage(graph, config)
+
+    # If the stream stalled before producing any response (and no claim was
+    # submitted — that path returns earlier), tell the user plainly instead of
+    # leaving a silent, dead turn.
+    if not finalText and streamTimedOut:
+        finalText = (
+            "This is taking longer than expected and the request timed out before I "
+            "could respond. Nothing was lost — please send your message again."
+        )
+        logEvent(
+            logger,
+            "sse.stream_timeout_notice_emitted",
+            logCategory="sse",
+            claimId=graphInput.get("claimId"),
+            threadId=threadId,
+            message="Emitted timeout notice to user after inactivity timeout with no response",
+        )
 
     # BUG-013: Detect hallucinated claim submission (second layer — message)
     # Guard must only fire on actual success phrasing. Mere echo of a CLAIM-XXX
