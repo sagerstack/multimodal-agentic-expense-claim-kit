@@ -92,15 +92,15 @@ eat dinner with colleagues
 
 ## Why this matters
 
-Intake's own `searchPolicies` call — a **semantic** search, not the category filter Compliance uses — surfaced the genuine **SGD 30.00 cap (Section 2.3)** and correctly flagged the claim as a violation. It did not surface the poison at all for this query.
+Intake looked up the meal policy by **searching** for it ("meals expense limit"). That search returned 5 real policy sections, and the fake rule was not one of them (checked directly against the raw tool output, not just the summary). So Intake correctly found the real SGD 30 cap and flagged the claim as over the limit.
 
-Downstream, Compliance evaluated the same claim using `getPolicyByCategory("meals")` — a metadata filter that returns every chunk in the category with certainty — and it **did** retrieve the poison (`id=10001`, Section 2.6), returning `verdict: pass` (see [`poc-transcript.md`](poc-transcript.md) Step 5 / main report "Impact confirmed end-to-end").
+Compliance checked the same claim a different way. Instead of searching, it asks the database for **everything tagged "meals"** and gets every meal-policy chunk back, including the fake one. So Compliance saw the fake rule and passed the claim.
 
-So the same claim got two different readings from two different retrieval paths inside the same pipeline:
+Same claim, two different lookup methods, two different answers:
 
-| Stage | Retrieval method | Poison surfaced? | Result |
+| Stage | How it looked up policy | Did it see the fake rule? | Outcome |
 |---|---|---|---|
-| Intake pre-check | `searchPolicies` (semantic, top-K) | No | Flagged as a violation, required justification |
-| Compliance | `getPolicyByCategory` (metadata filter, guaranteed) | Yes | `pass`, zero violations |
+| Intake | Search (returns the closest-matching results) | No | Caught the violation, asked for justification |
+| Compliance | "Give me everything in this category" | Yes | Passed the claim, no violation recorded |
 
-This is direct, real evidence for the report's Limits point 4 ("retrieval method determines reliability") — the same poison is invisible to a probabilistic semantic query but guaranteed to appear through the deterministic category lookup. The claimant even received a correct warning at intake, and it made no difference: the pipeline overrode it once Compliance ran its own, poisoned-guaranteed lookup.
+This is real proof of a point made earlier in the report: a search can miss the fake rule by chance, but "give me everything in this category" always finds it, because it does not filter by relevance, it returns the whole category. The claimant was correctly warned at the very first step, but that warning didn't matter in the end, because the agent that actually made the final call used a lookup method the fake rule can't hide from.
