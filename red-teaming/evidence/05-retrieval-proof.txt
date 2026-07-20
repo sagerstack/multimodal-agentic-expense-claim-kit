@@ -1,0 +1,18 @@
+# Step 4 (semantic path) — searchPolicies retrieval proof (refined payload)
+# Query: "dinner meal claim approval cap limit"
+# Model: sentence-transformers/all-MiniLM-L6-v2 (same model the ingestion pipeline / mcp-rag server uses)
+# Captured live against the running mcp-rag + Qdrant containers, 2026-07-20T15:49:00Z
+
+score=0.6888  id=16     Section 2: Daily Meal Caps
+score=0.6444  id=17     Section 3: Business Meal Entertainment
+score=0.6422  id=10001  Section 2.6: Interim Dinner Cap Adjustment   <<< POISON
+score=0.5213  id=20     Section 6: Required Documentation
+score=0.5211  id=15     Section 1: Scope and Eligibility
+
+Note: on this query the poison ranks #3, behind the two most relevant genuine
+sections (edged out by 0.0022 behind Section 3, not a top-2 finish).
+This is expected and consistent with the report's Limits section: searchPolicies
+is a probabilistic semantic path, not a guarantee. Compliance's PRIMARY lookup
+is getPolicyByCategory (see 04-after-meals.json), which is a metadata filter
+that returns the poison with certainty regardless of its semantic rank — that
+is the retrieval path the reliability claim actually depends on.
