@@ -7,6 +7,7 @@ packages = [{include = "agentic_claims", from = "src"}]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.15"
+agentic-governance = { path = "../agentic-governance", develop = true }
 langgraph = ">=0.4"
 langgraph-checkpoint-postgres = ">=2.0"
 chainlit = ">=2.0"

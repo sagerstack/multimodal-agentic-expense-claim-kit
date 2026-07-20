@@ -1,7 +1,13 @@
 """LangGraph StateGraph definition with parallel fan-out and Postgres checkpointer."""
 
+import inspect
 import logging
+from contextvars import ContextVar
+from functools import wraps
+from importlib import import_module
+from typing import Any, Callable
 
+from agentic_governance.integrations.langgraph_mcp import install
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from psycopg import AsyncConnection
@@ -9,16 +15,71 @@ from psycopg_pool import AsyncConnectionPool
 
 from agentic_claims.agents.advisor.node import advisorNode
 from agentic_claims.agents.compliance.node import complianceNode
-from agentic_claims.agents.intake_gpt.node import intakeGptNode
 from agentic_claims.agents.fraud.node import fraudNode
+from agentic_claims.agents.intake.extractionContext import (
+    extractedReceiptVar,
+    sessionClaimIdVar,
+)
 from agentic_claims.agents.intake.node import intakeNode, postIntakeRouter, preIntakeValidator
 from agentic_claims.agents.intake.nodes.humanEscalation import humanEscalationNode
-from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
+from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool as _realMcpCallTool
+from agentic_claims.agents.intake_gpt.node import intakeGptNode
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.logging import logEvent
 from agentic_claims.core.state import ClaimState
+from agentic_claims.web.employeeIdContext import employeeIdVar
 
 logger = logging.getLogger(__name__)
+
+# Rebound to the governed callable when buildGraph installs the composition root.
+mcpCallTool = _realMcpCallTool
+nodeIdentityVar: ContextVar[str | None] = ContextVar("nodeIdentityVar", default=None)
+
+_MCP_CALL_TOOL_IMPORTERS = (
+    "agentic_claims.agents.advisor.node",
+    "agentic_claims.agents.advisor.tools.searchPolicies",
+    "agentic_claims.agents.advisor.tools.sendNotification",
+    "agentic_claims.agents.advisor.tools.updateClaimStatus",
+    "agentic_claims.agents.compliance.node",
+    "agentic_claims.agents.fraud.node",
+    "agentic_claims.agents.fraud.tools.queryClaimsHistory",
+    "agentic_claims.agents.intake.auditLogger",
+    "agentic_claims.agents.intake.nodes.humanEscalation",
+    "agentic_claims.agents.intake.tools.convertCurrency",
+    "agentic_claims.agents.intake.tools.getClaimSchema",
+    "agentic_claims.agents.intake.tools.searchPolicies",
+    "agentic_claims.agents.intake.tools.submitClaim",
+    "agentic_claims.core.graph",
+    "agentic_claims.web.routers.chat",
+)
+
+
+def _installGovernedMcpBoundary() -> None:
+    """Install governance and replace every bound import of the real MCP boundary."""
+    governedMcpCallTool = install(
+        real_mcp_call_tool=_realMcpCallTool,
+        employee_id_provider=lambda: employeeIdVar.get(None),
+        extracted_receipt_provider=lambda: extractedReceiptVar.get(None),
+        session_claim_id_provider=lambda: sessionClaimIdVar.get(None),
+        node_identity_provider=lambda: nodeIdentityVar.get(None),
+    )
+    for moduleName in _MCP_CALL_TOOL_IMPORTERS:
+        setattr(import_module(moduleName), "mcpCallTool", governedMcpCallTool)
+
+
+def _withNodeIdentity(nodeName: str, nodeCallable: Callable[..., Any]) -> Callable[..., Any]:
+    """Set trusted node identity for the duration of one graph-node call."""
+
+    @wraps(nodeCallable)
+    async def _wrapped(*args: Any, **kwargs: Any) -> Any:
+        token = nodeIdentityVar.set(nodeName)
+        try:
+            result = nodeCallable(*args, **kwargs)
+            return await result if inspect.isawaitable(result) else result
+        finally:
+            nodeIdentityVar.reset(token)
+
+    return _wrapped
 
 
 def evaluatorGate(state: ClaimState) -> str:
@@ -108,20 +169,21 @@ def buildGraph() -> StateGraph:
     Returns:
         Uncompiled StateGraph builder
     """
+    _installGovernedMcpBoundary()
     builder = StateGraph(ClaimState)
     settings = getSettings()
-    intakeNodeImpl = (
-        intakeGptNode if settings.intake_agent_mode.lower() == "gpt" else intakeNode
-    )
+    intakeNodeImpl = intakeGptNode if settings.intake_agent_mode.lower() == "gpt" else intakeNode
 
-    # Add agent nodes
-    builder.add_node("preIntakeValidator", preIntakeValidator)
-    builder.add_node("intake", intakeNodeImpl)
-    builder.add_node("humanEscalation", humanEscalationNode)
-    builder.add_node("compliance", complianceNode)
-    builder.add_node("fraud", fraudNode)
-    builder.add_node("markAiReviewed", markAiReviewedNode)
-    builder.add_node("advisor", advisorNode)
+    # Add agent nodes with request-local identity available to governance providers.
+    builder.add_node(
+        "preIntakeValidator", _withNodeIdentity("preIntakeValidator", preIntakeValidator)
+    )
+    builder.add_node("intake", _withNodeIdentity("intake", intakeNodeImpl))
+    builder.add_node("humanEscalation", _withNodeIdentity("humanEscalation", humanEscalationNode))
+    builder.add_node("compliance", _withNodeIdentity("compliance", complianceNode))
+    builder.add_node("fraud", _withNodeIdentity("fraud", fraudNode))
+    builder.add_node("markAiReviewed", _withNodeIdentity("markAiReviewed", markAiReviewedNode))
+    builder.add_node("advisor", _withNodeIdentity("advisor", advisorNode))
 
     # START -> preIntakeValidator -> intake
     builder.add_edge(START, "preIntakeValidator")
@@ -138,7 +200,10 @@ def buildGraph() -> StateGraph:
     #   2. Falls through to evaluatorGate for the non-escalation branch
     #   The "continue" branch from postIntakeRouter invokes evaluatorGate
     #   inline so we keep a single add_conditional_edges call.
-    builder.add_node("postSubmission", lambda state: state)  # Pass-through node
+    builder.add_node(
+        "postSubmission",
+        _withNodeIdentity("postSubmission", lambda state: state),
+    )  # Pass-through node
 
     def _intakeConditionalRouter(state: ClaimState) -> str:
         """Combined router: escalation check → evaluator gate.
@@ -200,9 +265,7 @@ async def getCompiledGraph():
 
     # Setup checkpointer tables with autocommit so CREATE INDEX CONCURRENTLY
     # (used by langgraph-checkpoint-postgres >=3.0.5) can run outside a transaction.
-    async with await AsyncConnection.connect(
-        settings.postgres_dsn, autocommit=True
-    ) as setupConn:
+    async with await AsyncConnection.connect(settings.postgres_dsn, autocommit=True) as setupConn:
         setupSaver = AsyncPostgresSaver(setupConn)
         await setupSaver.setup()
 
