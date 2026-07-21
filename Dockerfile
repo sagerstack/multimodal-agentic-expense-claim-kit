@@ -21,13 +21,17 @@ COPY pyproject.toml poetry.lock ./
 # on the app build in docker-compose.yml.
 COPY --from=governance . /agentic-governance
 
-# Export lock file to requirements.txt and install via pip.
-# Strip the governance path-dep from the copied pyproject so `poetry export` stays
-# consistent with the (unchanged) poetry.lock; governance is installed explicitly below.
-RUN sed -i '/agentic-governance/d' pyproject.toml \
-    && poetry export --without dev -f requirements.txt -o requirements.txt \
-    && pip install --no-cache-dir -r requirements.txt \
-    && rm requirements.txt \
+# Export app deps via poetry. startup.sh runs `poetry lock` first, so the copied
+# poetry.lock is consistent with pyproject.toml (which includes the governance
+# path-dep) and `poetry export` will NOT fail on a freshness check. We strip any
+# governance line out of the exported requirements (poetry may emit an unusable
+# host path for a directory dep) and install governance explicitly from the copied
+# context instead — /agentic-governance is the sibling of /app that the path-dep
+# `../agentic-governance` resolves to.
+RUN poetry export --without dev -f requirements.txt -o requirements.txt \
+    && grep -vi 'agentic-governance' requirements.txt > requirements.clean.txt || true \
+    && pip install --no-cache-dir -r requirements.clean.txt \
+    && rm -f requirements.txt requirements.clean.txt \
     && pip install --no-cache-dir /agentic-governance
 
 # Copy source code, config, Alembic migrations, and web assets
