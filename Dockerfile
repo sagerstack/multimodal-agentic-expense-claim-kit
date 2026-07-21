@@ -14,10 +14,21 @@ WORKDIR /app
 # Copy dependency files first for layer caching
 COPY pyproject.toml poetry.lock ./
 
-# Export lock file to requirements.txt and install via pip
-RUN poetry export --without dev -f requirements.txt -o requirements.txt \
+# --- Governance layer (Option 2: parent additional build context) ---
+# Bring the agentic-governance package in from the sibling repo and place it where
+# the pyproject path-dep expects it (../agentic-governance == /agentic-governance,
+# sibling of WORKDIR /app). Requires `additional_contexts: {governance: ../agentic-governance}`
+# on the app build in docker-compose.yml.
+COPY --from=governance . /agentic-governance
+
+# Export lock file to requirements.txt and install via pip.
+# Strip the governance path-dep from the copied pyproject so `poetry export` stays
+# consistent with the (unchanged) poetry.lock; governance is installed explicitly below.
+RUN sed -i '/agentic-governance/d' pyproject.toml \
+    && poetry export --without dev -f requirements.txt -o requirements.txt \
     && pip install --no-cache-dir -r requirements.txt \
-    && rm requirements.txt
+    && rm requirements.txt \
+    && pip install --no-cache-dir /agentic-governance
 
 # Copy source code, config, Alembic migrations, and web assets
 COPY src/ ./src/

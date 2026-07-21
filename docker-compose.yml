@@ -1,6 +1,9 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      additional_contexts:
+        governance: ../agentic-governance
     ports:
       - "8000:8000"
     env_file:
@@ -29,6 +32,7 @@ services:
       - ./src:/app/src
       - ./templates:/app/templates
       - ./static:/app/static
+      - ./.governance-audit:/app/.agentic_governance
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 10s
