@@ -150,6 +150,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Agentic Governance audit output
+.agentic_governance/
+
 # Spyder project settings
 .spyderproject
 .spyproject
