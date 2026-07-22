@@ -61,7 +61,7 @@ def _installGovernedMcpBoundary() -> None:
         employee_id_provider=lambda: employeeIdVar.get(None),
         extracted_receipt_provider=lambda: extractedReceiptVar.get(None),
         session_claim_id_provider=lambda: sessionClaimIdVar.get(None),
-        node_identity_provider=lambda: nodeIdentityVar.get(None),
+        node_identity_provider=lambda: nodeIdentityVar.get(None) or "application",
     )
     for moduleName in _MCP_CALL_TOOL_IMPORTERS:
         setattr(import_module(moduleName), "mcpCallTool", governedMcpCallTool)
