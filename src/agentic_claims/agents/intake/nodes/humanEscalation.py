@@ -30,10 +30,11 @@ Sources:
     (non-negotiable template)
 """
 
+import json
 import logging
 from datetime import datetime, timezone
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, ToolMessage
 
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
@@ -46,6 +47,38 @@ _ESCALATION_MESSAGE = (
     "I couldn't complete this automatically. Your draft is saved. "
     "A reviewer will follow up."
 )
+_GOVERNANCE_ESCALATION_REASONS = frozenset(
+    {"exposure-exceeded", "rate-exceeded", "evidence-insufficient"}
+)
+
+
+def _governanceEscalationReason(state: dict) -> str | None:
+    """Return a verified governance reason from the latest submitClaim result."""
+    for message in reversed(state.get("messages") or []):
+        if not isinstance(message, ToolMessage) or message.name != "submitClaim":
+            continue
+
+        content = message.content
+        if isinstance(content, str):
+            try:
+                content = json.loads(content)
+            except (TypeError, ValueError):
+                return None
+        if not isinstance(content, dict):
+            return None
+
+        escalation = content.get("escalation")
+        reason = content.get("reason")
+        if (
+            content.get("decision") == "Escalate"
+            and isinstance(escalation, dict)
+            and escalation.get("source") == "governance"
+            and escalation.get("reason") == reason
+            and reason in _GOVERNANCE_ESCALATION_REASONS
+        ):
+            return reason
+        return None
+    return None
 
 
 def _classifyTrigger(state: dict) -> str:
@@ -73,10 +106,13 @@ async def humanEscalationNode(state: dict) -> dict:
     dbClaimId = state.get("dbClaimId")
     askHumanCount = int(state.get("askHumanCount", 0))
     unsupportedCurrencies = sorted(state.get("unsupportedCurrencies") or set())
-    triggerClass = _classifyTrigger(state)
+    governanceReason = _governanceEscalationReason(state)
+    source = "governance" if governanceReason is not None else "internal"
+    triggerClass = governanceReason or _classifyTrigger(state)
     triggeredAt = datetime.now(timezone.utc).isoformat()
 
     escalationMetadata = {
+        "source": source,
         "reason": triggerClass,
         "askHumanCount": askHumanCount,
         "unsupportedCurrencies": unsupportedCurrencies,
@@ -90,6 +126,8 @@ async def humanEscalationNode(state: dict) -> dict:
         agent="intake",
         claimId=claimId,
         threadId=threadId,
+        source=source,
+        reason=triggerClass,
         triggerClass=triggerClass,
         askHumanCount=askHumanCount,
         unsupportedCurrencies=unsupportedCurrencies,
@@ -111,6 +149,8 @@ async def humanEscalationNode(state: dict) -> dict:
                     "claimId": dbClaimId,
                     "newStatus": "escalated",
                     "actor": "intake_agent",
+                    "advisorDecision": "escalate_to_reviewer",
+                    "advisorFindings": {"escalationMetadata": escalationMetadata},
                 },
             )
             logEvent(

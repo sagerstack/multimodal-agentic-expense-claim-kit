@@ -331,6 +331,7 @@ async def postMessage(
     graphInput = {
         "threadId": threadId,
         "claimId": claimId,
+        "dbClaimId": request.session.get("draft_claim_id"),
         "message": message,
         "hasImage": hasImage,
         "isResume": awaitingClarification,

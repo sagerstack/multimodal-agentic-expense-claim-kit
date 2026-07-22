@@ -21,7 +21,10 @@ from agentic_claims.agents.intake.extractionContext import (
     sessionClaimIdVar,
 )
 from agentic_claims.agents.intake.node import intakeNode, postIntakeRouter, preIntakeValidator
-from agentic_claims.agents.intake.nodes.humanEscalation import humanEscalationNode
+from agentic_claims.agents.intake.nodes.humanEscalation import (
+    _governanceEscalationReason,
+    humanEscalationNode,
+)
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool as _realMcpCallTool
 from agentic_claims.agents.intake_gpt.node import intakeGptNode
 from agentic_claims.core.config import getSettings
@@ -222,6 +225,8 @@ def buildGraph() -> StateGraph:
         postIntakeRouter returns 'humanEscalation' or 'continue'.
         When 'continue', evaluatorGate decides submitted/pending.
         """
+        if _governanceEscalationReason(state) is not None:
+            return "humanEscalation"
         branch = postIntakeRouter(state)
         if branch == "humanEscalation":
             return "humanEscalation"

@@ -911,6 +911,7 @@ def _buildGraphInput(graphInput: dict) -> dict:
 
     return {
         "claimId": claimId,
+        "dbClaimId": graphInput.get("dbClaimId"),
         "status": "draft",
         "messages": [humanMsg],
     }
