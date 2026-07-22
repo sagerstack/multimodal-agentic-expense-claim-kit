@@ -77,10 +77,15 @@ def _withNodeIdentity(nodeName: str, nodeCallable: Callable[..., Any]) -> Callab
         state = args[0] if args else kwargs.get("state", {})
         identityToken = nodeIdentityVar.set(nodeName)
         dbClaimIdToken = dbClaimIdVar.set(state.get("dbClaimId"))
+        extractedReceiptToken = None
+        if "extractedReceipt" in state:
+            extractedReceiptToken = extractedReceiptVar.set(state["extractedReceipt"])
         try:
             result = nodeCallable(*args, **kwargs)
             return await result if inspect.isawaitable(result) else result
         finally:
+            if extractedReceiptToken is not None:
+                extractedReceiptVar.reset(extractedReceiptToken)
             dbClaimIdVar.reset(dbClaimIdToken)
             nodeIdentityVar.reset(identityToken)
 
