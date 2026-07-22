@@ -251,7 +251,10 @@ def test_buildGraphInputPreservesAbsentDbClaimIdAsNone():
 
 @pytest.mark.asyncio
 async def test_nodeContextStillCarriesIdentityDbClaimIdAndReceipt():
-    receipt = {"confidence": 0.98}
+    receipt = {
+        "fields": {"merchant": "Kopitiam"},
+        "confidence": {"merchant": 0.98},
+    }
 
     async def observe(state):
         return (
