@@ -11,6 +11,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from starlette.requests import Request
 from starlette.responses import Response
 
+from agentic_claims.agents.intake.extractionContext import sessionClaimIdVar
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.imageStore import clearImage, getImage, getImagePath, storeImage
@@ -247,6 +248,8 @@ async def postMessage(
     if not request.session.get("draft_created"):
         try:
             settings = getSettings()
+            employeeIdVar.set(request.session["employee_id"])
+            sessionClaimIdVar.set(getSessionIds(request)["claimId"])
             draftResult = await mcpCallTool(
                 serverUrl=settings.db_mcp_url,
                 toolName="insertClaim",

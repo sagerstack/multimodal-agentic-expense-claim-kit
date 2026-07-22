@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 # Rebound to the governed callable when buildGraph installs the composition root.
 mcpCallTool = _realMcpCallTool
 nodeIdentityVar: ContextVar[str | None] = ContextVar("nodeIdentityVar", default=None)
+dbClaimIdVar: ContextVar[int | None] = ContextVar("dbClaimIdVar", default=None)
 
 _MCP_CALL_TOOL_IMPORTERS = (
     "agentic_claims.agents.advisor.node",
@@ -62,6 +63,7 @@ def _installGovernedMcpBoundary() -> None:
         extracted_receipt_provider=lambda: extractedReceiptVar.get(None),
         session_claim_id_provider=lambda: sessionClaimIdVar.get(None),
         node_identity_provider=lambda: nodeIdentityVar.get(None) or "application",
+        db_claim_id_provider=lambda: dbClaimIdVar.get(None),
     )
     for moduleName in _MCP_CALL_TOOL_IMPORTERS:
         setattr(import_module(moduleName), "mcpCallTool", governedMcpCallTool)
@@ -72,12 +74,15 @@ def _withNodeIdentity(nodeName: str, nodeCallable: Callable[..., Any]) -> Callab
 
     @wraps(nodeCallable)
     async def _wrapped(*args: Any, **kwargs: Any) -> Any:
-        token = nodeIdentityVar.set(nodeName)
+        state = args[0] if args else kwargs.get("state", {})
+        identityToken = nodeIdentityVar.set(nodeName)
+        dbClaimIdToken = dbClaimIdVar.set(state.get("dbClaimId"))
         try:
             result = nodeCallable(*args, **kwargs)
             return await result if inspect.isawaitable(result) else result
         finally:
-            nodeIdentityVar.reset(token)
+            dbClaimIdVar.reset(dbClaimIdToken)
+            nodeIdentityVar.reset(identityToken)
 
     return _wrapped
 
