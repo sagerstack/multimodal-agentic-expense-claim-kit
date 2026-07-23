@@ -9,18 +9,22 @@ import time
 from typing import Annotated, Any
 
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.tools import tool
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt import InjectedState, ToolNode
 from typing_extensions import NotRequired, TypedDict
 
+from agentic_claims.agents.intake.auditLogger import bufferStep, logIntakeStep
+from agentic_claims.agents.intake.extractionContext import (
+    extractedReceiptVar,
+    trustedExtractedReceipt,
+)
 from agentic_claims.agents.intake.tools.convertCurrency import convertCurrency
 from agentic_claims.agents.intake.tools.extractReceiptFields import extractReceiptFields
 from agentic_claims.agents.intake.tools.getClaimSchema import getClaimSchema
 from agentic_claims.agents.intake.tools.searchPolicies import searchPolicies
-from agentic_claims.agents.intake.tools.submitClaim import submitClaim
-from agentic_claims.agents.intake.auditLogger import bufferStep, logIntakeStep
-from agentic_claims.agents.intake.extractionContext import extractedReceiptVar
+from agentic_claims.agents.intake.tools.submitClaim import submitClaim as _submitClaim
 from agentic_claims.agents.intake_gpt.prompt import INTAKE_GPT_SYSTEM_PROMPT
 from agentic_claims.agents.intake_gpt.state import IntakeGptState
 from agentic_claims.agents.intake_gpt.tools.requestHumanInput import requestHumanInput
@@ -28,12 +32,38 @@ from agentic_claims.core.logging import logEvent
 
 logger = logging.getLogger(__name__)
 
+
+@tool("submitClaim", description=_submitClaim.description)
+async def _submitClaimWithTrustedEvidence(
+    claimData: dict,
+    receiptData: dict,
+    state: Annotated[dict, InjectedState],
+    intakeFindings: dict | None = None,
+    threadId: str | None = None,
+    sessionClaimId: str | None = None,
+) -> dict:
+    """Bind checkpointed receipt evidence in the exact submit tool execution context."""
+    token = extractedReceiptVar.set(trustedExtractedReceipt(state))
+    try:
+        return await _submitClaim.ainvoke(
+            {
+                "claimData": claimData,
+                "receiptData": receiptData,
+                "intakeFindings": intakeFindings,
+                "threadId": threadId,
+                "sessionClaimId": sessionClaimId,
+            }
+        )
+    finally:
+        extractedReceiptVar.reset(token)
+
+
 _INTAKE_GPT_TOOLS = [
     searchPolicies,
     getClaimSchema,
     extractReceiptFields,
     convertCurrency,
-    submitClaim,
+    _submitClaimWithTrustedEvidence,
     requestHumanInput,
 ]
 _END_CONVERSATION_TOKENS = {"bye", "exit", "quit", "close", "stop"}

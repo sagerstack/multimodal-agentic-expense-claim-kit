@@ -2,7 +2,6 @@
 
 import inspect
 import logging
-from collections.abc import Mapping
 from contextvars import ContextVar
 from functools import wraps
 from importlib import import_module
@@ -20,6 +19,7 @@ from agentic_claims.agents.fraud.node import fraudNode
 from agentic_claims.agents.intake.extractionContext import (
     extractedReceiptVar,
     sessionClaimIdVar,
+    trustedExtractedReceipt,
 )
 from agentic_claims.agents.intake.node import intakeNode, postIntakeRouter, preIntakeValidator
 from agentic_claims.agents.intake.nodes.humanEscalation import (
@@ -73,37 +73,6 @@ def _installGovernedMcpBoundary() -> None:
         setattr(import_module(moduleName), "mcpCallTool", governedMcpCallTool)
 
 
-def _trustedExtractedReceipt(state: Mapping[str, Any]) -> dict[str, Any] | None:
-    """Resolve canonical receipt evidence exclusively from trusted graph state."""
-    intakeGpt = state.get("intakeGpt")
-    slots = intakeGpt.get("slots") if isinstance(intakeGpt, Mapping) else None
-    candidates = (
-        slots.get("extractedReceipt") if isinstance(slots, Mapping) else None,
-        state.get("extractedReceipt"),
-    )
-    for candidate in candidates:
-        if not isinstance(candidate, Mapping):
-            continue
-        fields = candidate.get("fields")
-        if not isinstance(fields, Mapping):
-            fields = candidate.get("extractedFields")
-        confidence = candidate.get("confidence")
-        if not isinstance(confidence, Mapping):
-            confidence = candidate.get("confidenceScores")
-        if not isinstance(fields, Mapping) and not isinstance(confidence, Mapping):
-            continue
-
-        canonical = dict(candidate)
-        canonical.pop("extractedFields", None)
-        canonical.pop("confidenceScores", None)
-        if isinstance(fields, Mapping):
-            canonical["fields"] = dict(fields)
-        if isinstance(confidence, Mapping):
-            canonical["confidence"] = dict(confidence)
-        return canonical
-    return None
-
-
 def _withNodeIdentity(nodeName: str, nodeCallable: Callable[..., Any]) -> Callable[..., Any]:
     """Set trusted node identity for the duration of one graph-node call."""
 
@@ -112,7 +81,7 @@ def _withNodeIdentity(nodeName: str, nodeCallable: Callable[..., Any]) -> Callab
         state = args[0] if args else kwargs.get("state", {})
         identityToken = nodeIdentityVar.set(nodeName)
         dbClaimIdToken = dbClaimIdVar.set(state.get("dbClaimId"))
-        extractedReceiptToken = extractedReceiptVar.set(_trustedExtractedReceipt(state))
+        extractedReceiptToken = extractedReceiptVar.set(trustedExtractedReceipt(state))
         try:
             result = nodeCallable(*args, **kwargs)
             return await result if inspect.isawaitable(result) else result
