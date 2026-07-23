@@ -1,0 +1,61 @@
+id: GA-07
+title: Per-action exposure hard-denies above the ceiling
+covers: [A6, A7, A12]
+level: browser
+
+purpose: >
+  Prove A7's hard-deny ceiling denies the final intake/insertClaim call outright once the
+  claimed amount crosses it, and that this outcome is exactly Deny - never mismarked as an
+  Escalate (contrast with GA-06, which stays below the hard ceiling and correctly Escalates).
+
+setup:
+  application: Use suite defaults.
+  account: Use suite defaults.
+  environment: Use suite governanceBaseline exactly - no override in this case.
+  isolation: fresh app runtime and fresh governance counters for this case.
+  deterministicProvider: required. The extraction-provider override must return exactly the
+    trustedFacts below at the real extraction node.
+  fixture:
+    ref: GROUP_A_VALID_SGD_5000_01
+    trustedFacts:
+      merchantPresent: true
+      datePresent: true
+      totalAmount: 5000.01
+      currency: SGD
+      confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}
+  preflight: Confirm the deterministic provider is wired and returns exactly these facts for
+    fixture ref GROUP_A_VALID_SGD_5000_01 before starting. If not, mark this case BLOCKED and stop.
+
+steps:
+  - Log in using suite loginUrl and credentialsRef EXPENSE_TEST_LOGIN; confirm homeUrl and the
+    chat textarea placeholder as in GA-01.
+  - Start a new claim and declare fixture GROUP_A_VALID_SGD_5000_01 as the receipt input.
+  - Wait for extraction; confirm the extracted-field summary exactly once.
+  - When the final submit/confirm prompt appears, confirm exactly once to trigger the final
+    intake/insertClaim governed call.
+  - Capture browser evidence at the terminal state.
+  - Locate the newest governance audit entry correlated to this claim's final intake/insertClaim call.
+  - Read the Postgres claims table for this claim before step 2 and again after step 4, including its status column.
+
+expected:
+  ui:
+    - No claim reference number appears in the chat after the final confirm (informational only).
+  authoritative:
+    - The final intake/insertClaim disposition is exactly Deny (not Escalate), with reason
+      "exposure-exceeded" and an outcome indicating the hard cap was crossed.
+    - No new Postgres claims row is inserted; the claim's Postgres status is NOT "escalated" -
+      this is a plain Deny, and no governance-sourced escalation handoff marker is produced.
+  verdict: Read from the audit entry and the Postgres row, never from chat text alone.
+
+evidence:
+  - privacy-safe screenshot at terminal state
+  - the matching audit-*.jsonl line (decision=Deny, reason=exposure-exceeded, hard-cap outcome, controlId A7)
+  - the Postgres claims row query before and after (unchanged, no escalated status)
+
+timeouts:
+  caseSeconds: 360
+  responseAfterSubmitSeconds: 300
+retries:
+  max: 0
+cleanup:
+  - No governance environment was changed; no restore needed.

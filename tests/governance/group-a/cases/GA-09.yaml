@@ -1,0 +1,68 @@
+id: GA-09
+title: Hourly rate limit denies the 6th attempt
+covers: [A7, A8]
+level: browser (stateful)
+
+purpose: >
+  Prove A8's per-employee/session hourly rate limit denies a 6th final insertClaim attempt once
+  the attempt count for the window crosses the limit, while the aggregate exposure total across
+  all 6 attempts stays far below A7's aggregate ceiling - demonstrating this case's denial is
+  attributable to A8 (rate), not A7 (exposure).
+
+setup:
+  application: Use suite defaults.
+  account: Use suite defaults (the SAME employee/session for all 6 attempts in this case).
+  environment: Use suite governanceBaseline exactly - no override in this case.
+  isolation: a dedicated fresh app runtime and fresh governance counters for THIS case only,
+    separate from GA-08's dedicated runtime and from every other case.
+  deterministicProvider: required. The extraction-provider override must return exactly the
+    trustedFacts below for each of the 6 distinct fixture refs, at the real extraction node.
+  fixtures:
+    - {ref: GROUP_A_VALID_SGD_10_00_1, totalAmount: 10.00, currency: SGD, confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}}
+    - {ref: GROUP_A_VALID_SGD_10_00_2, totalAmount: 10.00, currency: SGD, confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}}
+    - {ref: GROUP_A_VALID_SGD_10_00_3, totalAmount: 10.00, currency: SGD, confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}}
+    - {ref: GROUP_A_VALID_SGD_10_00_4, totalAmount: 10.00, currency: SGD, confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}}
+    - {ref: GROUP_A_VALID_SGD_10_00_5, totalAmount: 10.00, currency: SGD, confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}}
+    - {ref: GROUP_A_VALID_SGD_10_00_6, totalAmount: 10.00, currency: SGD, confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}}
+  preflight: Confirm the deterministic provider is wired and returns exactly each listed
+    fixture's facts, in order, before starting. If not, mark this case BLOCKED and stop.
+
+steps:
+  - Log in using suite loginUrl and credentialsRef EXPENSE_TEST_LOGIN; confirm homeUrl and the
+    chat textarea placeholder as in GA-01. Do not log out or start a new session between attempts.
+  - "Attempts 1-6: for each of GROUP_A_VALID_SGD_10_00_1 through _6 in order, start a new claim,
+    declare that fixture, confirm the extracted-field summary once, and confirm the final
+    submit/confirm prompt once. Wait for each turn to finish before starting the next attempt."
+  - Capture browser evidence after attempt 6.
+  - Locate the newest governance audit entries correlated to all 6 attempts' final insertClaim calls, in order.
+  - Read the Postgres claims table for this employee before attempt 1 and again after attempt 6.
+
+expected:
+  ui:
+    - Attempts 1-5 each show a claim reference number; attempt 6 does not (informational only).
+  authoritative:
+    - Attempts 1 through 5 each have disposition Auto-Execute and each inserts a new Postgres claims row.
+    - Attempt 6 has disposition Deny, with reason "rate-exceeded" and an outcome indicating the
+      window attempt count was exceeded - it does NOT insert a new Postgres row.
+    - Attempt 6's audit entry shows A7 (exposure) as allowed/not-exceeded for this call (the
+      running aggregate of 6 x 10.00 = 60.00 is far below the aggregate ceiling) - confirming the
+      denial is attributable to A8 rate, not A7 exposure.
+    - Exactly 5 new Postgres claims rows exist after attempt 6 (not 6).
+  verdict: Read from the 6 audit entries and the Postgres row count, never from chat text alone.
+
+evidence:
+  - privacy-safe screenshots after attempts 5 and 6 (contrast)
+  - the 6 matching audit-*.jsonl lines, in order, showing the attempt count
+  - the Postgres claims row count before attempt 1 and after attempt 6 (delta of exactly 5)
+
+timeouts:
+  caseSeconds: 600
+  responseAfterSubmitSeconds: 300
+retries:
+  max: 0
+cleanup:
+  - No governance environment was changed; no restore needed.
+  - Recreate a fresh dedicated runtime for this case (reset its counters) so no state leaks into
+    any other case; this does not affect any other case's own isolation.
+  - Report the 5 created claim ids to the overall report; do not delete them without explicit
+    team-lead direction.

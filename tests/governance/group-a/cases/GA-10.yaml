@@ -1,0 +1,78 @@
+id: GA-10
+title: Weak evidence escalates regardless of amount
+covers: [A6, A9]
+level: browser
+
+purpose: >
+  Prove A9 (evidence-quality threshold) escalates the final intake/insertClaim call when one
+  required field's confidence is below the governance minimum, even though the amount itself is
+  the same well-within-limits value used in GA-01 - confirming A9 fires independently of A7/A8,
+  and that this Escalate is correctly persisted as a governance-sourced handoff (A6).
+
+setup:
+  application: Use suite defaults.
+  account: Use suite defaults.
+  environment: Use suite governanceBaseline exactly - no override in this case.
+  isolation: fresh app runtime and fresh governance counters for this case.
+  deterministicProvider: required. The extraction-provider override must return exactly the
+    trustedFacts below at the real extraction node - this is the mechanism that supplies the
+    below-threshold confidence value; it must never be a live VLM call and must never be a value
+    the user types in chat (see the note below on stale/forged values).
+  fixture:
+    ref: GROUP_A_LOW_CONFIDENCE_SGD_19_37
+    trustedFacts:
+      merchantPresent: true
+      datePresent: true
+      totalAmount: 19.37
+      currency: SGD
+      confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.69, currency: 0.95}
+  preflight: Confirm the deterministic provider is wired and returns exactly these facts
+    (including the single 0.69 totalAmount confidence, all others 0.95) for fixture ref
+    GROUP_A_LOW_CONFIDENCE_SGD_19_37 before starting. If not, mark this case BLOCKED and stop.
+  note: The governed disposition must be based only on the trusted extraction-node confidence
+    values above, never on any later user-typed override or a resumed-turn's re-assertion of a
+    higher confidence. If the flow allows the user to type a different amount/confidence and the
+    disposition follows that typed value instead of the trusted extraction facts, treat this as a
+    finding and report it - do not silently accept it as a pass. The exhaustive interrupt/resume/
+    forged/stale matrix for this is covered separately by
+    tests/test_governance_trusted_evidence.py (see suite.yaml supportingEvidence).
+
+steps:
+  - Log in using suite loginUrl and credentialsRef EXPENSE_TEST_LOGIN; confirm homeUrl and the
+    chat textarea placeholder as in GA-01.
+  - Start a new claim and declare fixture GROUP_A_LOW_CONFIDENCE_SGD_19_37 as the receipt input.
+  - Wait for extraction; confirm the extracted-field summary exactly once even though a
+    lower-confidence field is present (the point of this case is that the USER accepted it, so
+    governance - not the user - is the backstop).
+  - When the final submit/confirm prompt appears, confirm exactly once to trigger the final
+    intake/insertClaim governed call.
+  - Capture browser evidence at the terminal state.
+  - Locate the newest governance audit entry correlated to this claim's final intake/insertClaim call.
+  - Read the Postgres claims table for this claim before step 2 and again after step 4.
+
+expected:
+  ui:
+    - No claim reference number appears in the chat after the final confirm (informational only).
+  authoritative:
+    - The final intake/insertClaim disposition is exactly Escalate, with reason "evidence-insufficient".
+    - The audit entry's A9 controlState reflects the threshold/outcome but does NOT expose the raw
+      confidence value (0.69) in cleartext.
+    - No new Postgres claims row is inserted as a completed submission; the claim's Postgres
+      status reflects "escalated".
+    - The governance escalation handoff marker carries escalation.source == "governance" and
+      reason "evidence-insufficient".
+  verdict: Read from the audit entry and the Postgres status, never from chat text alone.
+
+evidence:
+  - privacy-safe screenshot at terminal state
+  - the matching audit-*.jsonl line (decision=Escalate, reason=evidence-insufficient, controlId A9, no raw confidence value)
+  - the Postgres claims row query before and after (status=escalated)
+
+timeouts:
+  caseSeconds: 360
+  responseAfterSubmitSeconds: 300
+retries:
+  max: 0
+cleanup:
+  - No governance environment was changed; no restore needed.
+  - Leave the claim in its escalated state; do not take any reviewer decision on it in this case.

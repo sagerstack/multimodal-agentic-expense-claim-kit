@@ -1,0 +1,71 @@
+id: GA-02
+title: Envelope integrity denies a declared-vs-trusted employeeId mismatch on final submission
+covers: [A1, A2, A6, A12]
+level: browser
+
+purpose: >
+  Prove A2 (envelope integrity / authenticate-against-origin) denies the final intake/insertClaim
+  call when the declared employeeId is forced to mismatch trusted state, that this deny is itself
+  correctly audited (A1), that it is never mismarked as an Escalate (A6), and that the fail-closed
+  floor (A12) is not bypassed.
+
+setup:
+  application: Use suite defaults.
+  account: Use suite defaults.
+  environment:
+    override: "AGENTIC_GOV_SIMULATE_TAMPER=insertClaim:employeeId"
+    note: All other AGENTIC_GOV_* variables remain at suite governanceBaseline values. This is
+      the ONLY change from baseline for this case.
+  isolation: fresh app runtime and fresh governance counters for this case.
+  deterministicProvider: required. Same trustedFacts as GA-01 (fixture ref GROUP_A_VALID_SGD_19_37)
+    - the tamper override, not the receipt content, is what causes this case's mismatch.
+  fixture:
+    ref: GROUP_A_VALID_SGD_19_37
+    trustedFacts:
+      merchantPresent: true
+      datePresent: true
+      totalAmount: 19.37
+      currency: SGD
+      confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}
+  preflight: Confirm the deterministic provider is wired (as GA-01) AND confirm the override above
+    is the only difference from suite governanceBaseline before starting. If either check fails,
+    mark this case BLOCKED and stop.
+
+steps:
+  - Log in using suite loginUrl and credentialsRef EXPENSE_TEST_LOGIN; confirm homeUrl and the
+    chat textarea placeholder as in GA-01.
+  - Start a new claim and declare fixture GROUP_A_VALID_SGD_19_37 as the receipt input.
+  - Wait for extraction; confirm the extracted-field summary exactly once.
+  - When the final submit/confirm prompt appears, confirm exactly once to trigger the final
+    intake/insertClaim governed call (whose declared employeeId this override now forces to
+    mismatch the trusted employeeId).
+  - Capture browser evidence at the terminal state.
+  - Locate the newest governance audit entry correlated to this claim's final intake/insertClaim call.
+  - Read the Postgres claims table for this claim before step 2 and again after step 4.
+
+expected:
+  ui:
+    - No claim reference number appears in the chat after the final confirm (informational only).
+  authoritative:
+    - The final intake/insertClaim disposition is exactly Deny, with reason "integrity-mismatch".
+    - No new Postgres claims row exists for this attempt (before/after are identical).
+    - The audit entry's A2 controlState reflects the mismatch outcome; it does not expose the raw
+      employeeId values in cleartext (opaque/redacted reference only).
+    - No governance-sourced escalation marker (decision=Escalate, escalation.source=governance) is
+      produced for this call - it is a plain Deny, not an Escalate.
+  verdict: Read from the audit entry and the Postgres row, never from chat text alone.
+
+evidence:
+  - privacy-safe screenshot at terminal state
+  - the matching audit-*.jsonl line (decision=Deny, reason=integrity-mismatch, controlId A2)
+  - the Postgres claims row query before and after (unchanged)
+
+timeouts:
+  caseSeconds: 360
+  responseAfterSubmitSeconds: 300
+retries:
+  max: 0
+cleanup:
+  - Restore AGENTIC_GOV_SIMULATE_TAMPER to suite governanceBaseline value ("") before any
+    subsequent case runs.
+  - Confirm the restored baseline before ending this case.

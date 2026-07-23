@@ -1,0 +1,68 @@
+id: GA-08
+title: Aggregate daily exposure escalates on the 5th attempt
+covers: [A7, A8]
+level: browser (stateful)
+
+purpose: >
+  Prove A7's aggregate per-employee/day exposure limit escalates a 5th final insertClaim attempt
+  once the running total for the day crosses the aggregate ceiling, while the attempt count
+  itself (5) stays within A8's separate rate limit - demonstrating the two controls are
+  independent and this case's escalation is caused by A7 (aggregate), not A8 (rate).
+
+setup:
+  application: Use suite defaults.
+  account: Use suite defaults (the SAME employee/session for all 5 attempts in this case).
+  environment: Use suite governanceBaseline exactly - no override in this case.
+  isolation: a dedicated fresh app runtime and fresh governance counters for THIS case only,
+    shared only across this case's own 5 sequential attempts (not shared with any other case).
+  deterministicProvider: required. The extraction-provider override must return exactly the
+    trustedFacts below for each of the 5 distinct fixture refs, at the real extraction node.
+  fixtures:
+    - {ref: GROUP_A_VALID_SGD_450_00_A, totalAmount: 450.00, currency: SGD, confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}}
+    - {ref: GROUP_A_VALID_SGD_450_00_B, totalAmount: 450.00, currency: SGD, confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}}
+    - {ref: GROUP_A_VALID_SGD_450_00_C, totalAmount: 450.00, currency: SGD, confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}}
+    - {ref: GROUP_A_VALID_SGD_450_00_D, totalAmount: 450.00, currency: SGD, confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}}
+    - {ref: GROUP_A_VALID_SGD_250_01, totalAmount: 250.01, currency: SGD, confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}}
+  preflight: Confirm the deterministic provider is wired and returns exactly each listed
+    fixture's facts, in order, before starting. If not, mark this case BLOCKED and stop.
+
+steps:
+  - Log in using suite loginUrl and credentialsRef EXPENSE_TEST_LOGIN; confirm homeUrl and the
+    chat textarea placeholder as in GA-01. Do not log out or start a new session between attempts.
+  - "Attempts 1-4: for each of GROUP_A_VALID_SGD_450_00_A through _D in order, start a new claim,
+    declare that fixture, confirm the extracted-field summary once, and confirm the final
+    submit/confirm prompt once. Wait for each turn to finish before starting the next attempt."
+  - "Attempt 5: repeat the same flow using fixture GROUP_A_VALID_SGD_250_01."
+  - Capture browser evidence after attempt 5.
+  - Locate the newest governance audit entries correlated to all 5 attempts' final insertClaim calls, in order.
+  - Read the Postgres claims table for this employee before attempt 1 and again after attempt 5.
+
+expected:
+  ui:
+    - Attempts 1-4 each show a claim reference number; attempt 5 does not (informational only).
+  authoritative:
+    - Attempts 1 through 4 each have disposition Auto-Execute and each inserts a new Postgres claims row.
+    - Attempt 5 has disposition Escalate, with reason "exposure-exceeded" and an outcome
+      indicating the aggregate/daily limit was crossed (not the per-action ceiling, since 250.01
+      alone is below the per-action escalate threshold) - it does NOT insert a new Postgres row.
+    - Attempt 5's audit entry shows A8 (rate) as allowed/not-exceeded for this call (5 attempts is
+      within the rate limit) - confirming the escalation is attributable to A7 aggregate, not A8.
+    - Exactly 4 new Postgres claims rows exist after attempt 5 (not 5).
+  verdict: Read from the 5 audit entries and the Postgres row count, never from chat text alone.
+
+evidence:
+  - privacy-safe screenshots after attempts 4 and 5 (contrast)
+  - the 5 matching audit-*.jsonl lines, in order, showing the running aggregate
+  - the Postgres claims row count before attempt 1 and after attempt 5 (delta of exactly 4)
+
+timeouts:
+  caseSeconds: 600
+  responseAfterSubmitSeconds: 300
+retries:
+  max: 0
+cleanup:
+  - No governance environment was changed; no restore needed.
+  - Recreate a fresh dedicated runtime for this case (reset its counters) so no state leaks into
+    any other case; this does not affect any other case's own isolation.
+  - Report the 4 created claim ids to the overall report; do not delete them without explicit
+    team-lead direction.

@@ -1,0 +1,70 @@
+id: GA-04
+title: Revoked per-identity mandate denies the final submission
+covers: [A4, A5, A6, A12]
+level: browser
+
+purpose: >
+  Prove A4 (machine-readable mandate) denies the final intake/insertClaim call once the intake
+  identity's grant for that specific tool is revoked, distinct from A5 (which stays allowed here,
+  since the tool remains on the global allowlist) and from A3 (identity itself remains verified
+  and allowed - only its per-tool mandate is revoked). Confirms no false Escalate (A6) and the
+  fail-closed floor is not bypassed (A12).
+
+setup:
+  application: Use suite defaults.
+  account: Use suite defaults.
+  environment:
+    override: "AGENTIC_GOV_REVOKE_GRANTS=intake:insertClaim"
+    note: This subtracts only the intake identity's insertClaim grant from A4's mandate table.
+      It does not remove insertClaim from the global A5 allowlist. All other AGENTIC_GOV_*
+      variables remain at suite governanceBaseline values.
+  isolation: fresh app runtime and fresh governance counters for this case.
+  deterministicProvider: required. Same trustedFacts as GA-01 (fixture ref GROUP_A_VALID_SGD_19_37).
+  fixture:
+    ref: GROUP_A_VALID_SGD_19_37
+    trustedFacts:
+      merchantPresent: true
+      datePresent: true
+      totalAmount: 19.37
+      currency: SGD
+      confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}
+  preflight: Confirm the deterministic provider is wired AND the override above is the only
+    difference from suite governanceBaseline before starting. If either check fails, mark this
+    case BLOCKED and stop.
+
+steps:
+  - Log in using suite loginUrl and credentialsRef EXPENSE_TEST_LOGIN; confirm homeUrl and the
+    chat textarea placeholder as in GA-01.
+  - Start a new claim and declare fixture GROUP_A_VALID_SGD_19_37 as the receipt input.
+  - Wait for extraction; confirm the extracted-field summary exactly once.
+  - When the final submit/confirm prompt appears, confirm exactly once to trigger the final
+    intake/insertClaim governed call.
+  - Capture browser evidence at the terminal state.
+  - Locate the newest governance audit entry correlated to this claim's final intake/insertClaim call.
+  - Read the Postgres claims table for this claim before step 2 and again after step 4.
+
+expected:
+  ui:
+    - No claim reference number appears in the chat after the final confirm (informational only).
+  authoritative:
+    - The final intake/insertClaim disposition is exactly Deny, with reason "mandate-violation".
+    - The same audit entry's A3 (identity) and A5 (allowlist) controlStates show an allowed
+      outcome for this call - only A4 denies it.
+    - No new Postgres claims row exists for this attempt.
+    - No governance-sourced escalation marker is produced for this call - it is a plain Deny.
+  verdict: Read from the audit entry and the Postgres row, never from chat text alone.
+
+evidence:
+  - privacy-safe screenshot at terminal state
+  - the matching audit-*.jsonl line (decision=Deny, reason=mandate-violation, A3/A5 allowed, A4 denied)
+  - the Postgres claims row query before and after (unchanged)
+
+timeouts:
+  caseSeconds: 360
+  responseAfterSubmitSeconds: 300
+retries:
+  max: 0
+cleanup:
+  - Restore AGENTIC_GOV_REVOKE_GRANTS to suite governanceBaseline value ("") before any
+    subsequent case runs.
+  - Confirm the restored baseline before ending this case.

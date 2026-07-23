@@ -1,0 +1,72 @@
+id: GA-06
+title: Per-action exposure escalation reaches human handoff
+covers: [A6, A7, A12]
+level: browser
+
+purpose: >
+  Prove A7 (per-action exposure ceiling) escalates the final intake/insertClaim call once the
+  claimed amount crosses the escalate threshold but stays below the hard-deny ceiling, and that
+  this Escalate is correctly persisted as a governance-sourced handoff (A6 completion) without
+  bypassing the fail-closed floor (A12). Reviewer-side UI routing is captured as supporting
+  evidence only - the primary verdict is audit plus Postgres.
+
+setup:
+  application: Use suite defaults.
+  account: Use suite defaults.
+  environment: Use suite governanceBaseline exactly - no override in this case (A7 is a normal
+    enforce-mode threshold, not a demo-toggle path).
+  isolation: fresh app runtime and fresh governance counters for this case.
+  deterministicProvider: required. The extraction-provider override must return exactly the
+    trustedFacts below at the real extraction node.
+  fixture:
+    ref: GROUP_A_VALID_SGD_750_00
+    trustedFacts:
+      merchantPresent: true
+      datePresent: true
+      totalAmount: 750.00
+      currency: SGD
+      confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}
+  preflight: Confirm the deterministic provider is wired and returns exactly these facts for
+    fixture ref GROUP_A_VALID_SGD_750_00 before starting. If not, mark this case BLOCKED and stop.
+
+steps:
+  - Log in using suite loginUrl and credentialsRef EXPENSE_TEST_LOGIN; confirm homeUrl and the
+    chat textarea placeholder as in GA-01.
+  - Start a new claim and declare fixture GROUP_A_VALID_SGD_750_00 as the receipt input.
+  - Wait for extraction; confirm the extracted-field summary exactly once.
+  - When the final submit/confirm prompt appears, confirm exactly once to trigger the final
+    intake/insertClaim governed call.
+  - Capture browser evidence at the terminal state.
+  - Locate the newest governance audit entry correlated to this claim's final intake/insertClaim call.
+  - Read the Postgres claims table for this claim before step 2 and again after step 4, including its status column.
+  - As supporting evidence only, not the primary verdict - if a reviewer-facing view is reachable
+    in this session/role, note whether the claim shows an escalated-status indicator there.
+
+expected:
+  ui:
+    - No claim reference number appears in the chat after the final confirm; a saved-draft /
+      "a reviewer will follow up" style acknowledgment may appear (informational only, exact
+      wording not asserted here).
+  authoritative:
+    - The final intake/insertClaim disposition is exactly Escalate, with reason "exposure-exceeded".
+    - No new Postgres claims row is inserted as a completed submission; the claim's Postgres
+      status reflects "escalated", not silently dropped and not silently approved.
+    - The governance escalation handoff marker consumed by this app carries escalation.source
+      == "governance" and the same reason "exposure-exceeded" (per
+      tests/test_governance_escalation_handoff.py's contract).
+  verdict: Read from the audit entry and the Postgres status, never from chat text alone.
+
+evidence:
+  - privacy-safe screenshot at terminal state
+  - the matching audit-*.jsonl line (decision=Escalate, reason=exposure-exceeded, controlId A7)
+  - the Postgres claims row query before and after (status=escalated)
+  - optional supporting screenshot of the reviewer-facing escalated-status indicator, if reachable
+
+timeouts:
+  caseSeconds: 360
+  responseAfterSubmitSeconds: 300
+retries:
+  max: 0
+cleanup:
+  - No governance environment was changed; no restore needed.
+  - Leave the claim in its escalated state; do not take any reviewer decision on it in this case.

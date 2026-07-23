@@ -1,0 +1,160 @@
+id: EXPENSE-GROUP-A
+title: Group A governance acceptance for Expense AI
+
+purpose: >
+  Prove A1 through A12 (agentic-governance package, path dependency ../agentic-governance,
+  wired into this app's composition root at src/agentic_claims/core/graph.py) actually gate
+  the live Expense AI app, using 12 outcome-oriented acceptance cases plus supporting
+  lower-layer evidence from the package's own tests and this app's governance tests. This is
+  not an exhaustive unit matrix - see README.md.
+
+application:
+  baseUrl: http://localhost:8000
+  loginUrl: http://localhost:8000/login
+  homeUrl: http://localhost:8000/
+  loginSuccess:
+    urlIsExactly: http://localhost:8000/
+    chatTextareaPlaceholderVisible: "Type a message or drop files..."
+
+accounts:
+  employee:
+    credentialsRef: EXPENSE_TEST_LOGIN
+    # Never embed a raw username/password here or in any case file. The QA lead resolves
+    # the actual secret behind this reference at execution time.
+
+defaults:
+  artifacts: .qa/test-YYYYMMDD-HHMMSS/<agent-name>/
+  isolation: fresh app runtime and fresh governance counters per case, unless a case
+    explicitly declares itself stateful/shared across its own steps (GA-08, GA-09 only -
+    each still isolated from every OTHER case).
+  loginAs: employee
+  timeouts:
+    caseSeconds: 360
+    responseAfterSubmitSeconds: 300
+  retries:
+    max: 0
+    exception: A case may declare one bounded, explicitly non-side-effect, evidence-only
+      retry (for example re-reading an audit file that has not yet been flushed to disk) if
+      and only if that case's own text says so. Prefer zero. Never blindly retry a submit or
+      confirm click.
+  restoreBaselineAfterEnvChangingCases: true
+
+# Every AGENTIC_GOV_* mode/toggle a case does not explicitly override is this baseline.
+governanceBaseline:
+  modes:
+    AGENTIC_GOV_ENABLE_ALLOWLIST: enforce
+    AGENTIC_GOV_ENABLE_IDENTITY: enforce
+    AGENTIC_GOV_ENABLE_MANDATE: enforce
+    AGENTIC_GOV_ENABLE_INTEGRITY: enforce
+    AGENTIC_GOV_ENABLE_EXPOSURE: enforce
+    AGENTIC_GOV_ENABLE_RATE: enforce
+    AGENTIC_GOV_ENABLE_EVIDENCE: enforce
+    AGENTIC_GOV_ENABLE_SCHEMA: enforce
+    AGENTIC_GOV_ENABLE_FAIL_CLOSED: enforce
+  demoToggles:
+    AGENTIC_GOV_DENY_TOOLS: ""
+    AGENTIC_GOV_REVOKE_GRANTS: ""
+    AGENTIC_GOV_FORCE_IDENTITY: ""
+    AGENTIC_GOV_SIMULATE_TAMPER: ""
+  policyFile: "" # empty - use the package's bundled default policy, no AGENTIC_GOV_POLICY_FILE override
+  audit: always on for every call; there is no disable flag for the audit sink.
+
+authoritativeEvidence: >
+  The browser is the actuator and a secondary observation only. The governance runtime's
+  JSONL audit log and the Postgres claims table are authoritative for disposition and
+  side-effect verdicts. If the correlating audit entry or DB row cannot be located for a
+  case's final call, that case's verdict is INCONCLUSIVE - never pass or fail on chat text
+  alone.
+
+correlation: >
+  Follow exactly one thread per case: the browser/session identity, to the trusted
+  draft/in-flight DB claim id created during intake, to the audit correlationId carried on
+  every governed call for that claim, to the FINAL governed intake/insertClaim call for that
+  claim (never an earlier draft/intermediate governed call, such as getClaimSchema or a
+  draft insertClaim variant), to the resulting DB mutation or the confirmed absence of one.
+  A case's verdict is always read off this final call, never an intermediate one.
+
+stopRules:
+  assertionFailure: continue (other cases still run)
+  harnessFailure: abort
+  baselineRestoreFailure: abort
+  unexpectedDbSideEffect: abort
+  blockedCaseIsolation: a case marked BLOCKED (missing deterministic provider or oracle
+    adapter) does not block any unrelated case from running.
+
+cases:
+  - cases/GA-01.yaml
+  - cases/GA-02.yaml
+  - cases/GA-03.yaml
+  - cases/GA-04.yaml
+  - cases/GA-05.yaml
+  - cases/GA-06.yaml
+  - cases/GA-07.yaml
+  - cases/GA-08.yaml
+  - cases/GA-09.yaml
+  - cases/GA-10.yaml
+  - cases/GA-11.yaml
+  - cases/GA-12.yaml
+
+# A1-A12 coverage map. Every control appears in at least one acceptance case; several
+# also have exhaustive lower-layer coverage listed under supportingEvidence below.
+coverage:
+  A1: [GA-01, GA-02, GA-03, GA-04, GA-05, GA-06, GA-07, GA-08, GA-09, GA-10, GA-11, GA-12]
+  A2: [GA-01, GA-02]
+  A3: [GA-01, GA-03]
+  A4: [GA-01, GA-04]
+  A5: [GA-01, GA-04, GA-05, GA-11]
+  A6: [GA-01, GA-02, GA-03, GA-04, GA-05, GA-06, GA-07, GA-10, GA-11, GA-12]
+  A7: [GA-01, GA-06, GA-07, GA-08, GA-09]
+  A8: [GA-08, GA-09]
+  A9: [GA-01, GA-10]
+  A10: [GA-01, GA-11]
+  A11: [GA-12]
+  A12: [GA-01, GA-02, GA-03, GA-04, GA-05, GA-06, GA-07, GA-10, GA-12]
+
+# Deterministic lower-layer coverage this suite deliberately references instead of
+# duplicating as browser cases. Expected result for every command below is "pass" - none
+# of these have been executed as part of authoring this suite.
+supportingEvidence:
+  - control: A1 pre-execution governance envelope, and audit PII/privacy safety (v0.6.1 patch)
+    command: poetry run pytest ../agentic-governance/tests/test_slice0.py ../agentic-governance/tests/test_patch_061.py
+    expected: pass - one audit event per governed call built from trusted providers; declared
+      arguments persist only as an opaque payload-hash reference, never raw PII/amount/receipt content.
+  - control: A2 envelope integrity, including control-mode independence and policy override behavior
+    command: poetry run pytest ../agentic-governance/tests/test_slice3.py
+    expected: pass - draft/final and status-update integrity mismatches denied; observe/off
+      modes shadow-only; malformed policy overrides fail closed at initialization.
+  - control: A3/A4 verified identity and per-identity mandate (extra to GA-01/GA-03/GA-04)
+    command: poetry run pytest ../agentic-governance/tests/test_slice2.py
+    expected: pass - out-of-mandate and unknown/missing identity calls denied fail-closed before dispatch.
+  - control: A5 least-privilege deny-unknown-tool allowlist (extra to GA-01/GA-04/GA-05/GA-11)
+    command: poetry run pytest ../agentic-governance/tests/test_slice1.py
+    expected: pass - unknown (serverUrl, wireToolName) pairs denied before dispatch; demo DENY_TOOLS trigger covered.
+  - control: A7/A8 exact exposure and rate boundaries plus atomic-counter concurrency (extra to GA-06/07/08/09)
+    command: poetry run pytest ../agentic-governance/tests/test_slice4.py
+    expected: pass - per-action and aggregate exposure ceilings, the 6th-attempt rate deny, and
+      atomic behavior under concurrent branches are exhaustively parameterized and pass.
+  - control: A6 all four dispositions in one run; A10 schema/trusted-server; A11 layered-assertion; A12 gateway wrapper
+    command: poetry run pytest ../agentic-governance/tests/test_slice5.py
+    expected: pass - Deny/Escalate/Auto-Execute/Observe all demonstrated; malformed arguments and
+      non-allowlisted serverUrl deny; the action-authorization core is confirmed standalone and
+      model-independent (A11, as a structural assertion, not a behavioral demo).
+  - control: A9 evidence-quality decisions are bound only to trusted extraction-node facts, never
+      to a later user-typed override, a resumed interrupt, a forged tool result, or a stale value
+    command: poetry run pytest tests/test_governance_trusted_evidence.py
+    expected: pass - the exhaustive interrupt/resume/forged/stale matrix for trusted receipt binding.
+  - control: Escalate handoff marker contract consumed by this app's humanEscalation node, and
+      governance-sourced reviewer routing/persistence
+    command: poetry run pytest tests/test_governance_escalation_handoff.py
+    expected: pass - only a well-formed decision=Escalate, escalation.source=governance marker
+      from the CURRENT-turn submitClaim result is honored; forged/internal/mismatched payloads
+      are rejected; reviewer-facing persistence of the escalation is exercised.
+
+reporting: >
+  One overall Group A run produces a single report in JSON, Markdown, HTML, and JUnit form. For
+  every case it records: expected vs. actual outcome, evidence level (browser-observed vs.
+  audit/DB-authoritative), the audit entry id(s)/reasons/controlStates involved, the DB effect
+  (row inserted / not inserted / status change), the governance package and policy version in
+  force, artifact paths, and duration. It also records the pass/fail/blocked result of every
+  supportingEvidence command above. Cases marked BLOCKED (missing deterministic provider or
+  oracle adapter) are reported as BLOCKED, not silently omitted or marked pass/fail.

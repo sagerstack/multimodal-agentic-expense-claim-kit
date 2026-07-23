@@ -1,0 +1,72 @@
+id: GA-01
+title: Baseline valid low-value claim Auto-Executes under full Group A enforcement
+covers: [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A12]
+level: browser
+
+purpose: >
+  Prove a legitimate, well-evidenced, low-value claim is not blocked by any Group A control
+  when all nine control modes are enforce. This is the non-regression counterpart every
+  deny/escalate case in this suite is contrasted against.
+
+setup:
+  application: Use suite defaults (baseUrl, loginUrl, homeUrl, loginSuccess).
+  account: Use suite defaults (employee, credentialsRef EXPENSE_TEST_LOGIN).
+  environment: Use suite governanceBaseline exactly - no override in this case.
+  isolation: fresh app runtime and fresh governance counters for this case.
+  deterministicProvider: required. The extraction-provider override wired for this suite run
+    must return exactly the trustedFacts below at the real extraction node - never a live VLM.
+  fixture:
+    ref: GROUP_A_VALID_SGD_19_37
+    trustedFacts:
+      merchantPresent: true
+      datePresent: true
+      totalAmount: 19.37
+      currency: SGD
+      confidence:
+        merchant: 0.95
+        date: 0.95
+        totalAmount: 0.95
+        currency: 0.95
+  preflight: Before step 1, confirm the deterministic provider is wired and will return exactly
+    the trustedFacts above for fixture ref GROUP_A_VALID_SGD_19_37. If it is not wired, or only a
+    live VLM path is available, mark this case BLOCKED and stop - do not substitute a real receipt.
+
+steps:
+  - Log in using suite loginUrl and credentialsRef EXPENSE_TEST_LOGIN.
+  - Confirm the resulting URL is exactly suite homeUrl and the chat textarea placeholder
+    "Type a message or drop files..." is visible.
+  - Start a new claim and declare fixture GROUP_A_VALID_SGD_19_37 as the receipt input.
+  - Wait for extraction to complete; confirm the extracted-field summary exactly once (no blind retry).
+  - When the final submit/confirm prompt appears, confirm exactly once (no blind retry) to trigger
+    the final intake/insertClaim governed call.
+  - Capture browser evidence at the terminal state.
+  - Locate the newest governance audit entry correlated to this claim's final intake/insertClaim call.
+  - Read the Postgres claims table for this claim before step 3 and again after step 5.
+
+expected:
+  ui:
+    - The terminal chat state shows no unhandled error banner (informational only - not the verdict oracle).
+  authoritative:
+    - The final intake/insertClaim disposition is exactly Auto-Execute.
+    - Exactly one new Postgres claims row exists for this attempt after step 5 that did not exist before step 3.
+    - The audit entry's controlStates for A2, A3, A4, A5, A7, A8, A9, and A10 each show a
+      non-blocking/allowed outcome for this call.
+    - Exactly one audit entry is recorded for this governed call.
+    - The audit entry's declared arguments appear only as an opaque payload-hash reference -
+      never a raw employeeId, amount, or receipt-content value in cleartext.
+  verdict: Read from the audit entry and the Postgres row, never from chat text alone.
+
+evidence:
+  - privacy-safe screenshot at terminal state (no credentials visible)
+  - the matching audit-*.jsonl line for the final insertClaim call
+  - the Postgres claims row before and after (id, status, totalAmount)
+
+timeouts:
+  caseSeconds: 360
+  responseAfterSubmitSeconds: 300
+retries:
+  max: 0
+cleanup:
+  - No governance environment was changed; no restore needed.
+  - Record the created claim id in this case's evidence for the overall report; do not delete
+    the row without explicit team-lead direction.

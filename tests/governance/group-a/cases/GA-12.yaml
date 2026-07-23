@@ -1,0 +1,65 @@
+id: GA-12
+title: Fail-closed floor and standalone action-authorization core
+covers: [A11, A12, A6]
+level: integrated-boundary + supporting structural
+
+purpose: >
+  Prove the fail-closed floor (A12) denies a high-impact intake/insertClaim call when the
+  governance dependency itself (audit sink or policy-decision engine) is unavailable - without
+  ever awaiting the real tool or writing to the database - and that a pending audit record
+  appears once the dependency recovers. Separately cite (not newly execute) the structural
+  confirmation that the action-authorization core (A11) is a standalone, model-independent layer
+  that every high-impact call in this app actually routes through.
+
+setup:
+  environment: Use suite governanceBaseline exactly - no override in this case. This case injects
+    a governance-dependency failure at the wrapper/dependency boundary for exactly one call, not
+    by damaging the live app's filesystem, process, or container - no destructive environment
+    change and no container restart.
+  isolation: fresh governance counters for this case; no browser session, no login.
+  target: the real governed wrapper the app's composition root wires (same as GA-11), invoked
+    directly - not through the chat UI.
+  deterministicProvider: not applicable - the trigger is a dependency failure, not receipt content.
+  preflight: Confirm the injected-failure mechanism is a non-destructive dependency substitution
+    (for example a test double for the audit sink that raises once, then recovers) rather than an
+    action against the live shared audit directory/process. If only a destructive mechanism is
+    available, mark this case BLOCKED and stop rather than risk crashing the shared app process.
+
+steps:
+  - With the injected dependency failure active, invoke the governed wrapper for one high-impact
+    intake/insertClaim call. Capture the returned structured result.
+  - Allow the injected failure to clear (recovery), then invoke the governed wrapper again for a
+    second, otherwise-identical high-impact intake/insertClaim call. Capture its structured result
+    and confirm whether a pending/backfilled audit entry for the FIRST (failed-dependency) call is
+    now present, per the documented audit-emitted-after-recovery behavior.
+  - As a structural citation only, no new live call - reference that the action-authorization core
+    is its own module with no dependency on any model-hook/Group-B state, and that every
+    high-impact call in this app (submitClaim, updateClaimStatus paths) is wired through this same
+    governed wrapper at the app's single composition-root edit
+    (src/agentic_claims/core/graph.py). Do not claim a network-proxy/gateway deployment is
+    implemented - that pattern remains explicitly deferred and out of scope for this app.
+
+expected:
+  - "Step 1: the wrapper's result is exactly {error: \"governance-unavailable\", decision: \"Deny\"}.
+    The real tool function is never awaited; no database row is affected."
+  - "Step 2: the recovered call proceeds according to its own disposition (not further asserted
+    here); an audit entry correlating to the step-1 failed call is present once the dependency
+    recovers, consistent with the documented pending-audit-after-recovery behavior."
+  - "Step 3: a structural citation only - no claim beyond what the cited source
+    (../agentic-governance/tests/test_slice5.py's standalone/model-independent assertion) already
+    establishes, and an explicit statement that the network-proxy/gateway pattern is deferred, not
+    implemented."
+
+evidence:
+  - the two structured wrapper results (step 1 and step 2)
+  - the audit entries for both calls, including the backfilled/pending entry for step 1
+  - a citation of the composition-root wiring location and the standalone-core assertion referenced in step 3
+
+timeouts:
+  caseSeconds: 360
+retries:
+  max: 0
+cleanup:
+  - No destructive environment change was made.
+  - Confirm the injected dependency failure is fully cleared before ending this case, so no
+    degraded state is left for any subsequent case.

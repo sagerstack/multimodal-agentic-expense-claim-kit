@@ -1,0 +1,54 @@
+id: GA-11
+title: Input-hardening boundary - rogue server and malformed arguments
+covers: [A5, A6, A10]
+level: integrated-boundary
+
+purpose: >
+  Prove A10 (typed schema validation plus trusted-MCP server allowlist) denies two distinct
+  input-hardening breaches at the real governed wrapper boundary, independent of any browser/UI
+  path, and that neither breach ever reaches the real tool or the database. This case does not
+  claim any UI behavior.
+
+setup:
+  environment: Use suite governanceBaseline exactly - no override in this case (A10 is a normal
+    enforce-mode structural check).
+  isolation: fresh governance counters for this case; no browser session, no login.
+  target: the real governed wrapper the app's composition root wires (the same
+    governedMcpCallTool the app calls from src/agentic_claims/core/graph.py), invoked directly -
+    not through the chat UI.
+  deterministicProvider: not applicable - neither sub-check involves receipt extraction.
+  preflight: Confirm the wrapper under test is the same instance/configuration the live app uses
+    (same policy, same trusted-server configuration) before starting. If a separate/divergent
+    wrapper instance must be used instead, mark this case BLOCKED and stop rather than report
+    against a different configuration.
+
+steps:
+  - "Sub-check (a) - rogue server: invoke the governed wrapper with a serverUrl that is not one of
+    this app's three trusted rag/db/currency MCP URLs, and otherwise well-formed insertClaim
+    arguments. Capture the wrapper's returned structured result and its audit entry."
+  - "Sub-check (b) - malformed arguments: invoke the governed wrapper with the real trusted db
+    serverUrl, toolName insertClaim, and an arguments object that is missing a required field (or
+    has a wrong-typed field) per this app's configured strict schema for insertClaim. Capture the
+    wrapper's returned structured result and its audit entry."
+
+expected:
+  - "Sub-check (a): the wrapper's result is exactly Deny, with reason \"untrusted-server\". The
+    audit entry shows this fired before identity/mandate/exposure/rate/evidence were evaluated for
+    this call. The real tool function is never invoked (if a spy/mock is used for the real tool,
+    assert it was not awaited) and no database row is affected."
+  - "Sub-check (b): the wrapper's result is exactly Deny, with reason \"schema-invalid\". The same
+    non-dispatch and no-database-effect assertions apply."
+  - Neither sub-check makes any UI claim; evidence is limited to the wrapper's structured result
+    and its audit entry.
+
+evidence:
+  - the two structured wrapper results (sub-check a and b)
+  - the two matching audit-*.jsonl lines (reason=untrusted-server; reason=schema-invalid)
+
+timeouts:
+  caseSeconds: 360
+retries:
+  max: 0
+cleanup:
+  - No environment change was made; no restore needed.
+  - No database effect occurred; no cleanup action required.

@@ -1,0 +1,71 @@
+id: GA-03
+title: Unverified/forced-unknown identity is denied fail-closed before dispatch
+covers: [A3, A6, A12]
+level: browser
+
+purpose: >
+  Prove A3 (verified, accountable agent identity) denies any governed call attributed to an
+  unregistered identity, before it reaches any tool dispatch, and that this deny is correctly
+  audited without a false Escalate (A6) and without bypassing the fail-closed floor (A12).
+
+setup:
+  application: Use suite defaults.
+  account: Use suite defaults.
+  environment:
+    override: "AGENTIC_GOV_FORCE_IDENTITY=attacker"
+    note: The identity "attacker" is not registered in the governance policy's identities
+      table. All other AGENTIC_GOV_* variables remain at suite governanceBaseline values.
+  isolation: fresh app runtime and fresh governance counters for this case.
+  deterministicProvider: required. Same trustedFacts as GA-01 (fixture ref GROUP_A_VALID_SGD_19_37).
+  fixture:
+    ref: GROUP_A_VALID_SGD_19_37
+    trustedFacts:
+      merchantPresent: true
+      datePresent: true
+      totalAmount: 19.37
+      currency: SGD
+      confidence: {merchant: 0.95, date: 0.95, totalAmount: 0.95, currency: 0.95}
+  preflight: Confirm the deterministic provider is wired AND the override above is the only
+    difference from suite governanceBaseline before starting. If either check fails, mark this
+    case BLOCKED and stop.
+  note: Because AGENTIC_GOV_FORCE_IDENTITY overrides every governed call app-wide for the
+    duration of this case, the deny is expected to fire at the FIRST governed call the intake
+    flow makes for this claim - not necessarily the final insertClaim call as in GA-02/04/05.
+    Record whichever governed call is first observed to Deny.
+
+steps:
+  - Log in using suite loginUrl and credentialsRef EXPENSE_TEST_LOGIN; confirm homeUrl and the
+    chat textarea placeholder as in GA-01.
+  - Start a new claim and declare fixture GROUP_A_VALID_SGD_19_37 as the receipt input.
+  - Wait for the turn to finish; do not click any further confirm/submit control once the turn
+    ends (there is no blind retry in this case).
+  - Capture browser evidence at the terminal state.
+  - Locate the newest governance audit entry showing a Deny for this attempt.
+  - Read the Postgres claims table for this attempted claim before step 2 and again after step 3.
+
+expected:
+  ui:
+    - The extraction/confirmation table does not render normally; the turn ends without the
+      claim progressing to a submit/confirm prompt (informational only).
+  authoritative:
+    - The first Deny disposition recorded for this attempt has reason "unverified-identity",
+      with the audited agentIdentity reflecting the unrecognized/forced value rather than a
+      registered identity such as "intake".
+    - No new Postgres claims row exists for this attempt.
+    - No governance-sourced escalation marker is produced for this call - it is a plain Deny.
+  verdict: Read from the audit entry and the Postgres row, never from chat text alone.
+
+evidence:
+  - privacy-safe screenshot at terminal state
+  - the matching audit-*.jsonl line (decision=Deny, reason=unverified-identity)
+  - the Postgres claims row query before and after (unchanged)
+
+timeouts:
+  caseSeconds: 300
+  responseAfterSubmitSeconds: 300
+retries:
+  max: 0
+cleanup:
+  - Restore AGENTIC_GOV_FORCE_IDENTITY to suite governanceBaseline value ("") before any
+    subsequent case runs.
+  - Confirm the restored baseline before ending this case.
