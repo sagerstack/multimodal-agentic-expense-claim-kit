@@ -33,12 +33,19 @@ Receipt Upload -> Intake Agent -> Compliance + Fraud (parallel) -> Advisor -> De
 
 - Docker and Docker Compose
 - Python 3.11+
-- An `.env.local` file (copy from `.env.example` and fill in your values)
+- An `.env.local` app configuration file
+- An `.env.governance` governance configuration file
 
 ```bash
 cp .env.example .env.local
-# Edit .env.local with your OPENROUTER_API_KEY and other settings
+cp .env.governance.example .env.governance
+# Edit .env.local with your OPENROUTER_API_KEY and other app settings.
+# Edit .env.governance only when changing governance modes or demo controls.
 ```
+
+Docker Compose loads `.env.local` first and `.env.governance` second for the app service.
+After changing either file, recreate the app with
+`docker compose up -d --force-recreate app`.
 
 ### Launch
 
@@ -110,6 +117,7 @@ Requires PostgreSQL and Qdrant running locally:
 poetry install
 poetry run alembic upgrade head
 python scripts/ingest_policies.py
+set -a; source .env.governance; set +a  # Direct host runs must export governance config.
 poetry run chainlit run src/agentic_claims/app.py --host 0.0.0.0 --port 8000
 ```
 
