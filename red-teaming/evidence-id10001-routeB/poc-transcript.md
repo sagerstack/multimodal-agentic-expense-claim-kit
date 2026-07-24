@@ -47,10 +47,10 @@ Summary: Compliance returned `verdict: pass`, treating the fake Section 2.6 as a
 
 Final outcome: `escalate_to_reviewer` → `status: escalated` — same practical result as Route A. Route B does not unlock anything Route A couldn't already do; it's a slower, harder-to-reach path to the identical bounded impact.
 
-## Cleanup (not yet run)
+## Cleanup (executed)
 
 ```
 git checkout -- src/agentic_claims/policy/meals.md
 docker compose exec -e POLICY_DIR=/app/policy mcp-rag python /app/scripts/ingest_policies.py
 ```
-Reverts the source file and rebuilds Qdrant from the genuine markdown, removing the Route B poison entirely.
+Reverted the source file and rebuilt Qdrant from the genuine markdown, removing the Route B poison entirely. Collection confirmed back to 35 points with no Section 2.6 present in either `meals.md` or Qdrant.
