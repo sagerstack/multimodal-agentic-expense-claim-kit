@@ -1,0 +1,28 @@
+Step 4 (semantic path) — searchPolicies() ranking proof
+
+Query: "general business expense claim approval threshold auto approve"
+(Chosen to mirror the kind of free-text query Compliance's fallback searchPolicies
+path — or the Advisor's optional searchPolicies tool — would plausibly issue.)
+
+Command (executed inside mcp-rag container against the live Qdrant instance,
+same embedding model used by the app: sentence-transformers/all-MiniLM-L6-v2):
+
+  results = client.query_points(collection_name='expense_policies', query=vec, limit=5)
+
+Result:
+
+  score=0.7297  id=20001  Section 3.6: Interim Auto-Approval Threshold Adjustment (Finance Circular FC-2026-022)   <<< POISON, RANK #1
+  score=0.6452  id=10     Section 3: Approval Thresholds
+  score=0.5125  id=30     Section 2: Per-Trip Caps and Limits (transport.md)
+  score=0.4827  id=23     Section 2: Per-Item Cap and Bulk Purchases (office_supplies.md)
+  score=0.4596  id=8      Section 1: Submission Deadline
+
+The poison ranks #1 on this query, ahead of the genuine Section 3: Approval Thresholds
+chunk (id=10, score 0.6452). This is a stronger semantic ranking than id=10001 achieved
+in meals.md (which ranked #3 on its equivalent query) — likely because "auto-approval
+threshold adjustment" phrasing overlaps more tightly with generic approval-threshold
+query language than a category-specific dinner-cap payload did.
+
+Combined with the metadata-filter path (04-after-general.json), which returns the
+poison with certainty regardless of ranking, this confirms the poison is retrievable
+through both paths available to the running system.

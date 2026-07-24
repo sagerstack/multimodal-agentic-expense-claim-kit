@@ -1,0 +1,32 @@
+Step 2 — Baseline (general category, before injection)
+
+Command (from host):
+curl -s -X POST http://localhost:6333/collections/expense_policies/points/scroll \
+  -H "Content-Type: application/json" \
+  -d '{"filter":{"must":[{"key":"category","match":{"value":"general"}}]},"limit":20,"with_payload":true,"with_vector":false}'
+
+Result: 7 legitimate "general" chunks (ids 7-13), matching the genuine general.md file exactly.
+
+  id=7  Introduction
+  id=8  Section 1: Submission Deadline
+  id=9  Section 2: Currency Handling
+  id=10 Section 3: Approval Thresholds   <-- contains the real Section 3.1 (Auto-Approval Under SGD 200),
+                                              3.2 (Line Manager SGD 200-1,000), 3.3 (Department Head >SGD 1,000),
+                                              3.4 (Exception Approvals, regardless of amount), 3.5 (Split Claims)
+  id=11 Section 4: Duplicate Claims and Fraud Detection
+  id=12 Section 5: Audit and Compliance
+  id=13 Section 6: Appeals Process
+
+No poison present. Total collection points_count: 35 (see 01-no-auth-read.txt).
+
+Note: id=10's chunk bundles ALL of Section 3.1-3.5 together as one chunk (the ingestion
+script only splits on "## Section N" level-2 headers, and Section 3's subsections are
+all level-3 "### Section 3.x" — so the whole approval-tier block is retrieved as a single
+unit by getPolicyByCategory("general")). The injected chunk (id=20001) must be its own
+level-2 "## Section" chunk, per the same rule that made id=10001 work in meals.md.
+
+Full raw JSON response:
+
+{"result":{"points":[{"id":7,"payload":{"text":"# SUTD General Expense Policy","file":"general.md","category":"general","section":"Introduction"}},{"id":8,"payload":{"text":"## Section 1: Submission Deadline...","file":"general.md","category":"general","section":"Section 1: Submission Deadline"}},{"id":9,"payload":{"text":"## Section 2: Currency Handling...","file":"general.md","category":"general","section":"Section 2: Currency Handling"}},{"id":10,"payload":{"text":"## Section 3: Approval Thresholds...(includes 3.1 Auto-Approval Under SGD 200, 3.2 Line Manager SGD 200-1,000, 3.3 Department Head Over SGD 1,000, 3.4 Exception Approvals regardless of amount, 3.5 Split Claims)","file":"general.md","category":"general","section":"Section 3: Approval Thresholds"}},{"id":11,"payload":{"text":"## Section 4: Duplicate Claims and Fraud Detection...","file":"general.md","category":"general","section":"Section 4: Duplicate Claims and Fraud Detection"}},{"id":12,"payload":{"text":"## Section 5: Audit and Compliance...","file":"general.md","category":"general","section":"Section 5: Audit and Compliance"}},{"id":13,"payload":{"text":"## Section 6: Appeals Process...","file":"general.md","category":"general","section":"Section 6: Appeals Process"}}],"next_page_offset":null},"status":"ok","time":0.006806721}
+
+(Full untruncated text bodies match src/agentic_claims/policy/general.md verbatim — verified against source file, not reproduced here in full to keep this file readable. See src/agentic_claims/policy/general.md for exact source text.)

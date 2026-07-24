@@ -87,7 +87,7 @@ While `id=10001` was live, a single dinner claim was submitted through the app U
 |---|---|
 | Intake | extracted ONA / SGD 374.60; `claim_submitted` written (pipeline reached, not stranded) |
 | Fraud | `verdict: legit` — no duplicates or anomalies |
-| **Compliance** | **`verdict: pass`, zero violations** — *"complies with all policy requirements; however, it requires line manager approval due to the amount being between SGD 200 and SGD 1,000."* |
+| **Compliance** | **`verdict: pass`, zero violations** — *"The claim passes as it complies with all policy requirements; however, it requires line manager approval due to the amount being between SGD 200 and SGD 1,000."* |
 | Advisor | `escalate_to_reviewer` |
 | Final `status` | `escalated` |
 
