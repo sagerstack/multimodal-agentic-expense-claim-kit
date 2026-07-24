@@ -1128,7 +1128,7 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     sessionClaimIdVar.set(graphInput.get("claimId", None))
 
     try:
-        from agentic_claims.web.governanceNoticeContext import drain_notices
+        from agentic_claims.web.governanceNoticeContext import drain_notices, get_block_message
         
         async for event in graph.astream_events(invokeInput, config=config, version="v2"):
             if await request.is_disconnected():
@@ -1718,40 +1718,33 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             for notice in pending_notices:
                 yield ServerSentEvent(raw_data=notice, event=SseEvent.GOVERNANCE_NOTICE)
             
-            # Check for governance block message after reasonNode completes
-            if eventKind == "on_chain_end" and event.get("name") == "reasonNode":
-                try:
-                    snapshot = await graph.aget_state(config=config)
-                    intakeGpt = snapshot.values.get("intakeGpt", {})
-                    governanceBlockMsg = intakeGpt.get("governanceBlockMessage")
-                    
-                    if governanceBlockMsg:
-                        # Render governance message (main thread, distinct styling)
-                        governanceHtml = (
-                            f'<div class="flex gap-4 max-w-2xl">'
-                            f'  <div class="w-8 h-8 rounded-lg bg-tertiary-container flex items-center justify-center shrink-0 border border-tertiary/20">'
-                            f'    <span class="material-symbols-outlined text-tertiary text-sm" style="font-variation-settings: \'FILL\' 1;">shield</span>'
-                            f'  </div>'
-                            f'  <div class="space-y-2 flex-1">'
-                            f'    <div class="bg-tertiary-container/50 p-4 rounded-2xl rounded-tl-none border border-tertiary/10">'
-                            f'      <p class="text-on-tertiary-container text-sm leading-relaxed">{governanceBlockMsg}</p>'
-                            f'    </div>'
-                            f'    <span class="text-[10px] text-outline px-1">{_nowTimestamp()} • Governance</span>'
-                            f'  </div>'
-                            f'</div>'
-                        )
-                        yield ServerSentEvent(raw_data=governanceHtml, event=SseEvent.GOVERNANCE_MESSAGE)
-                        
-                        # Close thinking panel cleanly before terminating turn
-                        totalElapsed = time.time() - turnStart
-                        thinkingSummary = f"Blocked by governance . {_formatElapsed(totalElapsed)}"
-                        yield ServerSentEvent(raw_data=thinkingSummary, event=SseEvent.THINKING_DONE)
-                        
-                        # Terminate turn (no assistant response follows governance block)
-                        yield ServerSentEvent(raw_data="Governance intervention", event=SseEvent.DONE)
-                        break
-                except Exception as govErr:
-                    logger.warning("governance_message check failed: %r", govErr, exc_info=True)
+            # Check for governance block message synchronously (no checkpoint lag)
+            governanceBlockMsg = get_block_message()
+            if governanceBlockMsg is not None:
+                # Render governance message (main thread, distinct styling)
+                governanceHtml = (
+                    f'<div class="flex gap-4 max-w-2xl">'
+                    f'  <div class="w-8 h-8 rounded-lg bg-tertiary-container flex items-center justify-center shrink-0 border border-tertiary/20">'
+                    f'    <span class="material-symbols-outlined text-tertiary text-sm" style="font-variation-settings: \'FILL\' 1;">shield</span>'
+                    f'  </div>'
+                    f'  <div class="space-y-2 flex-1">'
+                    f'    <div class="bg-tertiary-container/50 p-4 rounded-2xl rounded-tl-none border border-tertiary/10">'
+                    f'      <p class="text-on-tertiary-container text-sm leading-relaxed">{governanceBlockMsg}</p>'
+                    f'    </div>'
+                    f'    <span class="text-[10px] text-outline px-1">{_nowTimestamp()} • Governance</span>'
+                    f'  </div>'
+                    f'</div>'
+                )
+                yield ServerSentEvent(raw_data=governanceHtml, event=SseEvent.GOVERNANCE_MESSAGE)
+                
+                # Close thinking panel cleanly before terminating turn
+                totalElapsed = time.time() - turnStart
+                thinkingSummary = f"Blocked by governance . {_formatElapsed(totalElapsed)}"
+                yield ServerSentEvent(raw_data=thinkingSummary, event=SseEvent.THINKING_DONE)
+                
+                # Terminate turn (no assistant response follows governance block)
+                yield ServerSentEvent(raw_data="Governance intervention", event=SseEvent.DONE)
+                break
 
     except Exception as e:
         logEvent(

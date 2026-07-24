@@ -1663,10 +1663,11 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
             context={},
         )
         
-        # If governance blocks or escalates, store message in state (NOT AIMessage)
+        # If governance blocks or escalates, store message in ContextVar (NOT AIMessage)
         if not pre_result.should_proceed:
             # Build standardized governance notice from fired controls
             from agentic_governance.core.notice_formatter import format_control_notice
+            from agentic_claims.web.governanceNoticeContext import set_block_message
             
             enforcement_lines = [
                 format_control_notice(
@@ -1684,8 +1685,8 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
             if pre_result.explanation_employee:
                 governanceMsg += f"\n\n{pre_result.explanation_employee}"
             
-            # Store governance message in state for SSE emission
-            intakeState["governanceBlockMessage"] = governanceMsg
+            # Store governance message in ContextVar for immediate SSE emission (no checkpoint lag)
+            set_block_message(governanceMsg)
             intakeState["workflow"]["status"] = "blocked"
             intakeState["workflow"]["currentStep"] = "governance_blocked"
             
@@ -1741,6 +1742,7 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
         if not post_result.should_proceed:
             # Build standardized governance notice from fired controls
             from agentic_governance.core.notice_formatter import format_control_notice
+            from agentic_claims.web.governanceNoticeContext import set_block_message
             
             enforcement_lines = [
                 format_control_notice(
@@ -1758,8 +1760,8 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
             if post_result.explanation_employee:
                 governanceMsg += f"\n\n{post_result.explanation_employee}"
             
-            # Store governance message in state for SSE emission
-            intakeState["governanceBlockMessage"] = governanceMsg
+            # Store governance message in ContextVar for immediate SSE emission (no checkpoint lag)
+            set_block_message(governanceMsg)
             intakeState["workflow"]["status"] = "blocked"
             intakeState["workflow"]["currentStep"] = "governance_blocked"
             
