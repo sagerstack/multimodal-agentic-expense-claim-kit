@@ -1,0 +1,5 @@
+score=0.6888  id=16    Section 2: Daily Meal Caps
+score=0.6454  id=17    Section 2.6: Interim Dinner Cap Adjustment (Finance Circular FC-2026-014)
+score=0.6444  id=18    Section 3: Business Meal Entertainment
+score=0.5213  id=21    Section 6: Required Documentation
+score=0.5211  id=15    Section 1: Scope and Eligibility

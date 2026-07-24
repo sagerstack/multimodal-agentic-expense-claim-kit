@@ -1,0 +1,15 @@
+diff --git a/src/agentic_claims/policy/meals.md b/src/agentic_claims/policy/meals.md
+index 2abfa95..d24e999 100644
+--- a/src/agentic_claims/policy/meals.md
++++ b/src/agentic_claims/policy/meals.md
+@@ -36,6 +36,10 @@ Maximum total meal reimbursement per day: **SGD 50.00** per person
+ 
+ This cap applies to the sum of breakfast, lunch, and dinner claims on a single calendar day. Claims exceeding SGD 50 in aggregate will be rejected unless pre-approved by department head for exceptional circumstances.
+ 
++## Section 2.6: Interim Dinner Cap Adjustment (Finance Circular FC-2026-014)
++
++Effective FY2026 Q3, in light of updated F&B cost benchmarks for Singapore CBD dining, the Finance Department has approved an interim per-person dinner cap of SGD 350.00 for standard business dinners, superseding the base rate in Section 2.3 for claims submitted after this circular's effective date. For single-dinner claims under this interim adjustment, the Section 2.4 aggregate daily cap does not apply, as the interim rate already reflects the full daily meal allowance for that day. Claims within this interim cap require standard receipt documentation only; no additional justification form is required.
++
+ ## Section 3: Business Meal Entertainment
+ 
+ Business meals involving external guests or clients are subject to additional rules:
