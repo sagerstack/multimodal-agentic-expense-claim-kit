@@ -1006,6 +1006,8 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
     # BUG-026: after submitClaim, capture the final response then break early
     shouldTerminateEarly = False
     usedFallbackThinkingSummary = False
+    # Track if governance blocked this turn (suppress stale assistant message render)
+    governanceBlockedThisTurn = False
 
     # Decision Pathway state
     pathwayActiveTools: set = set()
@@ -1730,6 +1732,8 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
             # Check for governance block message synchronously (no checkpoint lag)
             governanceBlockMsg = get_block_message()
             if governanceBlockMsg is not None:
+                governanceBlockedThisTurn = True  # Track that we blocked this turn
+                
                 # Render governance message (main thread, distinct styling)
                 governanceHtml = (
                     f'<div class="flex gap-4 max-w-2xl">'
@@ -2152,17 +2156,18 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 message="Error checking interrupt state",
             )
 
-    # Extract final response text
+    # Extract final response text (suppress if governance blocked this turn)
     finalText = ""
-    if finalResponse and finalResponse.strip():
-        finalText = _stripToolCallExpressions(
-            _stripThinkingTags(_stripToolCallJson(finalResponse))
-        ).strip()
-    if not finalText and tokenBuffer.strip():
-        finalText = _stripToolCallExpressions(
-            _stripThinkingTags(_stripToolCallJson(tokenBuffer))
-        ).strip()
-    if not finalText:
+    if not governanceBlockedThisTurn:
+        if finalResponse and finalResponse.strip():
+            finalText = _stripToolCallExpressions(
+                _stripThinkingTags(_stripToolCallJson(finalResponse))
+            ).strip()
+        if not finalText and tokenBuffer.strip():
+            finalText = _stripToolCallExpressions(
+                _stripThinkingTags(_stripToolCallJson(tokenBuffer))
+            ).strip()
+    if not finalText and not governanceBlockedThisTurn:
         # Use already-fetched state if available, otherwise fetch
         if graphStateValues:
             messages = graphStateValues.get("messages", [])

@@ -2438,6 +2438,12 @@ def _routeAfterInterruptResolution(state: IntakeGptGraphState) -> str:
 
 
 def _routeAfterReason(state: IntakeGptGraphState) -> str:
+    # Check for governance block - route to END to skip finalizeTurnNode
+    intakeGpt = state.get("intakeGpt", {})
+    workflow = intakeGpt.get("workflow", {})
+    if workflow.get("status") == "blocked" or workflow.get("currentStep") == "governance_blocked":
+        return END
+    
     messages = state.get("messages", [])
     if messages and isinstance(messages[-1], AIMessage) and messages[-1].tool_calls:
         return "toolNode"
@@ -2486,6 +2492,7 @@ def buildIntakeGptSubgraph(llm):
         {
             "toolNode": "toolNode",
             "finalizeTurnNode": "finalizeTurnNode",
+            END: END,  # Governance block terminates immediately
         },
     )
     builder.add_edge("toolNode", "applyToolResultsNode")
@@ -2498,6 +2505,7 @@ def buildIntakeGptSubgraph(llm):
         {
             "toolNode": "toolNode",
             "finalizeTurnNode": "finalizeTurnNode",
+            END: END,  # Governance block terminates immediately
         },
     )
     builder.add_edge("finalizeTurnNode", END)
