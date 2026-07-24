@@ -77,6 +77,10 @@
       </div>
     </div>
 
+    <!-- Persistent governance notices (actionable notices that remain visible) -->
+    <div id="governancePersistentNotices" sse-swap="governance-persistent" hx-swap="beforeend"
+         class="max-w-2xl mb-4 space-y-1 empty:hidden"></div>
+
     <!-- Token stream target (live tokens during generation) -->
     <div id="tokenTarget" sse-swap="token" hx-swap="beforeend"
          hx-on::after-swap="document.getElementById('chatHistory').scrollTop = document.getElementById('chatHistory').scrollHeight"

@@ -14,5 +14,6 @@ class SseEvent:
     DONE = "done"
     ERROR = "error"
     INTERRUPT = "interrupt"
-    GOVERNANCE_NOTICE = "governance-notice"  # Informational → thinking panel
+    GOVERNANCE_NOTICE = "governance-notice"  # Informational → thinking panel (deprecated, use GOVERNANCE_PERSISTENT)
+    GOVERNANCE_PERSISTENT = "governance-persistent"  # Actionable notices → persistent strip
     GOVERNANCE_MESSAGE = "governance-message"  # Enforcement → main thread

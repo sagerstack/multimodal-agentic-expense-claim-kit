@@ -1714,9 +1714,18 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                         )
             
             # Drain governance notices and emit them (after each event)
+            # v0.12.1+ emits only actionable notices (clean passes suppressed at source)
             pending_notices = drain_notices()
             for notice in pending_notices:
-                yield ServerSentEvent(raw_data=notice, event=SseEvent.GOVERNANCE_NOTICE)
+                # Render each notice as a styled block (fix run-together text)
+                notice_html = (
+                    f'<div class="governance-notice-line flex items-center gap-2 text-xs py-1 px-3 bg-tertiary-container/20 border-l-2 border-tertiary rounded-r">'
+                    f'  <span class="material-symbols-outlined text-tertiary text-[10px]" style="font-variation-settings: \'FILL\' 1;">shield</span>'
+                    f'  <span class="text-tertiary">{notice}</span>'
+                    f'</div>'
+                )
+                # Emit to persistent strip (remains visible after thinking panel collapses)
+                yield ServerSentEvent(raw_data=notice_html, event=SseEvent.GOVERNANCE_PERSISTENT)
             
             # Check for governance block message synchronously (no checkpoint lag)
             governanceBlockMsg = get_block_message()
