@@ -66,9 +66,16 @@ _MCP_CALL_TOOL_IMPORTERS = (
 def _installGovernedMcpBoundary() -> None:
     """Install governance and replace every bound import of the real MCP boundary."""
     global contentHookRuntime
+    from agentic_claims.web.governanceNoticeContext import append_notice
     
     # Build ONE shared audit sink for unified action + content audit correlation
     sharedAuditSink = JsonlAuditSink("./.agentic_governance/")
+    
+    # Define the notice callback that feeds into the ContextVar queue
+    def notice_callback(notices: list[str]) -> None:
+        """Injected callback: append governance notices to the request queue."""
+        for notice in notices:
+            append_notice(notice)
     
     # Group A: action governance (tool-call boundary)
     governedMcpCallTool = install(
@@ -79,6 +86,7 @@ def _installGovernedMcpBoundary() -> None:
         node_identity_provider=lambda: nodeIdentityVar.get(None) or "application",
         db_claim_id_provider=lambda: dbClaimIdVar.get(None),
         audit_sink=sharedAuditSink,
+        notice_callback=notice_callback,
     )
     for moduleName in _MCP_CALL_TOOL_IMPORTERS:
         setattr(import_module(moduleName), "mcpCallTool", governedMcpCallTool)
@@ -86,6 +94,7 @@ def _installGovernedMcpBoundary() -> None:
     # Group B: content governance (model I/O boundary)
     contentHookRuntime = install_content_hooks(
         audit_sink=sharedAuditSink,
+        notice_callback=notice_callback,
     )
 
 

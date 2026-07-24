@@ -1663,16 +1663,32 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
             context={},
         )
         
-        # If governance blocks or escalates, return early
+        # If governance blocks or escalates, store message in state (NOT AIMessage)
         if not pre_result.should_proceed:
-            if pre_result.needs_human:
-                escalationMsg = AIMessage(
-                    content=f"Flagged for review: {', '.join(pre_result.reasons)}"
+            # Build standardized governance notice from fired controls
+            from agentic_governance.core.notice_formatter import format_control_notice
+            
+            enforcement_lines = [
+                format_control_notice(
+                    c["controlId"], c["name"], c["result"],
+                    entity_types=c.get("entityTypes"),
+                    signal_value=c.get("signalValue")
                 )
-            else:
-                escalationMsg = AIMessage(
-                    content=f"Request blocked: {', '.join(pre_result.reasons)}"
-                )
+                for c in pre_result.fired_controls
+                if c["result"] in ("escalated", "would-escalate", "denied", "blocked", "transformed")
+            ]
+            
+            governanceMsg = "\n".join(enforcement_lines) if enforcement_lines else "Governance control — request held for review."
+            
+            # Optionally append employee-facing explanation as friendly context
+            if pre_result.explanation_employee:
+                governanceMsg += f"\n\n{pre_result.explanation_employee}"
+            
+            # Store governance message in state for SSE emission
+            intakeState["governanceBlockMessage"] = governanceMsg
+            intakeState["workflow"]["status"] = "blocked"
+            intakeState["workflow"]["currentStep"] = "governance_blocked"
+            
             logEvent(
                 logger,
                 "intake.gpt.governance_pre_check_blocked",
@@ -1695,7 +1711,8 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
                 workflowStep=intakeState["workflow"]["currentStep"],
                 message="intake-gpt node exited",
             )
-            return {"messages": [escalationMsg], "intakeGpt": intakeState}
+            # Return WITHOUT an AIMessage (governance message via SSE instead)
+            return {"intakeGpt": intakeState}
         
         # If B2 redacted PII, substitute redacted content into the HumanMessage
         if pre_result.content != latest_human_text and latest_human_idx >= 0:
@@ -1719,6 +1736,57 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
             rag_clauses=None,
             required_evidence_fields=None,
         )
+        
+        # Check if post-check blocks or escalates
+        if not post_result.should_proceed:
+            # Build standardized governance notice from fired controls
+            from agentic_governance.core.notice_formatter import format_control_notice
+            
+            enforcement_lines = [
+                format_control_notice(
+                    c["controlId"], c["name"], c["result"],
+                    entity_types=c.get("entityTypes"),
+                    signal_value=c.get("signalValue")
+                )
+                for c in post_result.fired_controls
+                if c["result"] in ("escalated", "would-escalate", "denied", "blocked", "transformed")
+            ]
+            
+            governanceMsg = "\n".join(enforcement_lines) if enforcement_lines else "Governance control — output held for review."
+            
+            # Optionally append employee-facing explanation
+            if post_result.explanation_employee:
+                governanceMsg += f"\n\n{post_result.explanation_employee}"
+            
+            # Store governance message in state for SSE emission
+            intakeState["governanceBlockMessage"] = governanceMsg
+            intakeState["workflow"]["status"] = "blocked"
+            intakeState["workflow"]["currentStep"] = "governance_blocked"
+            
+            logEvent(
+                logger,
+                "intake.gpt.governance_post_check_blocked",
+                logCategory="governance",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                decision=post_result.decision,
+                reasons=post_result.reasons,
+                message="Content governance post-check blocked output",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            # Return WITHOUT an AIMessage (governance message via SSE instead)
+            return {"intakeGpt": intakeState}
         
         # Apply post-check content whenever it differs (PII redaction on Allow/Transform)
         if post_result.content != str(response.content):

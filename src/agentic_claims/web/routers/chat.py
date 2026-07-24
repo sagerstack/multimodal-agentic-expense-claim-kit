@@ -411,8 +411,11 @@ async def streamChat(request: Request):
         )
 
         try:
+            from agentic_claims.web.governanceNoticeContext import init_notice_queue
+            
             employeeIdVar.set(request.session.get("employee_id"))
             imagePathVar.set(getImagePath(turnClaimId))
+            init_notice_queue()  # Initialize governance notice queue for this turn
 
             async for sseEvent in runGraph(graph, graphInput, request, templates):
                 yield sseEvent

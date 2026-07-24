@@ -14,3 +14,5 @@ class SseEvent:
     DONE = "done"
     ERROR = "error"
     INTERRUPT = "interrupt"
+    GOVERNANCE_NOTICE = "governance-notice"  # Informational → thinking panel
+    GOVERNANCE_MESSAGE = "governance-message"  # Enforcement → main thread
