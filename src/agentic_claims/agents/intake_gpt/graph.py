@@ -1667,11 +1667,11 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
         if not pre_result.should_proceed:
             if pre_result.needs_human:
                 escalationMsg = AIMessage(
-                    content=f"Flagged for review: {", ".join(pre_result.reasons)}"
+                    content=f"Flagged for review: {', '.join(pre_result.reasons)}"
                 )
             else:
                 escalationMsg = AIMessage(
-                    content=f"Request blocked: {", ".join(pre_result.reasons)}"
+                    content=f"Request blocked: {', '.join(pre_result.reasons)}"
                 )
             logEvent(
                 logger,
