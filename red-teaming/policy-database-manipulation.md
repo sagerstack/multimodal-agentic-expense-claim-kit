@@ -27,7 +27,7 @@ Either way, the outcome is the same: Compliance retrieves the false rule, treats
 
 ## Proof of Concept (Route A — demonstrated live)
 
-Executed against the running local stack. Full command log and artifacts in [`evidence/poc-transcript.md`](evidence/poc-transcript.md).
+Executed against the running local stack. Full command log and artifacts in [`evidence-id10001-routeA/poc-transcript.md`](evidence-id10001-routeA/poc-transcript.md).
 
 The payload used is the one designed against the boundary conditions this report establishes below — it reads as a specific dated policy update rather than a blanket override, and explicitly resolves its contradiction with the real daily-aggregate cap instead of leaving it for the LLM to arbitrate:
 
@@ -41,18 +41,18 @@ The payload used is the one designed against the boundary conditions this report
 }
 ```
 
-1. **Unauthenticated read** — `curl http://localhost:6333/collections/expense_policies` returned **HTTP 200** with no API key: 36 points, confirming Qdrant is reachable and requires no credentials. Evidence: [`01-no-auth-read.txt`](evidence/01-no-auth-read.txt).
-2. **Baseline** — with the poison temporarily removed, the `meals` category held 7 genuine chunks, including the real `Section 2.4: Total Daily Cap` (SGD 50). Evidence: [`02-baseline-meals.json`](evidence/02-baseline-meals.json).
-3. **Injection** — a single host-side `curl -X PUT` (no auth) inserted the crafted point above (`id=10001`, `category=meals`), embedded live with the same `all-MiniLM-L6-v2` model the ingestion pipeline uses. Response: `status: completed`, HTTP 200, `2026-07-20T15:48:34Z`. Evidence: [`03-poison-payload.json`](evidence/03-poison-payload.json).
+1. **Unauthenticated read** — `curl http://localhost:6333/collections/expense_policies` returned **HTTP 200** with no API key: 36 points, confirming Qdrant is reachable and requires no credentials. Evidence: [`01-no-auth-read.txt`](evidence-id10001-routeA/01-no-auth-read.txt).
+2. **Baseline** — with the poison temporarily removed, the `meals` category held 7 genuine chunks, including the real `Section 2.4: Total Daily Cap` (SGD 50). Evidence: [`02-baseline-meals.json`](evidence-id10001-routeA/02-baseline-meals.json).
+3. **Injection** — a single host-side `curl -X PUT` (no auth) inserted the crafted point above (`id=10001`, `category=meals`), embedded live with the same `all-MiniLM-L6-v2` model the ingestion pipeline uses. Response: `status: completed`, HTTP 200, `2026-07-20T15:48:34Z`. Evidence: [`03-poison-payload.json`](evidence-id10001-routeA/03-poison-payload.json).
 4. **Verification** — the poison is now returned by Compliance's primary retrieval path:
-   - `getPolicyByCategory("meals")`: 8 chunks now (was 7), poison included — a metadata filter, so retrieval here is **guaranteed**, not probabilistic. Evidence: [`04-after-meals.json`](evidence/04-after-meals.json).
-   - `searchPolicies("dinner meal claim approval cap limit")`: the poison ranks **#3 (0.6422)**, behind two genuine sections — a reminder that this fallback/semantic path is probabilistic, not guaranteed. Evidence: [`05-retrieval-proof.txt`](evidence/05-retrieval-proof.txt).
+   - `getPolicyByCategory("meals")`: 8 chunks now (was 7), poison included — a metadata filter, so retrieval here is **guaranteed**, not probabilistic. Evidence: [`04-after-meals.json`](evidence-id10001-routeA/04-after-meals.json).
+   - `searchPolicies("dinner meal claim approval cap limit")`: the poison ranks **#3 (0.6422)**, behind two genuine sections — a reminder that this fallback/semantic path is probabilistic, not guaranteed. Evidence: [`05-retrieval-proof.txt`](evidence-id10001-routeA/05-retrieval-proof.txt).
 
 An unauthenticated network write placed policy that the Compliance agent will treat as authoritative, retrievable with certainty through the lookup it actually relies on.
 
 ### Impact confirmed end-to-end — CLAIM-010
 
-While `id=10001` was live, a real dinner claim was submitted through the app UI: **merchant ONA, meals, SGD 374.60** — about **12× the real SGD 30 dinner cap**. The full pipeline ran on submission. Full backend record in [`poc-transcript.md`](evidence/poc-transcript.md) Step 5.
+While `id=10001` was live, a real dinner claim was submitted through the app UI: **merchant ONA, meals, SGD 374.60** — about **12× the real SGD 30 dinner cap**. The full pipeline ran on submission. Full backend record in [`poc-transcript.md`](evidence-id10001-routeA/poc-transcript.md) Step 5.
 
 | Stage | Result |
 |---|---|
