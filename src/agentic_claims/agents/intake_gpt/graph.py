@@ -20,6 +20,7 @@ from agentic_claims.agents.intake.extractionContext import (
     extractedReceiptVar,
     trustedExtractedReceipt,
 )
+from agentic_governance.core.content_envelope import ContentType
 from agentic_claims.agents.intake.tools.convertCurrency import convertCurrency
 from agentic_claims.agents.intake.tools.extractReceiptFields import extractReceiptFields
 from agentic_claims.agents.intake.tools.getClaimSchema import getClaimSchema
@@ -1634,14 +1635,106 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
     else:
         activeLlm = boundLlm
 
-    response = await activeLlm.ainvoke(
-        [
-            SystemMessage(content=INTAKE_GPT_SYSTEM_PROMPT),
-            SystemMessage(content=runtimeContext),
-            *sideQuestionDirective,
-            *state.get("messages", []),
-        ]
-    )
+    # Build messages list for LLM
+    messages = [
+        SystemMessage(content=INTAKE_GPT_SYSTEM_PROMPT),
+        SystemMessage(content=runtimeContext),
+        *sideQuestionDirective,
+        *state.get("messages", []),
+    ]
+
+    # Group B PRE-MODEL CHECK (B1 input attack, B2 PII input)
+    from agentic_claims.core.graph import contentHookRuntime
+    
+    # Extract latest HumanMessage text for pre-check (governance expects string content)
+    latest_human_text = ""
+    latest_human_idx = -1
+    for i, msg in enumerate(messages):
+        if isinstance(msg, HumanMessage):
+            latest_human_text = str(msg.content)
+            latest_human_idx = i
+    
+    if contentHookRuntime is not None and latest_human_text:
+        pre_result = await contentHookRuntime.pre_model_check(
+            content=latest_human_text,
+            content_type=ContentType.CHAT_INPUT,
+            correlation_id=state.get("claimId"),
+            agent_identity="intake",
+            context={},
+        )
+        
+        # If governance blocks or escalates, return early
+        if not pre_result.should_proceed:
+            if pre_result.needs_human:
+                escalationMsg = AIMessage(
+                    content=f"Flagged for review: {", ".join(pre_result.reasons)}"
+                )
+            else:
+                escalationMsg = AIMessage(
+                    content=f"Request blocked: {", ".join(pre_result.reasons)}"
+                )
+            logEvent(
+                logger,
+                "intake.gpt.governance_pre_check_blocked",
+                logCategory="governance",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                decision=pre_result.decision,
+                reasons=pre_result.reasons,
+                message="Content governance pre-check blocked request",
+            )
+            logEvent(
+                logger,
+                "intake.graph.node_exited",
+                logCategory="agent",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                nodeName="reasonNode",
+                workflowStep=intakeState["workflow"]["currentStep"],
+                message="intake-gpt node exited",
+            )
+            return {"messages": [escalationMsg], "intakeGpt": intakeState}
+        
+        # If B2 redacted PII, substitute redacted content into the HumanMessage
+        if pre_result.content != latest_human_text and latest_human_idx >= 0:
+            messages[latest_human_idx] = HumanMessage(content=pre_result.content)
+
+    response = await activeLlm.ainvoke(messages)
+    
+    # Group B POST-MODEL CHECK (B2 PII output, B3 grounding, B4 judge, B5 failure)
+    if contentHookRuntime is not None:
+        # Extract trusted receipt fields for B3 grounding validation
+        trusted_receipt = trustedExtractedReceipt(state)
+        trusted_fields = trusted_receipt.get("fields", {}) if trusted_receipt else {}
+        
+        post_result = await contentHookRuntime.post_model_check(
+            content=str(response.content),
+            content_type=ContentType.MODEL_OUTPUT,
+            correlation_id=state.get("claimId"),
+            agent_identity="intake",
+            context={},
+            trusted_state=trusted_fields,
+            rag_clauses=None,
+            required_evidence_fields=None,
+        )
+        
+        # Apply post-check content whenever it differs (PII redaction on Allow/Transform)
+        if post_result.content != str(response.content):
+            response.content = post_result.content
+            logEvent(
+                logger,
+                "intake.gpt.governance_post_check_transformed",
+                logCategory="governance",
+                agent="intake-gpt",
+                claimId=state.get("claimId"),
+                threadId=state.get("threadId"),
+                decision=post_result.decision,
+                reasons=post_result.reasons,
+                message="Content governance post-check transformed model output",
+            )
+    
     hydratedResponse = _hydrateRequestHumanInputCall(response, intakeState)
     _persistRequestHumanInputMetadata(intakeState, hydratedResponse)
     pendingInterrupt = _pendingInterruptFromToolCalls(hydratedResponse)

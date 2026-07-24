@@ -7,7 +7,8 @@ from functools import wraps
 from importlib import import_module
 from typing import Any, Callable
 
-from agentic_governance.integrations.langgraph_mcp import install
+from agentic_governance.adapters.jsonl_audit import JsonlAuditSink
+from agentic_governance.integrations.langgraph_mcp import install, install_content_hooks
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from psycopg import AsyncConnection
@@ -40,6 +41,9 @@ mcpCallTool = _realMcpCallTool
 nodeIdentityVar: ContextVar[str | None] = ContextVar("nodeIdentityVar", default=None)
 dbClaimIdVar: ContextVar[int | None] = ContextVar("dbClaimIdVar", default=None)
 
+# Group B content governance runtime (installed once per graph build)
+contentHookRuntime = None
+
 _MCP_CALL_TOOL_IMPORTERS = (
     "agentic_claims.agents.advisor.node",
     "agentic_claims.agents.advisor.tools.searchPolicies",
@@ -61,6 +65,12 @@ _MCP_CALL_TOOL_IMPORTERS = (
 
 def _installGovernedMcpBoundary() -> None:
     """Install governance and replace every bound import of the real MCP boundary."""
+    global contentHookRuntime
+    
+    # Build ONE shared audit sink for unified action + content audit correlation
+    sharedAuditSink = JsonlAuditSink("./.agentic_governance/")
+    
+    # Group A: action governance (tool-call boundary)
     governedMcpCallTool = install(
         real_mcp_call_tool=_realMcpCallTool,
         employee_id_provider=lambda: employeeIdVar.get(None),
@@ -68,9 +78,15 @@ def _installGovernedMcpBoundary() -> None:
         session_claim_id_provider=lambda: sessionClaimIdVar.get(None),
         node_identity_provider=lambda: nodeIdentityVar.get(None) or "application",
         db_claim_id_provider=lambda: dbClaimIdVar.get(None),
+        audit_sink=sharedAuditSink,
     )
     for moduleName in _MCP_CALL_TOOL_IMPORTERS:
         setattr(import_module(moduleName), "mcpCallTool", governedMcpCallTool)
+    
+    # Group B: content governance (model I/O boundary)
+    contentHookRuntime = install_content_hooks(
+        audit_sink=sharedAuditSink,
+    )
 
 
 def _withNodeIdentity(nodeName: str, nodeCallable: Callable[..., Any]) -> Callable[..., Any]:
