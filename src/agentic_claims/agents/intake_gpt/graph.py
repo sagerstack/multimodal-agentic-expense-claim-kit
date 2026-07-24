@@ -2439,9 +2439,10 @@ def _routeAfterInterruptResolution(state: IntakeGptGraphState) -> str:
 
 def _routeAfterReason(state: IntakeGptGraphState) -> str:
     # Check for governance block - route to END to skip finalizeTurnNode
+    # Use currentStep only (status="blocked" is too broad - interrupts also set it)
     intakeGpt = state.get("intakeGpt", {})
     workflow = intakeGpt.get("workflow", {})
-    if workflow.get("status") == "blocked" or workflow.get("currentStep") == "governance_blocked":
+    if workflow.get("currentStep") == "governance_blocked":
         return END
     
     messages = state.get("messages", [])
