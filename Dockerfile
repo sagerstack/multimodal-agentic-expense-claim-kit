@@ -32,7 +32,10 @@ RUN poetry export --without dev -f requirements.txt -o requirements.txt \
     && grep -vi 'agentic-governance' requirements.txt > requirements.clean.txt || true \
     && pip install --no-cache-dir -r requirements.clean.txt \
     && rm -f requirements.txt requirements.clean.txt \
-    && pip install --no-cache-dir /agentic-governance
+    && pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu --trusted-host download.pytorch.org \
+    && pip install --no-cache-dir "/agentic-governance[content]" \
+    && python -m spacy download en_core_web_lg \
+    && (python -c "from transformers import pipeline; pipeline('text-classification', model='protectai/deberta-v3-base-prompt-injection-v2')" || echo 'WARN: DeBERTa pre-pull failed at build; will lazy-load at runtime')
 
 # Copy source code, config, Alembic migrations, and web assets
 COPY src/ ./src/
