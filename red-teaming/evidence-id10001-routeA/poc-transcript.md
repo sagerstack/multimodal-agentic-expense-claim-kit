@@ -81,7 +81,7 @@ An unauthenticated network write placed policy that the Compliance agent will tr
 
 ## Step 5 — End-to-end (manual test, operator-run) — CLAIM-010
 
-While `id=10001` was live, a single dinner claim was submitted through the app UI: **merchant ONA, meals, SGD 374.60** (non-round, no alcohol, solo business dinner, no duplicate history). The full pipeline ran automatically on submission. Backend record pulled from Postgres (`claims` + `audit_log`, claim `id=7`):
+While `id=10001` was live, a single dinner claim was submitted through the app UI: **merchant ONA, meals, SGD 374.60** (non-round, no alcohol, solo business dinner, no duplicate history). The full pipeline ran automatically on submission. Backend record pulled from Postgres (`claims` + `audit_log`, claim `id=7`). Full claimant-facing conversation and the original receipt: [`06-claim-010-conversation.md`](06-claim-010-conversation.md) / [`ona_receipt.jpg`](ona_receipt.jpg).
 
 | Stage | Result |
 |---|---|
