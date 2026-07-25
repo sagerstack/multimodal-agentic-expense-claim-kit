@@ -96,11 +96,6 @@
          hx-on::after-swap="document.getElementById('chatHistory').scrollTop = document.getElementById('chatHistory').scrollHeight; window.dispatchEvent(new CustomEvent('message-swapped'))"
          class="space-y-6 empty:hidden"></div>
 
-    <!-- Governance Messages (enforcement interceptions, main thread) -->
-    <div id="governanceMessages" sse-swap="governance-message" hx-swap="beforeend"
-         hx-on::after-swap="document.getElementById('chatHistory').scrollTop = document.getElementById('chatHistory').scrollHeight"
-         class="space-y-6"></div>
-
     <!-- Done sentinel — triggers turn freeze -->
     <div id="doneTarget" sse-swap="done" hx-swap="innerHTML"
          hx-on::after-swap="window.dispatchEvent(new CustomEvent('stream-done'))" class="hidden"></div>

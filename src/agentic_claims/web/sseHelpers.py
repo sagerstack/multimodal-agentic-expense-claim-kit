@@ -1715,31 +1715,25 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             message="Error rendering table on tool end",
                         )
             
-            # Check for governance block message FIRST (before emitting notices)
+            # Emit governance notices as small red persistent notices
+            # This is the SINGLE channel for ALL governance notifications (A1-A12 + B1-B6)
+            # v0.12.1+ emits only actionable notices (clean passes suppressed at source)
+            pending_notices = drain_notices()
+            for notice in pending_notices:
+                # Render each notice as a styled block (small red persistent notice)
+                notice_html = (
+                    f'<div class="governance-notice-line flex items-center gap-2 text-xs py-1 px-3 bg-tertiary-container/20 border-l-2 border-tertiary rounded-r">'
+                    f'  <span class="material-symbols-outlined text-tertiary text-[10px]" style="font-variation-settings: \'FILL\' 1;">shield</span>'
+                    f'  <span class="text-tertiary">{notice}</span>'
+                    f'</div>'
+                )
+                # Emit to persistent strip (remains visible after thinking panel collapses)
+                yield ServerSentEvent(raw_data=notice_html, event=SseEvent.GOVERNANCE_PERSISTENT)
+            
+            # Check for governance block (turn termination, no white bubble)
             governanceBlockMsg = get_block_message()
             if governanceBlockMsg is not None:
                 governanceBlockedThisTurn = True  # Track that we blocked this turn
-                
-                # Drain notices but DO NOT emit them (discard)
-                # The block bubble already shows these controls; emitting them again
-                # in the persistent strip would create duplicates.
-                drain_notices()  # Discard redundant notices
-                
-                # Render governance message (main thread, distinct styling)
-                governanceHtml = (
-                    f'<div class="flex gap-4 max-w-2xl">'
-                    f'  <div class="w-8 h-8 rounded-lg bg-tertiary-container flex items-center justify-center shrink-0 border border-tertiary/20">'
-                    f'    <span class="material-symbols-outlined text-tertiary text-sm" style="font-variation-settings: \'FILL\' 1;">shield</span>'
-                    f'  </div>'
-                    f'  <div class="space-y-2 flex-1">'
-                    f'    <div class="bg-tertiary-container/50 p-4 rounded-2xl rounded-tl-none border border-tertiary/10">'
-                    f'      <p class="text-on-tertiary-container text-sm leading-relaxed">{governanceBlockMsg}</p>'
-                    f'    </div>'
-                    f'    <span class="text-[10px] text-outline px-1">{_nowTimestamp()} • Governance</span>'
-                    f'  </div>'
-                    f'</div>'
-                )
-                yield ServerSentEvent(raw_data=governanceHtml, event=SseEvent.GOVERNANCE_MESSAGE)
                 
                 # Close thinking panel cleanly before terminating turn
                 totalElapsed = time.time() - turnStart
@@ -1749,20 +1743,6 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 # Terminate turn (no assistant response follows governance block)
                 yield ServerSentEvent(raw_data="Governance intervention", event=SseEvent.DONE)
                 break
-            else:
-                # Not blocked: emit persistent notices as usual
-                # v0.12.1+ emits only actionable notices (clean passes suppressed at source)
-                pending_notices = drain_notices()
-                for notice in pending_notices:
-                    # Render each notice as a styled block (fix run-together text)
-                    notice_html = (
-                        f'<div class="governance-notice-line flex items-center gap-2 text-xs py-1 px-3 bg-tertiary-container/20 border-l-2 border-tertiary rounded-r">'
-                        f'  <span class="material-symbols-outlined text-tertiary text-[10px]" style="font-variation-settings: \'FILL\' 1;">shield</span>'
-                        f'  <span class="text-tertiary">{notice}</span>'
-                        f'</div>'
-                    )
-                    # Emit to persistent strip (remains visible after thinking panel collapses)
-                    yield ServerSentEvent(raw_data=notice_html, event=SseEvent.GOVERNANCE_PERSISTENT)
 
     except Exception as e:
         logEvent(
