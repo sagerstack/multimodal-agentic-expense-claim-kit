@@ -369,6 +369,16 @@ function chatState() {
         thinkingPanel.insertAdjacentElement('beforebegin', frozen);
       }
 
+      // 1b. Freeze governance persistent notices into the transcript flow
+      const govNotices = document.getElementById('governancePersistentNotices');
+      if (govNotices && govNotices.innerHTML.trim()) {
+        const frozenGov = document.createElement('div');
+        frozenGov.className = 'max-w-2xl mb-4 space-y-1';  // same visual styling, minus empty:hidden and sse-swap id
+        frozenGov.innerHTML = govNotices.innerHTML;
+        thinkingPanel.insertAdjacentElement('beforebegin', frozenGov);
+        govNotices.innerHTML = '';  // clear for next turn
+      }
+
       // 2. Move AI messages out of accumulator into flow (if arrived)
       const moved = this.moveAiMessages();
 
