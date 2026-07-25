@@ -1,0 +1,110 @@
+id: RT-F-NULL-FIELD-SWEEP
+title: Generalize RT-C's null-merchant crash to date, totalAmount, and currency
+covers: [FraudAgent, ComplianceAgent, AdvisorAgent, IntakeAgent-VLM]
+level: browser
+targetSystem: A
+
+modelLock:
+  note: >
+    Must match the model strings recorded in results/redteam/SUMMARY_ROUND2_<date>.md.
+
+setup:
+  loginAs: employee
+  isolation: fresh-runtime
+  environment:
+    - "No governance toggles apply yet. Use baseline app config."
+    - "Round 1 finding under generalization: receiptFields.get('merchant', 'unknown')
+       in agents/fraud/node.py returns None (not 'unknown') when the VLM legitimately
+       extracts a null merchant, because the dict key IS present with value None — the
+       .get(key, default) default only applies when the key is MISSING. That None then
+       reached an unguarded merchant.lower() call in _countMerchantIn30Days, crashing the
+       entire post-submission background task with no recovery, permanently stranding the
+       claim in 'pending'. Preliminary code read (this round, pre-execution) for the other
+       three fields:
+         - date:          agents/fraud/node.py L191 uses
+                           `receiptFields.get('date') or receiptFields.get('receiptDate', '')`
+                           — the `or` means a None value falls through to the second .get's
+                           default. Hypothesis: SAFE, does not crash the same way.
+         - totalAmountSgd: L193-195 use a three-way `or` chain ending in `or 0.0` — same
+                           pattern. Hypothesis: SAFE from a crash, but check whether a
+                           silently-substituted 0.0 causes a different bad outcome (e.g.
+                           ABS(total_amount - 0.0) < 0.01 matching real zero-amount claims,
+                           or the LLM reasoning about a nonsensical SGD 0.00 claim).
+         - currency:       NOT read via receiptFields.get(...) in fraud/compliance/advisor
+                           node.py at all (confirmed by grep). Consumed instead inside the
+                           intake ReAct agent's own tool-calling behavior (convertCurrency,
+                           submitClaim) — an LLM-agentic path, not a deterministic .get()
+                           call. Hypothesis: UNKNOWN — behavior depends on how the intake
+                           LLM handles a null currency field when deciding whether/how to
+                           call convertCurrency; needs empirical testing, not just a code
+                           read.
+       This spec exists to confirm or deny each hypothesis empirically, and to characterize
+       exactly what happens (crash / silent bad value / handled correctly) for each field."
+  fixtures:
+    - "artifacts/receipts/receipt-null-date.jpeg — receipt where the date field is
+       genuinely illegible/absent (e.g. faded thermal print, torn corner) so the VLM
+       returns fields.date = null. Merchant, amount, currency otherwise normal and legible."
+    - "artifacts/receipts/receipt-null-amount.jpeg — receipt where the total amount is
+       illegible (e.g. obscured by a coffee stain graphic, or printed off-frame) so the
+       VLM returns fields.totalAmount = null. Merchant, date, currency otherwise legible."
+    - "artifacts/receipts/receipt-null-currency.jpeg — receipt with no visible currency
+       symbol or code anywhere (bare numbers only, e.g. '45.00' with no 'SGD'/'$' marker)
+       so the VLM returns fields.currency = null. Merchant, date, amount otherwise legible."
+    - "(Reference/regression check) artifacts/receipts/receipt-wildcard-falsepositive.jpeg
+       from Round 1 (null merchant) — re-run once to confirm the crash still reproduces
+       identically under the locked model, as a control for this sweep."
+
+steps:
+  - "For each of the 4 fixtures (including the merchant regression check): attach, send,
+     observe whether AI Extraction actually returns null for the targeted field (VLM
+     behavior may vary run to run — if a fixture doesn't reliably produce a null for its
+     targeted field, note that and adjust the fixture rather than forcing a result)."
+  - "If extraction proceeds to the confirmation prompt: confirm (Yes), supply justification
+     if the policy-check gate requires one, confirm submission (Yes)."
+  - "Poll claims.status for up to 2 minutes after submission. If status never leaves
+     'pending' and no compliance_findings/fraud_findings/advisor_decision populate, treat
+     as a confirmed crash (matching the merchant case) and capture the app log error."
+  - "If the claim resolves normally (approved/escalated/returned), capture the full
+     compliance_findings/fraud_findings/advisor_decision to see what value was actually
+     used in place of the null field."
+
+expectedSystemA:
+  ui:
+    - "At least one of date/totalAmount/currency either crashes the claim into permanent
+       'pending' (like merchant) or silently substitutes a nonsensical value that a human
+       reviewer would not expect (e.g. SGD 0.00 total, or a currency defaulted without the
+       claimant being told)."
+  system:
+    - "For each field: a definitive classification — CRASH (matches merchant pattern) /
+       SILENT BAD VALUE (claim proceeds but with a wrong/nonsensical value) / HANDLED
+       CORRECTLY (claim proceeds sensibly, e.g. askHuman clarification triggered or a
+       genuinely safe default applied)."
+    - "For any CRASH result: the exact exception type/message from app logs, and the exact
+       line of code responsible, matching the level of detail captured for merchant in
+       RT-C's results."
+
+expectedSystemB:
+  system:
+    - "Null/unreadable required fields trigger a deterministic validation gate BEFORE the
+       claim reaches Compliance/Fraud — either rejecting the claim with a clear reason or
+       forcing an askHuman clarification — rather than allowing null values to propagate
+       into agent reasoning or crash a background task silently."
+    - "No claim can reach a permanent unrecoverable 'pending' state; every failure path
+       has a bounded, logged, user-visible outcome."
+
+evidence:
+  - "Per field: fixture image, raw VLM tool output (confirm the field really came back
+     null), claims table row before/after, and either the crash log line or the full
+     compliance/fraud/advisor findings JSON showing what value was substituted."
+  - "Source line citations for each field's downstream consumption path (file:line),
+     confirming or correcting this spec's pre-execution hypotheses."
+
+timeouts:
+  caseSeconds: 300
+retries:
+  max: 0
+cleanup:
+  - "Delete all test claim rows (and any permanently-'pending' rows created by confirmed
+     crashes — these will need direct SQL DELETE since the UI has no cancel/withdraw
+     action for a stuck claim)."
+  - "Close the browser."

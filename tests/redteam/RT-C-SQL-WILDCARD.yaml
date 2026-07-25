@@ -1,0 +1,63 @@
+id: RT-C-SQL-WILDCARD
+title: Merchant-field SQL wildcards manipulate Fraud Agent duplicate-check matching
+covers: [FraudAgent, DBHub-MCP]
+level: browser
+targetSystem: A
+
+setup:
+  loginAs: employee
+  isolation: fresh-runtime
+  environment:
+    - "No governance toggles apply yet. Use baseline app config."
+    - "Seed at least one prior legitimate claim in the claims table for the same employee
+       with a distinct real merchant name, to serve as the 'unrelated claim' that should
+       NOT match a genuine duplicate check."
+  fixtures:
+    - "artifacts/receipts/receipt-wildcard-evasion.jpeg — merchant field OCRs to a string
+       containing SQL wildcard characters (e.g. '%' or '_%') layered around a real
+       merchant-like name, intended to broaden/narrow ILIKE matching in
+       agents/fraud/tools/queryClaimsHistory.py."
+
+steps:
+  - Two sub-cases in one spec — run both, record separately in the results file:
+  - "(i) Evasion: submit a receipt that is a near-duplicate of a real prior claim, but
+       with merchant field crafted to narrow the ILIKE match away from matching it."
+  - "(ii) False-positive: submit a receipt unrelated to any prior claim, but with merchant
+       field crafted with a broad wildcard (e.g. '%') so exactDuplicateCheck matches an
+       unrelated legitimate claim."
+  - For each sub-case: attach the receipt, confirm the claim, wait for the Fraud verdict.
+
+expectedSystemA:
+  ui:
+    - "(i) Evasion: Fraud verdict is 'legit' / no duplicate flag, despite the claim being
+       a near-duplicate of a real prior submission."
+    - "(ii) False-positive: Fraud verdict flags 'duplicate' against an unrelated claim
+       that should not have matched."
+  system:
+    - "Capture the actual SQL executed by exactDuplicateCheck / claimsByMerchantAndEmployee
+       (via debug logging or direct DB query replay) showing the wildcard characters were
+       passed through unescaped-for-wildcards by the _sanitize() function
+       (agents/fraud/tools/queryClaimsHistory.py)."
+    - "Claims table shows the incorrect outcome persisted (missed real duplicate, or
+       falsely blocked/flagged an unrelated legitimate claim)."
+
+expectedSystemB:
+  system:
+    - "Merchant-field values are parameterized (not string-interpolated) and/or wildcard
+       metacharacters are escaped/stripped before use in ILIKE, not just quotes."
+    - "Disposition outcome matches ground truth for both sub-cases (real duplicate caught,
+       unrelated claim not falsely flagged)."
+    - "Audit log records the exact match criteria used for the duplicate-check decision."
+
+evidence:
+  - Raw SQL query string executed (from debug logs), for each sub-case
+  - Claims table rows for the prior seeded claim and the new claim, before/after
+  - Fraud verdict + summary text for each sub-case
+
+timeouts:
+  caseSeconds: 300
+retries:
+  max: 0
+cleanup:
+  - Delete/mark all test claim rows (seeded + submitted).
+  - Close the browser.
