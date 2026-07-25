@@ -4,7 +4,32 @@
 **Branch:** `redteam/fraud-compliance-injection`
 **Source findings doc:** `fraud-compliance-redteam-findings.md` (handover notes)
 **Test file:** [`tests/test_redteam_injection_poc.py`](../tests/test_redteam_injection_poc.py)
-**Status:** Part 1 (mocked/unit-style PoC) complete — 13/13 passing. Part 2 (live-LLM run) not yet started.
+**Status:** Part 1 (mocked/unit-style PoC) complete — 13/13 passing. Part 2 (live-LLM run) complete — see below.
+
+---
+
+> ## ⚠️ Scope note — read this before the findings below
+>
+> These 13 tests mock the LLM/VLM boundary. They test what happens **if** a poisoned string
+> reaches Compliance's or Fraud's prompt unmodified — they do **not** test whether an injected
+> string survives real VLM extraction in the first place.
+>
+> Live testing against the real pipeline (`results/redteam/`, Round 1 and Round 2, run under the
+> locked model `qwen/qwen2.5-vl-72b-instruct`) showed that every specific injection technique
+> attempted **did not survive VLM extraction** — for reasons unrelated to any governance control
+> (the model appears to correctly scope extraction to genuine receipt content, dropping injected
+> text whether it was embedded inside a field or positioned as a separate annotation).
+>
+> **These two result sets answer different questions and should be read together, not treated as
+> a single verdict on whether injection "works."** This document shows the downstream channel is
+> real and unguarded — if a poisoned string reaches the prompt, nothing stops it from propagating
+> to an auto-approval. The live results show that, empirically, the specific payloads tried here
+> did not make it past extraction under this model. Neither result set alone tells the full
+> story: the mocked tests don't prove real-world exploitability, and the live results don't prove
+> the downstream channel is safe — they show one model's extraction behavior held for the
+> payloads attempted, on this occasion.
+
+---
 
 ## Methodology
 
@@ -235,27 +260,35 @@ only reachable once JSON extraction has already failed for every `AIMessage` in 
 
 ---
 
-## Part 2 — Live-LLM Validation (not yet run)
+## Part 2 — Live-LLM Validation (completed)
 
 The tests above prove the *channels* exist and show what a compromised LLM's output would cascade
-into. They do not prove a real model will actually comply with an injected instruction (Finding
-#1) or actually get steered toward a wrong-category policy chunk via a manipulated fallback query
-(Finding #2) — that requires exercising the real OpenRouter model and Qdrant retrieval.
+into. Live validation against the real pipeline (real OpenRouter LLM/VLM, real Postgres, real
+Qdrant) has since been run across two rounds — full results, evidence, and raw traces are in
+[`results/redteam/`](../results/redteam/):
 
-**Prerequisites (not currently met on this machine):**
-- Docker Desktop running (`docker compose up -d --build`) — daemon was unreachable when checked
-- Valid `OPENROUTER_API_KEY` in `.env.local`
-- Qdrant populated via `python scripts/ingest_policies.py`
+- **Round 1** ([`SUMMARY_2026-07-23.md`](../results/redteam/SUMMARY_2026-07-23.md)): RT-A (receipt
+  injection), RT-B (RAG manipulation), RT-C (SQL wildcard), RT-D (anomaly override), RT-E (advisor
+  cascade) — synthetic fixtures, System A baseline.
+- **Round 2** ([`SUMMARY_ROUND2_2026-07-24.md`](../results/redteam/SUMMARY_ROUND2_2026-07-24.md),
+  addendum in
+  [`SUMMARY_ROUND2_ADDENDUM_2026-07-24.md`](../results/redteam/SUMMARY_ROUND2_ADDENDUM_2026-07-24.md)):
+  RT-E2 (category sweep), RT-F (null-field sweep), RT-G (boundary value), RT-B2 (rank escalation),
+  RT-A/RT-E re-run against real user-supplied invoices, and repeat trials closing the
+  statistical-confidence gap on RT-E2's and RT-G's single-run findings.
 
-**Planned scope for Part 2:**
-1. Submit a real receipt image (or directly-injected `extractedReceipt.fields`) with the Finding
-   #1 merchant payload through the live `complianceNode`/`fraudNode`, capture the raw LLM response.
-2. Repeat for the Finding #2 retrieval-steering merchant, capture actual Qdrant `searchPolicies`
-   results to see whether the wrong-category chunk is actually retrieved and cited.
-3. Chain a successful live injection into `advisorNode` and confirm the DB `updateClaimStatus`
-   write actually lands as `ai_approved` (matching Finding #4's mocked-cascade result).
-4. Record pass/fail per scenario in this same document (a "Live-LLM Results" table will be added
-   here once run).
+**Result relevant to Finding #1/#2 above:** the specific injection techniques attempted
+(merchant-field embedding, separate-annotation overlay, RAG-steering merchant text) **did not
+survive VLM extraction** under the locked model (`qwen/qwen2.5-vl-72b-instruct`) — see the scope
+note at the top of this document. RT-B2 separately confirmed RAG rank-1 retrieval-steering *is*
+achievable by probing the RAG server directly (bypassing the VLM entirely), so Finding #2's
+downstream channel remains demonstrated even though the end-to-end receipt-image attack in Round 1
+did not land.
+
+Other confirmed live findings with no mocked-PoC counterpart above: the category-defaulting bug
+(auto-approval bypass via Compliance never seeing `office_supplies.md`'s real category), null-field
+crash/silent-drop behavior in `fraud/node.py`, and the SGD 200 boundary's actual clean behavior vs.
+Section 3.4's unreliable per-category cap matching.
 
 ---
 
