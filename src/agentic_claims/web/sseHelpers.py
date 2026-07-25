@@ -1715,24 +1715,15 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                             message="Error rendering table on tool end",
                         )
             
-            # Drain governance notices and emit them (after each event)
-            # v0.12.1+ emits only actionable notices (clean passes suppressed at source)
-            pending_notices = drain_notices()
-            for notice in pending_notices:
-                # Render each notice as a styled block (fix run-together text)
-                notice_html = (
-                    f'<div class="governance-notice-line flex items-center gap-2 text-xs py-1 px-3 bg-tertiary-container/20 border-l-2 border-tertiary rounded-r">'
-                    f'  <span class="material-symbols-outlined text-tertiary text-[10px]" style="font-variation-settings: \'FILL\' 1;">shield</span>'
-                    f'  <span class="text-tertiary">{notice}</span>'
-                    f'</div>'
-                )
-                # Emit to persistent strip (remains visible after thinking panel collapses)
-                yield ServerSentEvent(raw_data=notice_html, event=SseEvent.GOVERNANCE_PERSISTENT)
-            
-            # Check for governance block message synchronously (no checkpoint lag)
+            # Check for governance block message FIRST (before emitting notices)
             governanceBlockMsg = get_block_message()
             if governanceBlockMsg is not None:
                 governanceBlockedThisTurn = True  # Track that we blocked this turn
+                
+                # Drain notices but DO NOT emit them (discard)
+                # The block bubble already shows these controls; emitting them again
+                # in the persistent strip would create duplicates.
+                drain_notices()  # Discard redundant notices
                 
                 # Render governance message (main thread, distinct styling)
                 governanceHtml = (
@@ -1758,6 +1749,20 @@ async def runGraph(graph, graphInput: dict, request: Request, templates: Jinja2T
                 # Terminate turn (no assistant response follows governance block)
                 yield ServerSentEvent(raw_data="Governance intervention", event=SseEvent.DONE)
                 break
+            else:
+                # Not blocked: emit persistent notices as usual
+                # v0.12.1+ emits only actionable notices (clean passes suppressed at source)
+                pending_notices = drain_notices()
+                for notice in pending_notices:
+                    # Render each notice as a styled block (fix run-together text)
+                    notice_html = (
+                        f'<div class="governance-notice-line flex items-center gap-2 text-xs py-1 px-3 bg-tertiary-container/20 border-l-2 border-tertiary rounded-r">'
+                        f'  <span class="material-symbols-outlined text-tertiary text-[10px]" style="font-variation-settings: \'FILL\' 1;">shield</span>'
+                        f'  <span class="text-tertiary">{notice}</span>'
+                        f'</div>'
+                    )
+                    # Emit to persistent strip (remains visible after thinking panel collapses)
+                    yield ServerSentEvent(raw_data=notice_html, event=SseEvent.GOVERNANCE_PERSISTENT)
 
     except Exception as e:
         logEvent(
