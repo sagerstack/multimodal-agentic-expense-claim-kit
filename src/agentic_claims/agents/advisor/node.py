@@ -327,23 +327,40 @@ async def advisorNode(state: ClaimState) -> dict:
     receiptFields = extractedReceipt.get("fields", {})
     
     # B3 grounding: build trusted_state from extracted receipt + claim data
-    # Lazy import to avoid circular dependency (core.graph imports this module)
+    # Try ContextVar first, fall back to state (ContextVar may not propagate across async tasks)
     from agentic_claims.agents.intake.extractionContext import extractedReceiptVar
     
     trusted_receipt = extractedReceiptVar.get(None)
     claim_data = state.get("claimData", {})
     
-    trusted_state_b3 = {}
+    # BUG FIX: Source trusted values from state if ContextVar not set (async boundary)
     if trusted_receipt and isinstance(trusted_receipt, dict):
         fields = trusted_receipt.get("fields", {})
-        trusted_state_b3 = {
-            "amount": claim_data.get("amountSgd") or fields.get("totalAmount"),
-            "date": fields.get("date"),
-            "vendor": fields.get("merchant"),
-            "currency": fields.get("currency", "SGD"),
-            "compliance_verdict": complianceFindings.get("verdict"),
-            "fraud_verdict": fraudFindings.get("verdict"),
-        }
+        trusted_amount = claim_data.get("amountSgd") or fields.get("totalAmount")
+        trusted_date = fields.get("date")
+        trusted_vendor = fields.get("merchant")
+        trusted_currency = fields.get("currency", "SGD")
+    else:
+        # Fallback to state (extractedReceipt stored in state by intake)
+        extracted_from_state = state.get("extractedReceipt", {}).get("fields", {})
+        trusted_amount = claim_data.get("amountSgd") or extracted_from_state.get("totalAmount")
+        trusted_date = extracted_from_state.get("date")
+        trusted_vendor = extracted_from_state.get("merchant")
+        trusted_currency = extracted_from_state.get("currency", "SGD")
+    
+    # BUG FIX: Read compliance/fraud verdicts UNCONDITIONALLY from state (NOT gated)
+    # These are always in state, don't depend on extractedReceiptVar
+    compliance_verdict = complianceFindings.get("verdict")
+    fraud_verdict = fraudFindings.get("verdict")
+    
+    trusted_state_b3 = {
+        "amount": trusted_amount,
+        "date": trusted_date,
+        "vendor": trusted_vendor,
+        "currency": trusted_currency,
+        "compliance_verdict": compliance_verdict,
+        "fraud_verdict": fraud_verdict,
+    }
     
     # B3 grounding: RAG clauses from compliance findings (already verified)
     rag_clauses_b3 = complianceFindings.get("citedClauses", [])
@@ -535,8 +552,20 @@ async def advisorNode(state: ClaimState) -> dict:
         post_result_b3 = None
         if contentHookRuntime_background and lastContent:
             try:
+                # BUG FIX: Normalize advisor output for GroundingValidator
+                # Extract summary fields to get citedClauses (before final extraction below)
+                temp_summary = _extractAdvisorSummaryFields(agentMessages)
+                
+                # Build normalized dict with GroundingValidator-compatible keys
+                normalized_advisor_output = {
+                    "amount": trusted_state_b3.get("amount"),  # Advisor references the claim amount
+                    "date": trusted_state_b3.get("date"),      # Advisor references the receipt date
+                    "vendor": trusted_state_b3.get("vendor"),  # Advisor references the merchant
+                    "cited_clauses": temp_summary.get("citedClauses", []),  # ← Key fix: cited_clauses not citedClauses
+                }
+                
                 post_result_b3 = await contentHookRuntime_background.post_model_check(
-                    content=str(lastContent),
+                    content=json.dumps(normalized_advisor_output),  # Pass normalized JSON
                     content_type=ContentType.MODEL_OUTPUT,
                     correlation_id=claimId,
                     agent_identity="advisor",
@@ -595,8 +624,18 @@ async def advisorNode(state: ClaimState) -> dict:
                         fallback_messages = result.get("messages", [])
                         fallback_content = fallback_messages[-1].content if fallback_messages else ""
                         if fallback_content:
+                            # BUG FIX: Normalize fallback advisor output for GroundingValidator
+                            fallback_summary = _extractAdvisorSummaryFields(fallback_messages)
+                            
+                            normalized_fallback_output = {
+                                "amount": trusted_state_b3.get("amount"),
+                                "date": trusted_state_b3.get("date"),
+                                "vendor": trusted_state_b3.get("vendor"),
+                                "cited_clauses": fallback_summary.get("citedClauses", []),
+                            }
+                            
                             post_result_b3 = await contentHookRuntime_background.post_model_check(
-                                content=str(fallback_content),
+                                content=json.dumps(normalized_fallback_output),  # Pass normalized JSON
                                 content_type=ContentType.MODEL_OUTPUT,
                                 correlation_id=claimId,
                                 agent_identity="advisor",
