@@ -64,6 +64,14 @@ def buildGovernedAgentLlm(
     - Capture structured fired_controls for embedding in *Findings JSONB
     - Audit automatically via shared sink (unified correlation)
     
+    LIMITATION — LangGraph prebuilts bypass this wrapper:
+    - create_react_agent, create_openai_functions_agent, .with_structured_output, etc.
+      use .bind_tools()/.astream() internally which bypasses GovernedChatOpenRouter.ainvoke
+    - Agents using these patterns (e.g., advisor) must govern at the NODE boundary:
+      call contentHookRuntime_background.pre_model_check / post_model_check explicitly
+      around agent.ainvoke() and capture fired_controls via append_background_governance
+    - Direct llm.ainvoke() calls (e.g., compliance/fraud) are governed by this wrapper
+    
     Args:
         settings: Application Settings
         agent_identity: Agent name for governance correlation ("compliance"|"fraud"|"advisor")

@@ -31,8 +31,11 @@ from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.agents.shared.llmFactory import buildGovernedAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
 from agentic_claims.core.config import getSettings
+from agentic_claims.core.graph import contentHookRuntime_background
 from agentic_claims.core.logging import logEvent
 from agentic_claims.core.state import ClaimState
+from agentic_claims.web.governanceNoticeContext import append_background_governance
+from agentic_governance.core.content_envelope import ContentType
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +60,16 @@ DECISION_LABELS = {
 
 
 def _getAdvisorAgent(useFallback: bool = False):
-    """Create the ReAct advisor agent with its two tools."""
+    """Create the ReAct advisor agent with its two tools.
+    
+    GOVERNANCE LIMITATION: create_react_agent uses .bind_tools()/.astream() internally
+    which bypasses GovernedChatOpenRouter.ainvoke override. The advisor node must
+    govern explicitly at the invocation boundary (pre/post checks around agent.ainvoke).
+    
+    This limitation applies to any LangGraph prebuilt that wraps the model (create_react_agent,
+    create_openai_functions_agent, .with_structured_output, etc.). Direct llm.ainvoke() calls
+    (like compliance/fraud) are governed by the wrapper.
+    """
     settings = getSettings()
     llm = buildGovernedAgentLlm(settings, agent_identity="advisor", temperature=0.2, useFallback=useFallback)
 
@@ -418,6 +430,62 @@ async def advisorNode(state: ClaimState) -> dict:
     )
     llmStartTime = time.time()
 
+    # Pre-check: B1/B2 on advisor input (create_react_agent bypasses wrapper)
+    if contentHookRuntime_background:
+        try:
+            pre_result = await contentHookRuntime_background.pre_model_check(
+                content=contextMessage,
+                content_type=ContentType.INTER_AGENT,
+                correlation_id=claimId,
+                agent_identity="advisor",
+                context={"agent": "advisor", "background": True},
+            )
+            
+            # Capture actionable fired_controls for findings embed
+            if pre_result.fired_controls:
+                for control in pre_result.fired_controls:
+                    result_val = control.get("result", "")
+                    if result_val in ("redacted", "escalated", "blocked", "flagged", "grounding-failed", "concerns-found"):
+                        append_background_governance({
+                            "control": control.get("controlId"),
+                            "name": control.get("name"),
+                            "result": result_val,
+                            "entityTypes": control.get("entityTypes"),
+                            "signalValue": control.get("signalValue"),
+                        })
+            
+            # If governance blocked, return early
+            if not pre_result.should_proceed:
+                logEvent(
+                    logger,
+                    "advisor.governance_blocked",
+                    level=logging.WARNING,
+                    logCategory="governance",
+                    agent="advisor",
+                    claimId=claimId,
+                    message="Advisor input blocked by governance",
+                )
+                # Return escalation decision when governance blocks
+                return await _advisorErrorFallback(
+                    claimId=claimId,
+                    dbClaimId=dbClaimId,
+                    settings=settings,
+                    errorStr="Governance blocked advisor input",
+                    complianceFindings=complianceFindings,
+                    fraudFindings=fraudFindings,
+                )
+        except Exception as gov_exc:
+            logEvent(
+                logger,
+                "advisor.governance_error",
+                level=logging.WARNING,
+                logCategory="governance",
+                agent="advisor",
+                claimId=claimId,
+                error=str(gov_exc),
+                message="Pre-check governance failed — continuing",
+            )
+
     try:
         result = await agent.ainvoke(agentInput)
         llmElapsed = round(time.time() - llmStartTime, 2)
@@ -437,6 +505,44 @@ async def advisorNode(state: ClaimState) -> dict:
             payload={"lastMessageContent": lastContent[:2000] if isinstance(lastContent, str) else str(lastContent)[:2000]},
             message="Advisor LLM response",
         )
+        
+        # Post-check: B2 PII + B4 judge on advisor output (create_react_agent bypasses wrapper)
+        if contentHookRuntime_background and lastContent:
+            try:
+                post_result = await contentHookRuntime_background.post_model_check(
+                    content=str(lastContent),
+                    content_type=ContentType.MODEL_OUTPUT,
+                    correlation_id=claimId,
+                    agent_identity="advisor",
+                    context={"agent": "advisor", "background": True},
+                    trusted_state={},
+                    rag_clauses=None,
+                    required_evidence_fields=None,
+                )
+                
+                # Capture actionable fired_controls for findings embed
+                if post_result.fired_controls:
+                    for control in post_result.fired_controls:
+                        result_val = control.get("result", "")
+                        if result_val in ("redacted", "escalated", "blocked", "flagged", "grounding-failed", "concerns-found"):
+                            append_background_governance({
+                                "control": control.get("controlId"),
+                                "name": control.get("name"),
+                                "result": result_val,
+                                "entityTypes": control.get("entityTypes"),
+                                "signalValue": control.get("signalValue"),
+                            })
+            except Exception as gov_exc:
+                logEvent(
+                    logger,
+                    "advisor.governance_error",
+                    level=logging.WARNING,
+                    logCategory="governance",
+                    agent="advisor",
+                    claimId=claimId,
+                    error=str(gov_exc),
+                    message="Post-check governance failed — continuing",
+                )
 
     except Exception as e:
         llmElapsed = round(time.time() - llmStartTime, 2)
@@ -456,6 +562,47 @@ async def advisorNode(state: ClaimState) -> dict:
             try:
                 fallbackAgent = _getAdvisorAgent(useFallback=True)
                 result = await fallbackAgent.ainvoke(agentInput)
+                
+                # Post-check on fallback result (pre-check already ran before main try)
+                if contentHookRuntime_background:
+                    try:
+                        fallback_messages = result.get("messages", [])
+                        fallback_content = fallback_messages[-1].content if fallback_messages else ""
+                        if fallback_content:
+                            post_result = await contentHookRuntime_background.post_model_check(
+                                content=str(fallback_content),
+                                content_type=ContentType.MODEL_OUTPUT,
+                                correlation_id=claimId,
+                                agent_identity="advisor",
+                                context={"agent": "advisor", "background": True, "fallback": True},
+                                trusted_state={},
+                                rag_clauses=None,
+                                required_evidence_fields=None,
+                            )
+                            
+                            # Capture actionable fired_controls
+                            if post_result.fired_controls:
+                                for control in post_result.fired_controls:
+                                    result_val = control.get("result", "")
+                                    if result_val in ("redacted", "escalated", "blocked", "flagged", "grounding-failed", "concerns-found"):
+                                        append_background_governance({
+                                            "control": control.get("controlId"),
+                                            "name": control.get("name"),
+                                            "result": result_val,
+                                            "entityTypes": control.get("entityTypes"),
+                                            "signalValue": control.get("signalValue"),
+                                        })
+                    except Exception as gov_exc:
+                        logEvent(
+                            logger,
+                            "advisor.governance_error",
+                            level=logging.WARNING,
+                            logCategory="governance",
+                            agent="advisor",
+                            claimId=claimId,
+                            error=str(gov_exc),
+                            message="Fallback post-check governance failed — continuing",
+                        )
             except Exception as fallbackErr:
                 return await _advisorErrorFallback(
                     claimId=claimId,
