@@ -325,6 +325,28 @@ async def advisorNode(state: ClaimState) -> dict:
     intakeFindings = state.get("intakeFindings") or {}
     extractedReceipt = state.get("extractedReceipt") or {}
     receiptFields = extractedReceipt.get("fields", {})
+    
+    # B3 grounding: build trusted_state from extracted receipt + claim data
+    # Lazy import to avoid circular dependency (core.graph imports this module)
+    from agentic_claims.agents.intake.extractionContext import extractedReceiptVar
+    
+    trusted_receipt = extractedReceiptVar.get(None)
+    claim_data = state.get("claimData", {})
+    
+    trusted_state_b3 = {}
+    if trusted_receipt and isinstance(trusted_receipt, dict):
+        fields = trusted_receipt.get("fields", {})
+        trusted_state_b3 = {
+            "amount": claim_data.get("amountSgd") or fields.get("totalAmount"),
+            "date": fields.get("date"),
+            "vendor": fields.get("merchant"),
+            "currency": fields.get("currency", "SGD"),
+            "compliance_verdict": complianceFindings.get("verdict"),
+            "fraud_verdict": fraudFindings.get("verdict"),
+        }
+    
+    # B3 grounding: RAG clauses from compliance findings (already verified)
+    rag_clauses_b3 = complianceFindings.get("citedClauses", [])
 
     # Read dbClaimId directly from state (written by intakeNode after submitClaim)
     dbClaimIdEarly = state.get("dbClaimId")
@@ -509,23 +531,24 @@ async def advisorNode(state: ClaimState) -> dict:
             message="Advisor LLM response",
         )
         
-        # Post-check: B2 PII + B4 judge on advisor output (create_react_agent bypasses wrapper)
+        # Post-check: B2 PII + B3 grounding + B4 judge on advisor output (create_react_agent bypasses wrapper)
+        post_result_b3 = None
         if contentHookRuntime_background and lastContent:
             try:
-                post_result = await contentHookRuntime_background.post_model_check(
+                post_result_b3 = await contentHookRuntime_background.post_model_check(
                     content=str(lastContent),
                     content_type=ContentType.MODEL_OUTPUT,
                     correlation_id=claimId,
                     agent_identity="advisor",
                     context={"agent": "advisor", "background": True},
-                    trusted_state={},
-                    rag_clauses=None,
+                    trusted_state=trusted_state_b3,  # B3 grounding validation
+                    rag_clauses=rag_clauses_b3,
                     required_evidence_fields=None,
                 )
                 
                 # Capture actionable fired_controls for findings embed
-                if post_result.fired_controls:
-                    for control in post_result.fired_controls:
+                if post_result_b3.fired_controls:
+                    for control in post_result_b3.fired_controls:
                         result_val = control.get("result", "")
                         if result_val in ("redacted", "escalated", "blocked", "flagged", "grounding-failed", "concerns-found"):
                             append_background_governance({
@@ -572,20 +595,20 @@ async def advisorNode(state: ClaimState) -> dict:
                         fallback_messages = result.get("messages", [])
                         fallback_content = fallback_messages[-1].content if fallback_messages else ""
                         if fallback_content:
-                            post_result = await contentHookRuntime_background.post_model_check(
+                            post_result_b3 = await contentHookRuntime_background.post_model_check(
                                 content=str(fallback_content),
                                 content_type=ContentType.MODEL_OUTPUT,
                                 correlation_id=claimId,
                                 agent_identity="advisor",
                                 context={"agent": "advisor", "background": True, "fallback": True},
-                                trusted_state={},
-                                rag_clauses=None,
+                                trusted_state=trusted_state_b3,  # B3 grounding validation
+                                rag_clauses=rag_clauses_b3,
                                 required_evidence_fields=None,
                             )
                             
                             # Capture actionable fired_controls
-                            if post_result.fired_controls:
-                                for control in post_result.fired_controls:
+                            if post_result_b3.fired_controls:
+                                for control in post_result_b3.fired_controls:
                                     result_val = control.get("result", "")
                                     if result_val in ("redacted", "escalated", "blocked", "flagged", "grounding-failed", "concerns-found"):
                                         append_background_governance({
@@ -627,9 +650,52 @@ async def advisorNode(state: ClaimState) -> dict:
             )
 
     # ------------------------------------------------------------------
-    # 4. Extract decision from agent output
+    # 4. Extract decision from agent output + B3 grounding check
     # ------------------------------------------------------------------
     advisorDecision = _extractAdvisorDecision(result["messages"])
+    
+    # B3 inline advisor-specific consistency check: auto_approve requires compliance=pass AND fraud=clean/low_risk
+    grounding_failed = False
+    grounding_reasons = []
+    
+    # Check if B3 GroundingValidator already flagged issues (from post_model_check)
+    if post_result_b3 and post_result_b3.fired_controls:
+        for control in post_result_b3.fired_controls:
+            if control.get("controlId") == "B3" and control.get("result") in ("grounding-failed", "escalated", "blocked"):
+                grounding_failed = True
+                grounding_reasons.append(control.get("name", "Grounding validation failed"))
+    
+    # Inline decision-consistency check (advisor-specific)
+    if advisorDecision == "auto_approve":
+        compliance_verdict = trusted_state_b3.get("compliance_verdict")
+        fraud_verdict = trusted_state_b3.get("fraud_verdict")
+        
+        if compliance_verdict != "pass":
+            grounding_failed = True
+            grounding_reasons.append(f"auto_approve requires compliance=pass, got {compliance_verdict}")
+        
+        if fraud_verdict not in ("clean", "legit", "low_risk"):
+            grounding_failed = True
+            grounding_reasons.append(f"auto_approve requires fraud=clean/legit/low_risk, got {fraud_verdict}")
+    
+    # If grounding failed, DOWNGRADE decision to escalate_to_reviewer (before updateClaimStatus)
+    original_decision = advisorDecision
+    if grounding_failed:
+        advisorDecision = "escalate_to_reviewer"
+        grounding_override_reason = f"[Governance B3] {'; '.join(grounding_reasons)}"
+        logEvent(
+            logger,
+            "advisor.b3_grounding_failed",
+            level=logging.WARNING,
+            logCategory="governance",
+            agent="advisor",
+            claimId=claimId,
+            originalDecision=original_decision,
+            downgradedDecision=advisorDecision,
+            reasons=grounding_reasons,
+            message="B3 grounding failed — downgraded decision to escalate_to_reviewer",
+        )
+    
     newStatus = DECISION_TO_STATUS.get(advisorDecision, "escalated")
     approvedBy = "agent" if advisorDecision == "auto_approve" else ""
 
@@ -652,7 +718,11 @@ async def advisorNode(state: ClaimState) -> dict:
 
     advisorFindingsPayload = {
         "decision": advisorDecision,
-        "reasoning": advisorSummaryFields.get("reasoning", ""),
+        "reasoning": (
+            grounding_override_reason + ". Original: " + advisorSummaryFields.get("reasoning", "")
+            if grounding_failed
+            else advisorSummaryFields.get("reasoning", "")
+        ),
         "summary": advisorSummaryFields.get("summary", ""),
         "citedClauses": advisorSummaryFields.get("citedClauses", []),
         "complianceSummary": complianceFindings.get("summary", ""),
@@ -661,9 +731,24 @@ async def advisorNode(state: ClaimState) -> dict:
         "fraudVerdict": fraudFindings.get("verdict"),
     }
     
-    # Drain and embed governance findings (B1/B2 from governed LLM)
+    # Drain and embed governance findings (B1/B2/B3 from governed LLM + inline checks)
     from agentic_claims.web.governanceNoticeContext import drain_background_governance
     governance_controls = drain_background_governance()
+    
+    # Add B3 grounding failure from inline consistency check if it failed
+    if grounding_failed and not any(c.get("control") == "B3" for c in governance_controls):
+        governance_controls.append({
+            "control": "B3",
+            "result": "escalated",
+            "name": "Output grounding",
+            "entityTypes": None,
+            "details": {
+                "original_decision": original_decision,
+                "downgraded_to": advisorDecision,
+                "reasons": grounding_reasons,
+            },
+        })
+    
     if governance_controls:
         # Embed structured governance data in findings (PII-safe: IDs/results/types only)
         advisorFindingsPayload["governance"] = [
@@ -672,6 +757,7 @@ async def advisorNode(state: ClaimState) -> dict:
                 "result": c.get("result"),
                 "reason": c.get("name"),
                 "entityTypes": c.get("entityTypes"),
+                "details": c.get("details"),
             }
             for c in governance_controls
         ]
