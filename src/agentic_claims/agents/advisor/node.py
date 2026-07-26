@@ -31,7 +31,6 @@ from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.agents.shared.llmFactory import buildGovernedAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
 from agentic_claims.core.config import getSettings
-from agentic_claims.core.graph import contentHookRuntime_background
 from agentic_claims.core.logging import logEvent
 from agentic_claims.core.state import ClaimState
 from agentic_claims.web.governanceNoticeContext import append_background_governance
@@ -431,6 +430,10 @@ async def advisorNode(state: ClaimState) -> dict:
     llmStartTime = time.time()
 
     # Pre-check: B1/B2 on advisor input (create_react_agent bypasses wrapper)
+    # Lazy import: core.graph imports this module at graph-build time, so a top-level
+    # import here creates a circular import. Imported at call time (after graph build),
+    # contentHookRuntime_background is set to the real runtime instance.
+    from agentic_claims.core.graph import contentHookRuntime_background
     if contentHookRuntime_background:
         try:
             pre_result = await contentHookRuntime_background.pre_model_check(
