@@ -2,7 +2,7 @@
 
 [[package]]
 name = "agentic-governance"
-version = "0.10.0"
+version = "0.12.1"
 description = "App-agnostic runtime governance layer"
 optional = false
 python-versions = ">=3.11"

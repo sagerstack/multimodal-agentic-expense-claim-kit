@@ -228,3 +228,6 @@ eval/results/*.json
 # Upload artifacts
 static/uploads/
 .governance-audit/
+.deepeval/
+~$*.xlsx
+*/~$*.xlsx
