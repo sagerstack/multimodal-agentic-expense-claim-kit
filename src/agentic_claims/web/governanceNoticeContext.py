@@ -15,6 +15,12 @@ governanceBlockHolderVar: ContextVar[list[str] | None] = ContextVar(
     "governanceBlockHolderVar", default=None
 )
 
+# Background agent governance (compliance/fraud/advisor) - structured fired_controls
+# Stores [{controlId, name, result, entityTypes, signalValue}, ...] for embedding in *Findings
+backgroundGovernanceVar: ContextVar[list[dict] | None] = ContextVar(
+    "backgroundGovernanceVar", default=None
+)
+
 
 def init_notice_queue() -> None:
     """Initialize an empty notice queue and block holder for this request.
@@ -24,6 +30,7 @@ def init_notice_queue() -> None:
     """
     governanceNoticeQueueVar.set([])
     governanceBlockHolderVar.set([])  # mutable holder for cross-task visibility
+    backgroundGovernanceVar.set([])  # mutable holder for background agent governance
 
 
 def append_notice(notice: str) -> None:
@@ -61,3 +68,32 @@ def get_block_message() -> str | None:
     message = holder[0]
     holder.clear()  # MUTATE shared object
     return message
+
+
+def append_background_governance(fired_control: dict) -> None:
+    """Append a fired governance control to background agent collection.
+    
+    Used by compliance/fraud/advisor to collect structured governance data
+    for embedding in their *Findings JSONB (not chat notices).
+    
+    Args:
+        fired_control: Structured control dict from ContentHookResult.fired_controls
+                      {controlId, name, result, entityTypes, signalValue, ...}
+    """
+    holder = backgroundGovernanceVar.get(None)
+    if holder is not None:
+        holder.append(fired_control)  # MUTATE shared object
+
+
+def drain_background_governance() -> list[dict]:
+    """Drain and return all background agent governance controls, clearing the holder.
+    
+    Returns:
+        List of structured fired_control dicts for embedding in *Findings.governance
+    """
+    holder = backgroundGovernanceVar.get(None)
+    if holder is None:
+        return []
+    controls = list(holder)
+    holder.clear()  # MUTATE shared object
+    return controls

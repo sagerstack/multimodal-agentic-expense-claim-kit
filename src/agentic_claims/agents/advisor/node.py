@@ -28,7 +28,7 @@ from agentic_claims.agents.advisor.prompts.advisorSystemPrompt import ADVISOR_SY
 from agentic_claims.agents.advisor.tools.searchPolicies import searchPolicies
 from agentic_claims.agents.advisor.tools.updateClaimStatus import updateClaimStatus
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
-from agentic_claims.agents.shared.llmFactory import buildAgentLlm
+from agentic_claims.agents.shared.llmFactory import buildGovernedAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.logging import logEvent
@@ -59,7 +59,7 @@ DECISION_LABELS = {
 def _getAdvisorAgent(useFallback: bool = False):
     """Create the ReAct advisor agent with its two tools."""
     settings = getSettings()
-    llm = buildAgentLlm(settings, temperature=0.2, useFallback=useFallback)
+    llm = buildGovernedAgentLlm(settings, agent_identity="advisor", temperature=0.2, useFallback=useFallback)
 
     return create_react_agent(
         model=llm,
@@ -510,6 +510,21 @@ async def advisorNode(state: ClaimState) -> dict:
         "complianceVerdict": complianceFindings.get("verdict"),
         "fraudVerdict": fraudFindings.get("verdict"),
     }
+    
+    # Drain and embed governance findings (B1/B2 from governed LLM)
+    from agentic_claims.web.governanceNoticeContext import drain_background_governance
+    governance_controls = drain_background_governance()
+    if governance_controls:
+        # Embed structured governance data in findings (PII-safe: IDs/results/types only)
+        advisorFindingsPayload["governance"] = [
+            {
+                "control": c.get("control"),
+                "result": c.get("result"),
+                "reason": c.get("name"),
+                "entityTypes": c.get("entityTypes"),
+            }
+            for c in governance_controls
+        ]
 
     if dbClaimId is not None:
         try:

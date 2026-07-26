@@ -22,7 +22,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from agentic_claims.agents.compliance.prompts.complianceSystemPrompt import COMPLIANCE_SYSTEM_PROMPT
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
-from agentic_claims.agents.shared.llmFactory import buildAgentLlm
+from agentic_claims.agents.shared.llmFactory import buildGovernedAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.logging import logEvent
@@ -226,10 +226,10 @@ async def complianceNode(state: ClaimState) -> dict:
     )
 
     # ------------------------------------------------------------------
-    # 4. Call LLM with 402 fallback
+    # 4. Call LLM with 402 fallback (governed for B1/B2)
     # ------------------------------------------------------------------
     modelName = settings.openrouter_model_llm
-    llm = buildAgentLlm(settings, temperature=0.1)
+    llm = buildGovernedAgentLlm(settings, agent_identity="compliance", temperature=0.1)
     llmMessages = [
         SystemMessage(content=COMPLIANCE_SYSTEM_PROMPT),
         HumanMessage(content=evaluationPrompt),
@@ -291,7 +291,7 @@ async def complianceNode(state: ClaimState) -> dict:
                 error=errorStr,
                 message="Primary LLM returned 402 in complianceNode — falling back",
             )
-            llm = buildAgentLlm(settings, temperature=0.1, useFallback=True)
+            llm = buildGovernedAgentLlm(settings, agent_identity="compliance", temperature=0.1, useFallback=True)
             try:
                 response = await llm.ainvoke(llmMessages)
                 rawContent = response.content
@@ -371,6 +371,21 @@ async def complianceNode(state: ClaimState) -> dict:
     # 5. Parse response into structured findings
     # ------------------------------------------------------------------
     complianceFindings = _parseComplianceResponse(rawContent)
+    
+    # Drain and embed governance findings (B1/B2 from governed LLM)
+    from agentic_claims.web.governanceNoticeContext import drain_background_governance
+    governance_controls = drain_background_governance()
+    if governance_controls:
+        # Embed structured governance data in findings (PII-safe: IDs/results/types only)
+        complianceFindings["governance"] = [
+            {
+                "control": c.get("control"),
+                "result": c.get("result"),
+                "reason": c.get("name"),
+                "entityTypes": c.get("entityTypes"),
+            }
+            for c in governance_controls
+        ]
 
     verdict = complianceFindings.get("verdict", "unknown").upper()
     summary = complianceFindings.get("summary", "")

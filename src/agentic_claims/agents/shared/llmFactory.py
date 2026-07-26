@@ -3,6 +3,8 @@
 import httpx
 from langchain_openrouter import ChatOpenRouter
 
+from agentic_claims.agents.shared.governedChatOpenRouter import GovernedChatOpenRouter
+
 
 def buildAgentLlm(
     settings,
@@ -43,3 +45,42 @@ def buildAgentLlm(
     llm.client.sdk_configuration.async_client = httpx.AsyncClient(verify=False, follow_redirects=True)
 
     return llm
+
+
+def buildGovernedAgentLlm(
+    settings,
+    agent_identity: str,
+    temperature: float = 0.1,
+    useFallback: bool = False,
+    reasoning: dict | None = None,
+) -> GovernedChatOpenRouter:
+    """Build ChatOpenRouter with B1/B2 content governance for background agents.
+    
+    Wraps the base buildAgentLlm() so compliance/fraud/advisor get automatic
+    B1 (injection) + B2 (PII) checks on both input prompts and output responses.
+    
+    Background agents (compliance/fraud/advisor):
+    - Run governance via contentHookRuntime_background (NO chat notices)
+    - Capture structured fired_controls for embedding in *Findings JSONB
+    - Audit automatically via shared sink (unified correlation)
+    
+    Args:
+        settings: Application Settings
+        agent_identity: Agent name for governance correlation ("compliance"|"fraud"|"advisor")
+        temperature: LLM temperature
+        useFallback: Use fallback model
+        reasoning: Optional reasoning config
+    
+    Returns:
+        GovernedChatOpenRouter wrapper with pre/post content hooks
+    """
+    from agentic_claims.core.graph import contentHookRuntime_background
+    
+    base_llm = buildAgentLlm(settings, temperature, useFallback, reasoning)
+    
+    # Return wrapped LLM with background governance (no chat notices)
+    return GovernedChatOpenRouter(
+        base_llm=base_llm,
+        agent_identity=agent_identity,
+        content_hook_runtime=contentHookRuntime_background,
+    )

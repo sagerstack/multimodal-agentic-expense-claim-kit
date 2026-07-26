@@ -145,6 +145,45 @@ async def extractReceiptFields(claimId: str) -> dict:
             if lines and lines[-1].strip() == "```":
                 lines = lines[:-1]  # Remove closing ```
             rawContent = "\n".join(lines)
+        
+        # B1: Run injection check on OCR text (untrusted multimodal input)
+        from agentic_claims.core.graph import contentHookRuntime
+        from agentic_governance.core.content_envelope import ContentType
+        
+        if contentHookRuntime:
+            try:
+                pre_result = await contentHookRuntime.pre_model_check(
+                    content=rawContent,
+                    content_type=ContentType.OCR_TEXT,
+                    correlation_id=claimId,
+                    agent_identity="extractReceiptFields",
+                    context={"tool": "extractReceiptFields", "vlm": True},
+                )
+                
+                # If injection detected, flag but continue (audit only, no block)
+                # The audit entry is written automatically via shared sink
+                if not pre_result.should_proceed:
+                    logEvent(
+                        logger,
+                        "tool.extractReceiptFields.injection_detected",
+                        level=logging.WARNING,
+                        logCategory="governance",
+                        toolName="extractReceiptFields",
+                        claimId=claimId,
+                        message="B1 injection detected in OCR text — flagged for review",
+                    )
+            except Exception as gov_exc:
+                # Governance check failed — log but don't block extraction
+                logEvent(
+                    logger,
+                    "tool.extractReceiptFields.governance_error",
+                    level=logging.WARNING,
+                    logCategory="governance",
+                    toolName="extractReceiptFields",
+                    claimId=claimId,
+                    error=str(gov_exc),
+                    message="Governance check failed on OCR text — continuing",
+                )
 
         try:
             result = json.loads(rawContent)

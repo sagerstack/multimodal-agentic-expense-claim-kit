@@ -41,8 +41,9 @@ mcpCallTool = _realMcpCallTool
 nodeIdentityVar: ContextVar[str | None] = ContextVar("nodeIdentityVar", default=None)
 dbClaimIdVar: ContextVar[int | None] = ContextVar("dbClaimIdVar", default=None)
 
-# Group B content governance runtime (installed once per graph build)
-contentHookRuntime = None
+# Group B content governance runtimes (installed once per graph build)
+contentHookRuntime = None  # Intake: live chat notices
+contentHookRuntime_background = None  # Background agents: audit + findings embed, no chat
 
 _MCP_CALL_TOOL_IMPORTERS = (
     "agentic_claims.agents.advisor.node",
@@ -65,7 +66,7 @@ _MCP_CALL_TOOL_IMPORTERS = (
 
 def _installGovernedMcpBoundary() -> None:
     """Install governance and replace every bound import of the real MCP boundary."""
-    global contentHookRuntime
+    global contentHookRuntime, contentHookRuntime_background
     from agentic_claims.web.governanceNoticeContext import append_notice
     
     # Build ONE shared audit sink for unified action + content audit correlation
@@ -92,9 +93,19 @@ def _installGovernedMcpBoundary() -> None:
         setattr(import_module(moduleName), "mcpCallTool", governedMcpCallTool)
     
     # Group B: content governance (model I/O boundary)
+    # TWO runtimes: intake (chat notices) + background (audit + findings embed, NO chat)
+    
+    # Intake runtime: live chat notices for interactive user-facing governance
     contentHookRuntime = install_content_hooks(
         audit_sink=sharedAuditSink,
         notice_callback=notice_callback,
+    )
+    
+    # Background agent runtime: audit + findings embed, NO chat notices
+    # Used by compliance/fraud/advisor (post-submission, not interactive)
+    contentHookRuntime_background = install_content_hooks(
+        audit_sink=sharedAuditSink,
+        notice_callback=None,  # No chat notices for background agents
     )
 
 
