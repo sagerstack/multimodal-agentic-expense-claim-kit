@@ -69,11 +69,11 @@ class GovernedChatOpenRouter:
         else:
             latest_content = str(input)
         
-        # Pre-check: run B1/B2 on input
+        # Pre-check: run B1/B2 on input (inter-agent messages, not user chat)
         if self._content_hook_runtime and latest_content:
             pre_result = await self._content_hook_runtime.pre_model_check(
                 content=latest_content,
-                content_type=ContentType.CHAT_INPUT,
+                content_type=ContentType.INTER_AGENT,
                 correlation_id=correlation_id,
                 agent_identity=self._agent_identity,
                 context={"agent": self._agent_identity, "background": True},
