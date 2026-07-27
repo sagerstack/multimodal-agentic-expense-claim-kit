@@ -22,6 +22,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from agentic_claims.agents.compliance.prompts.complianceSystemPrompt import COMPLIANCE_SYSTEM_PROMPT
 from agentic_claims.agents.intake.utils import mcpClient as _mcpClientMod
+# Expose symbol for test monkeypatch compatibility
+mcpCallTool = _mcpClientMod.mcpCallTool
 from agentic_claims.agents.shared.llmFactory import buildGovernedAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
 from agentic_claims.core.config import getSettings
@@ -123,7 +125,7 @@ async def complianceNode(state: ClaimState) -> dict:
     # Write start audit entry so the timeline shows "Processing"
     if dbClaimId is not None:
         try:
-            await _mcpClientMod.mcpCallTool(
+            await mcpCallTool(
                 serverUrl=settings.db_mcp_url,
                 toolName="insertAuditLog",
                 arguments={
@@ -182,7 +184,7 @@ async def complianceNode(state: ClaimState) -> dict:
         message="Querying RAG MCP for policy rules",
     )
 
-    policyResults = await _mcpClientMod.mcpCallTool(
+    policyResults = await mcpCallTool(
         serverUrl=settings.rag_mcp_url,
         toolName="searchPolicies",
         arguments={"query": policyQuery, "limit": 8},
@@ -350,7 +352,7 @@ async def complianceNode(state: ClaimState) -> dict:
                     "violations": [],
                     "summary": complianceFindings["summary"],
                 })
-                await _mcpClientMod.mcpCallTool(
+                await mcpCallTool(
                     serverUrl=settings.db_mcp_url,
                     toolName="insertAuditLog",
                     arguments={
@@ -582,7 +584,7 @@ async def complianceNode(state: ClaimState) -> dict:
                 "violations": complianceFindings.get("violations"),
                 "summary": summary,
             })
-            await _mcpClientMod.mcpCallTool(
+            await mcpCallTool(
                 serverUrl=settings.db_mcp_url,
                 toolName="insertAuditLog",
                 arguments={
