@@ -21,7 +21,7 @@ import time
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from agentic_claims.agents.compliance.prompts.complianceSystemPrompt import COMPLIANCE_SYSTEM_PROMPT
-from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
+from agentic_claims.agents.intake.utils import mcpClient as _mcpClientMod
 from agentic_claims.agents.shared.llmFactory import buildGovernedAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
 from agentic_claims.core.config import getSettings
@@ -123,7 +123,7 @@ async def complianceNode(state: ClaimState) -> dict:
     # Write start audit entry so the timeline shows "Processing"
     if dbClaimId is not None:
         try:
-            await mcpCallTool(
+            await _mcpClientMod.mcpCallTool(
                 serverUrl=settings.db_mcp_url,
                 toolName="insertAuditLog",
                 arguments={
@@ -182,7 +182,7 @@ async def complianceNode(state: ClaimState) -> dict:
         message="Querying RAG MCP for policy rules",
     )
 
-    policyResults = await mcpCallTool(
+    policyResults = await _mcpClientMod.mcpCallTool(
         serverUrl=settings.rag_mcp_url,
         toolName="searchPolicies",
         arguments={"query": policyQuery, "limit": 8},
@@ -229,16 +229,17 @@ async def complianceNode(state: ClaimState) -> dict:
     # 4. Call LLM with 402 fallback (governed for B1/B2)
     # ------------------------------------------------------------------
     modelName = settings.openrouter_model_llm
-    llm = buildGovernedAgentLlm(settings, agent_identity="compliance", temperature=0.1)
+    from agentic_claims.agents.shared import llmFactory as _llmFactoryMod
+    llm = _llmFactoryMod.buildGovernedAgentLlm(settings, agent_identity="compliance", temperature=0.1)
     llmMessages = [
         SystemMessage(content=COMPLIANCE_SYSTEM_PROMPT),
         HumanMessage(content=evaluationPrompt),
     ]
 
     # Log the exact SDK params to debug why OpenRouter takes 500s vs 0.1s direct
-    sdkParams = llm._default_params
     try:
-        sdkParamsLog = {k: str(v)[:200] for k, v in sdkParams.items()}
+        sdkParams = getattr(llm, "_default_params", {}) or {}
+        sdkParamsLog = {k: str(v)[:200] for k, v in sdkParams.items()} if isinstance(sdkParams, dict) else {}
     except Exception:
         sdkParamsLog = {}
     logEvent(
@@ -291,7 +292,8 @@ async def complianceNode(state: ClaimState) -> dict:
                 error=errorStr,
                 message="Primary LLM returned 402 in complianceNode — falling back",
             )
-            llm = buildGovernedAgentLlm(settings, agent_identity="compliance", temperature=0.1, useFallback=True)
+            from agentic_claims.agents.shared import llmFactory as _llmFactoryMod
+            llm = _llmFactoryMod.buildGovernedAgentLlm(settings, agent_identity="compliance", temperature=0.1, useFallback=True)
             try:
                 response = await llm.ainvoke(llmMessages)
                 rawContent = response.content
@@ -348,7 +350,7 @@ async def complianceNode(state: ClaimState) -> dict:
                     "violations": [],
                     "summary": complianceFindings["summary"],
                 })
-                await mcpCallTool(
+                await _mcpClientMod.mcpCallTool(
                     serverUrl=settings.db_mcp_url,
                     toolName="insertAuditLog",
                     arguments={
@@ -580,7 +582,7 @@ async def complianceNode(state: ClaimState) -> dict:
                 "violations": complianceFindings.get("violations"),
                 "summary": summary,
             })
-            await mcpCallTool(
+            await _mcpClientMod.mcpCallTool(
                 serverUrl=settings.db_mcp_url,
                 toolName="insertAuditLog",
                 arguments={
