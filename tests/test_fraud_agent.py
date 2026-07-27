@@ -68,7 +68,7 @@ async def testFraudLegitNoDuplicates():
         "agentic_claims.agents.fraud.node.mcpCallTool",
         new_callable=AsyncMock,
     ) as mockAuditMcp, patch(
-        "agentic_claims.agents.fraud.node.buildAgentLlm",
+        "agentic_claims.agents.fraud.node.buildGovernedAgentLlm",
         return_value=mockLlm,
     ):
         # All 3 DB queries return empty (no history)
@@ -112,7 +112,7 @@ async def testFraudExactDuplicateShortCircuit():
         "agentic_claims.agents.fraud.node.mcpCallTool",
         new_callable=AsyncMock,
     ) as mockAuditMcp, patch(
-        "agentic_claims.agents.fraud.node.buildAgentLlm",
+        "agentic_claims.agents.fraud.node.buildGovernedAgentLlm",
         return_value=mockLlm,
     ):
         # First call (exactDuplicateCheck) returns a match; others return empty
@@ -155,7 +155,7 @@ async def testFraudSuspiciousFrequencyAnomaly():
         "agentic_claims.agents.fraud.node.mcpCallTool",
         new_callable=AsyncMock,
     ) as mockAuditMcp, patch(
-        "agentic_claims.agents.fraud.node.buildAgentLlm",
+        "agentic_claims.agents.fraud.node.buildGovernedAgentLlm",
         return_value=mockLlm,
     ):
         # No exact duplicate, but many recent claims
@@ -189,7 +189,7 @@ async def testFraudAuditLogWritten():
         "agentic_claims.agents.fraud.node.mcpCallTool",
         new_callable=AsyncMock,
     ) as mockAuditMcp, patch(
-        "agentic_claims.agents.fraud.node.buildAgentLlm",
+        "agentic_claims.agents.fraud.node.buildGovernedAgentLlm",
         return_value=mockLlm,
     ):
         mockDbMcp.return_value = []

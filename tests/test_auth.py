@@ -16,8 +16,19 @@ def setTestEnv():
 
 @pytest.fixture
 def client():
-    """TestClient with mocked lifespan and no real DB."""
-    with patch("agentic_claims.core.graph.getCompiledGraph") as mockGetGraph:
+    """TestClient with mocked lifespan and no real DB.
+
+    NOTE: Patch the binding in `agentic_claims.web.main`, NOT the source
+    module `agentic_claims.core.graph`. main.py does
+    `from agentic_claims.core.graph import getCompiledGraph` at module load,
+    so the lifespan calls main.getCompiledGraph (a local binding), not
+    agentic_claims.core.graph.getCompiledGraph. Patching the source module
+    is a no-op for the lifespan, which then triggers the real getCompiledGraph
+    -> buildGraph -> _installGovernedMcpBoundary path, installing
+    `contentHookRuntime` as a side effect and polluting later tests that
+    rely on it being None.
+    """
+    with patch("agentic_claims.web.main.getCompiledGraph") as mockGetGraph:
         mockGraph = AsyncMock()
         mockPool = AsyncMock()
         mockGetGraph.return_value = (mockGraph, mockPool)
