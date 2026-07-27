@@ -186,6 +186,43 @@ def _extractAdvisorSummaryFields(messages: list) -> dict:
     }
 
 
+def _extractReviewerExplanation(*results) -> str | None:
+    """Best-effort extraction of a reviewer-facing B6 explanation from governance results.
+
+    Supports multiple attribute/key spellings to avoid tight coupling to runtime internals.
+    Returns the first non-empty string found.
+    """
+    candidate_keys = [
+        "explanation_reviewer",
+        "reviewer_explanation",
+        "explanationReviewer",
+        "reviewerExplanation",
+        "b6_explanation",
+        "explanation",  # fallback (if runtime exposes a single explanation)
+    ]
+    for res in results:
+        if res is None:
+            continue
+        # Attribute access (object-like)
+        for k in candidate_keys:
+            try:
+                val = getattr(res, k)
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+            except Exception:
+                pass
+        # Dict-like access
+        try:
+            if isinstance(res, dict):
+                for k in candidate_keys:
+                    val = res.get(k)
+                    if isinstance(val, str) and val.strip():
+                        return val.strip()
+        except Exception:
+            pass
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Node
 # ---------------------------------------------------------------------------
@@ -456,6 +493,9 @@ async def advisorNode(state: ClaimState) -> dict:
     agent = _getAdvisorAgent()
     agentInput = {"messages": [HumanMessage(content=contextMessage)]}
 
+    # B6 reviewer explanation holder (prefer post-check value if present)
+    reviewer_explanation: str | None = None
+
     logEvent(
         logger,
         "advisor.llm_request",
@@ -496,6 +536,14 @@ async def advisorNode(state: ClaimState) -> dict:
                             "signalValue": control.get("signalValue"),
                         })
             
+            # Capture reviewer-facing explanation (if provided by runtime)
+            try:
+                pre_expl = _extractReviewerExplanation(pre_result)
+                if pre_expl:
+                    reviewer_explanation = pre_expl
+            except Exception:
+                pass
+
             # If governance blocked, return early
             if not pre_result.should_proceed:
                 logEvent(
@@ -588,6 +636,14 @@ async def advisorNode(state: ClaimState) -> dict:
                                 "signalValue": control.get("signalValue"),
                             })
                 
+                # Capture reviewer-facing explanation (prefer post over pre)
+                try:
+                    post_expl = _extractReviewerExplanation(post_result_b3)
+                    if post_expl:
+                        reviewer_explanation = post_expl
+                except Exception:
+                    pass
+
                 # B4 judge (observe-only): critique advisor output and record structured signal
                 try:
                     critique = await contentHookRuntime_background.judge(
@@ -790,6 +846,10 @@ async def advisorNode(state: ClaimState) -> dict:
         "fraudVerdict": fraudFindings.get("verdict"),
     }
     
+    # Persist reviewerExplanation inside advisorFindings for reviewer surface (optional)
+    if reviewer_explanation:
+        advisorFindingsPayload["reviewerExplanation"] = reviewer_explanation
+    
     # Drain and embed governance findings (B1/B2/B3 from governed LLM + inline checks)
     from agentic_claims.web.governanceNoticeContext import drain_background_governance
     governance_controls = drain_background_governance()
@@ -823,10 +883,13 @@ async def advisorNode(state: ClaimState) -> dict:
 
     if dbClaimId is not None:
         try:
+            # Prefer B6 reviewer explanation; fall back to advisor summary reasoning
+            reasoning_for_audit = reviewer_explanation or advisorSummaryFields.get("reasoning", "")
             auditValue = json.dumps({
                 "decision": advisorDecision,
                 "complianceVerdict": complianceFindings.get("verdict"),
                 "fraudVerdict": fraudFindings.get("verdict"),
+                **({"reasoning": reasoning_for_audit} if reasoning_for_audit else {}),
             })
             await mcpCallTool(
                 serverUrl=settings.db_mcp_url,

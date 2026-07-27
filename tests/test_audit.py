@@ -424,6 +424,130 @@ def testBuildTimelineAdvisorEscalatedUsesRed():
     assert advisorStep["advisorDecision"] == "escalate_to_reviewer"
 
 
+def testAuditTimelineRendersReviewerExplanationWhenPresent(client):
+    """Audit page Advisory card includes reviewer explanation (B6) under the decision/status when present."""
+    from agentic_claims.web.routers.audit import _buildTimelineSteps
+
+    # Build a single advisor_decision row carrying a reviewer explanation
+    rows = [
+        _makeAuditRow(
+            "advisor_decision",
+            '{"decision": "return_to_claimant", "reasoning": "Please attach itemized receipt and ensure amount within cap."}',
+        ),
+    ]
+    steps = _buildTimelineSteps(rows)
+
+    # Mock the DB calls for the timeline endpoint to return these steps
+    mockScalars = MagicMock()
+    mockScalars.all.return_value = rows
+    mockResult = MagicMock()
+    mockResult.scalars.return_value = mockScalars
+
+    mockClaimRow = MagicMock()
+    mockClaimRow.id = 99
+    mockClaimRow.claimNumber = "CLM-099"
+    mockClaimRow.status = "pending"
+    mockClaimRow.totalAmount = Decimal("12.34")
+    mockClaimRow.currency = "SGD"
+    mockClaimRow.merchant = "Cafe"
+    mockClaimResult = MagicMock()
+    mockClaimResult.first.return_value = mockClaimRow
+
+    mockInsightRow = MagicMock()
+    _insightData = {"total_amount": 12.34, "currency": "SGD", "intake_findings": {}}
+    mockInsightRow.get = lambda k, d=None: _insightData.get(k, d)
+    mockInsightMappings = MagicMock()
+    mockInsightMappings.first.return_value = mockInsightRow
+    mockInsightResult = MagicMock()
+    mockInsightResult.mappings.return_value = mockInsightMappings
+
+    mockAvgRow = MagicMock(); mockAvgRow.avg = 10.0
+    mockAvgResult = MagicMock(); mockAvgResult.first.return_value = mockAvgRow
+
+    callCount = 0
+
+    def sessionFactory():
+        class _CM:
+            async def __aenter__(self):
+                return self
+            async def __aexit__(self, *args):
+                return False
+            async def execute(self, *args, **kwargs):
+                nonlocal callCount
+                callCount += 1
+                if callCount == 1:
+                    return mockResult  # audit_log query
+                elif callCount == 2:
+                    return mockClaimResult  # claim summary
+                elif callCount == 3:
+                    return mockInsightResult  # insights claim
+                else:
+                    return mockAvgResult  # avg query
+        return _CM()
+
+    with patch("agentic_claims.web.routers.audit.getAsyncSession", side_effect=sessionFactory):
+        response = client.get("/api/audit/99/timeline")
+
+    assert response.status_code == 200
+    # The rendered partial should include the reviewer explanation text
+    assert "Please attach itemized receipt and ensure amount within cap." in response.text
+
+
+def testNoEmptyBlockWhenExplanationAbsent(client):
+    """No empty paragraph is rendered when advisorReasoning/ reviewer explanation is absent."""
+    from agentic_claims.web.routers.audit import _buildTimelineSteps
+
+    rows = [
+        _makeAuditRow(
+            "advisor_decision",
+            '{"decision": "auto_approve"}',  # no reasoning field
+        ),
+    ]
+    steps = _buildTimelineSteps(rows)
+
+    mockScalars = MagicMock(); mockScalars.all.return_value = rows
+    mockResult = MagicMock(); mockResult.scalars.return_value = mockScalars
+
+    mockClaimRow = MagicMock(); mockClaimRow.id = 100; mockClaimRow.claimNumber = "CLM-100"; mockClaimRow.status = "ai_approved"; mockClaimRow.totalAmount = Decimal("0"); mockClaimRow.currency = "SGD"; mockClaimRow.merchant = "Store"
+    mockClaimResult = MagicMock(); mockClaimResult.first.return_value = mockClaimRow
+
+    mockInsightRow = MagicMock(); _insightData = {"total_amount": 0.0, "currency": "SGD", "intake_findings": {}}
+    mockInsightRow.get = lambda k, d=None: _insightData.get(k, d)
+    mockInsightMappings = MagicMock(); mockInsightMappings.first.return_value = mockInsightRow
+    mockInsightResult = MagicMock(); mockInsightResult.mappings.return_value = mockInsightMappings
+
+    mockAvgRow = MagicMock(); mockAvgRow.avg = 0.0
+    mockAvgResult = MagicMock(); mockAvgResult.first.return_value = mockAvgRow
+
+    callCount = 0
+    def sessionFactory():
+        class _CM:
+            async def __aenter__(self):
+                return self
+            async def __aexit__(self, *args):
+                return False
+            async def execute(self, *args, **kwargs):
+                nonlocal callCount
+                callCount += 1
+                if callCount == 1:
+                    return mockResult
+                elif callCount == 2:
+                    return mockClaimResult
+                elif callCount == 3:
+                    return mockInsightResult
+                else:
+                    return mockAvgResult
+        return _CM()
+
+    with patch("agentic_claims.web.routers.audit.getAsyncSession", side_effect=sessionFactory):
+        response = client.get("/api/audit/100/timeline")
+
+    assert response.status_code == 200
+    # Ensure the advisory card shows no stray 'Notes' or blank paragraph placeholder
+    assert "Notes:" not in response.text
+    assert "<p class=\"text-sm text-on-surface-variant mt-2\"></p>" not in response.text
+
+
 def testBuildTimelineStatusChangeIgnored():
     """status_change action is not mapped to any timeline step."""
     from agentic_claims.web.routers.audit import _buildTimelineSteps
