@@ -231,8 +231,7 @@ async def complianceNode(state: ClaimState) -> dict:
     # 4. Call LLM with 402 fallback (governed for B1/B2)
     # ------------------------------------------------------------------
     modelName = settings.openrouter_model_llm
-    from agentic_claims.agents.shared import llmFactory as _llmFactoryMod
-    llm = _llmFactoryMod.buildGovernedAgentLlm(settings, agent_identity="compliance", temperature=0.1)
+    llm = buildGovernedAgentLlm(settings, agent_identity="compliance", temperature=0.1)
     llmMessages = [
         SystemMessage(content=COMPLIANCE_SYSTEM_PROMPT),
         HumanMessage(content=evaluationPrompt),
@@ -294,8 +293,7 @@ async def complianceNode(state: ClaimState) -> dict:
                 error=errorStr,
                 message="Primary LLM returned 402 in complianceNode — falling back",
             )
-            from agentic_claims.agents.shared import llmFactory as _llmFactoryMod
-            llm = _llmFactoryMod.buildGovernedAgentLlm(settings, agent_identity="compliance", temperature=0.1, useFallback=True)
+            llm = buildGovernedAgentLlm(settings, agent_identity="compliance", temperature=0.1, useFallback=True)
             try:
                 response = await llm.ainvoke(llmMessages)
                 rawContent = response.content
