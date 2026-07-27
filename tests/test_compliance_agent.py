@@ -74,7 +74,7 @@ async def testCompliancePassCleanClaim():
         "agentic_claims.agents.compliance.node.mcpCallTool",
         new_callable=AsyncMock,
     ) as mockMcp, patch(
-        "agentic_claims.agents.compliance.node.buildAgentLlm",
+        "agentic_claims.agents.compliance.node.buildGovernedAgentLlm",
         return_value=mockLlm,
     ):
         # RAG returns policy snippets, audit log returns success
@@ -117,7 +117,7 @@ async def testComplianceFailViolation():
         "agentic_claims.agents.compliance.node.mcpCallTool",
         new_callable=AsyncMock,
     ) as mockMcp, patch(
-        "agentic_claims.agents.compliance.node.buildAgentLlm",
+        "agentic_claims.agents.compliance.node.buildGovernedAgentLlm",
         return_value=mockLlm,
     ):
         mockMcp.side_effect = [
@@ -151,7 +151,7 @@ async def testComplianceParseErrorFallback():
         "agentic_claims.agents.compliance.node.mcpCallTool",
         new_callable=AsyncMock,
     ) as mockMcp, patch(
-        "agentic_claims.agents.compliance.node.buildAgentLlm",
+        "agentic_claims.agents.compliance.node.buildGovernedAgentLlm",
         return_value=mockLlm,
     ):
         mockMcp.side_effect = [
@@ -184,7 +184,7 @@ async def testComplianceAuditLogWritten():
         "agentic_claims.agents.compliance.node.mcpCallTool",
         new_callable=AsyncMock,
     ) as mockMcp, patch(
-        "agentic_claims.agents.compliance.node.buildAgentLlm",
+        "agentic_claims.agents.compliance.node.buildGovernedAgentLlm",
         return_value=mockLlm,
     ):
         mockMcp.side_effect = [
@@ -227,7 +227,7 @@ async def testComplianceRagErrorProceedsWithEmptyContext():
         "agentic_claims.agents.compliance.node.mcpCallTool",
         new_callable=AsyncMock,
     ) as mockMcp, patch(
-        "agentic_claims.agents.compliance.node.buildAgentLlm",
+        "agentic_claims.agents.compliance.node.buildGovernedAgentLlm",
         return_value=mockLlm,
     ):
         # RAG returns error dict, audit log returns success

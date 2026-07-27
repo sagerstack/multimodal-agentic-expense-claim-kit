@@ -371,10 +371,155 @@ async def complianceNode(state: ClaimState) -> dict:
     # 5. Parse response into structured findings
     # ------------------------------------------------------------------
     complianceFindings = _parseComplianceResponse(rawContent)
-    
-    # Drain and embed governance findings (B1/B2 from governed LLM)
+
+    # ---------------------------------------------------------------
+    # 5b. B3 grounded-output validation (downgrade before persistence)
+    # ---------------------------------------------------------------
+    # Lazy-import core.graph globals (circular-import rule)
+    from agentic_claims.core.graph import contentHookRuntime_background
+    from agentic_claims.agents.intake.extractionContext import extractedReceiptVar
+    from agentic_governance.core.content_envelope import ContentType
+
+    # Build trusted_state (same hierarchical sourcing as advisor)
+    trusted_receipt_var = extractedReceiptVar.get(None)
+    claim_data_b3 = state.get("claimData", {})
+
+    if trusted_receipt_var and isinstance(trusted_receipt_var, dict):
+        var_fields = trusted_receipt_var.get("fields", {})
+        trusted_state_b3 = {
+            "amount": claim_data_b3.get("amountSgd") or var_fields.get("totalAmount"),
+            "date": var_fields.get("date"),
+            "vendor": var_fields.get("merchant"),
+            "currency": var_fields.get("currency", "SGD"),
+        }
+    else:
+        # Fallback to state.extractedReceipt (always available)
+        trusted_state_b3 = {
+            "amount": claim_data_b3.get("amountSgd") or receiptFields.get("totalAmount"),
+            "date": receiptFields.get("date"),
+            "vendor": receiptFields.get("merchant"),
+            "currency": receiptFields.get("currency", "SGD"),
+        }
+
+    # RAG clauses: extract 'section' from each policyResult compliance actually retrieved
+    # compliance.citedClauses must be a subset of these retrieved sections (otherwise hallucinated citation)
+    rag_clauses_b3 = []
+    if isinstance(policyResults, list):
+        for r in policyResults:
+            if isinstance(r, dict):
+                section = r.get("section")
+                if section:
+                    rag_clauses_b3.append(section)
+                text = r.get("text")
+                if text and isinstance(text, str):
+                    rag_clauses_b3.append(text[:200])  # truncate long text
+
+    # Normalized dict for GroundingValidator (MUST use snake_case keys)
+    normalized_compliance_output = {
+        "amount": trusted_state_b3.get("amount"),
+        "date": trusted_state_b3.get("date"),
+        "vendor": trusted_state_b3.get("vendor"),
+        "cited_clauses": complianceFindings.get("citedClauses", []),
+    }
+
+    grounding_failed = False
+    grounding_reasons = []
+
+    # Call post_model_check with B3 inputs (audit + GroundingValidator)
+    if contentHookRuntime_background:
+        try:
+            post_result_b3 = await contentHookRuntime_background.post_model_check(
+                content=json.dumps(normalized_compliance_output),
+                content_type=ContentType.MODEL_OUTPUT,
+                correlation_id=claimId,
+                agent_identity="compliance",
+                context={"agent": "compliance", "background": True, "grounding": "B3"},
+                trusted_state=trusted_state_b3,
+                rag_clauses=rag_clauses_b3 if rag_clauses_b3 else None,
+                required_evidence_fields=None,
+            )
+
+            # Check if GroundingValidator fired B3
+            if post_result_b3 and post_result_b3.fired_controls:
+                for control in post_result_b3.fired_controls:
+                    if control.get("controlId") == "B3" and control.get("result") in (
+                        "grounding-failed", "escalated", "blocked",
+                    ):
+                        grounding_failed = True
+                        grounding_reasons.append(control.get("name", "Grounding validation failed"))
+
+            # Capture B1/B2 actionable controls for findings embed
+            if post_result_b3.fired_controls:
+                from agentic_claims.web.governanceNoticeContext import append_background_governance
+                for control in post_result_b3.fired_controls:
+                    result_val = control.get("result", "")
+                    if result_val in ("redacted", "escalated", "blocked", "flagged", "grounding-failed", "concerns-found"):
+                        append_background_governance({
+                            "control": control.get("controlId"),
+                            "name": control.get("name"),
+                            "result": result_val,
+                            "entityTypes": control.get("entityTypes"),
+                            "signalValue": control.get("signalValue"),
+                        })
+        except Exception as gov_exc:
+            logEvent(
+                logger,
+                "compliance.governance_error",
+                level=logging.WARNING,
+                logCategory="governance",
+                agent="compliance",
+                claimId=claimId,
+                error=str(gov_exc),
+                message="B3 governance check failed - continuing",
+            )
+
+    # Inline consistency check: cited_clauses must be subset of retrieved rag_clauses
+    if not grounding_failed and isinstance(policyResults, list) and rag_clauses_b3:
+        cited_set = set(complianceFindings.get("citedClauses", []))
+        retrieved_set = set(rag_clauses_b3)
+        if cited_set and not cited_set.issubset(retrieved_set):
+            hallucinated = cited_set - retrieved_set
+            grounding_failed = True
+            grounding_reasons.append(
+                f"cited clauses not in retrieved RAG: {hallucinated}"
+            )
+
+    # DISPOSITION: downgrade verdict on grounding failure (BEFORE audit/persistence)
+    # Never turn fail -> pass (only downgrade)
+    if grounding_failed:
+        original_verdict = complianceFindings.get("verdict")
+        if original_verdict == "pass":
+            complianceFindings["verdict"] = "requires_review"
+            complianceFindings["requiresReview"] = True
+            logEvent(
+                logger,
+                "compliance.b3_grounding_failed",
+                level=logging.WARNING,
+                logCategory="governance",
+                agent="compliance",
+                claimId=claimId,
+                originalVerdict=original_verdict,
+                downgradedVerdict="requires_review",
+                reasons=grounding_reasons,
+                message="B3 grounding failed - downgraded verdict to requires_review",
+            )
+
+    # Drain and embed governance findings (B1/B2 from governed LLM + B3 from inline check)
     from agentic_claims.web.governanceNoticeContext import drain_background_governance
     governance_controls = drain_background_governance()
+
+    # Add B3 grounding failure from inline consistency check if not already captured
+    if grounding_failed and not any(c.get("control") == "B3" for c in governance_controls):
+        governance_controls.append({
+            "control": "B3",
+            "result": "escalated",
+            "name": "Output grounding",
+            "entityTypes": None,
+            "details": {
+                "reasons": grounding_reasons,
+            },
+        })
+
     if governance_controls:
         # Embed structured governance data in findings (PII-safe: IDs/results/types only)
         complianceFindings["governance"] = [
@@ -383,6 +528,7 @@ async def complianceNode(state: ClaimState) -> dict:
                 "result": c.get("result"),
                 "reason": c.get("name"),
                 "entityTypes": c.get("entityTypes"),
+                "details": c.get("details"),
             }
             for c in governance_controls
         ]
