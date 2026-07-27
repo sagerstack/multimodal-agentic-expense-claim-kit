@@ -587,6 +587,26 @@ async def advisorNode(state: ClaimState) -> dict:
                                 "entityTypes": control.get("entityTypes"),
                                 "signalValue": control.get("signalValue"),
                             })
+                
+                # B4 judge (observe-only): critique advisor output and record structured signal
+                try:
+                    critique = await contentHookRuntime_background.judge(
+                        content=str(lastContent) if isinstance(lastContent, str) else json.dumps(normalized_advisor_output),
+                        correlation_id=claimId,
+                        agent_identity="advisor",
+                        context={"agent": "advisor", "background": True},
+                    )
+                    if critique and getattr(critique, "confidence", None) is not None:
+                        result_val = "concerns-found" if getattr(critique, "concerns", ()) else "no-concerns"
+                        append_background_governance({
+                            "control": "B4",
+                            "name": "llm-judge",
+                            "result": result_val,
+                            "entityTypes": None,
+                            "signalValue": critique.confidence,
+                        })
+                except Exception:
+                    pass
             except Exception as gov_exc:
                 logEvent(
                     logger,

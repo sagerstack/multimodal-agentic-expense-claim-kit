@@ -119,6 +119,8 @@ async def test_background_agents_embed_b4_in_findings(monkeypatch):
 
             # Minimal state for compliance node
             from agentic_claims.agents.compliance.node import complianceNode
+            from agentic_claims.web.governanceNoticeContext import init_notice_queue, drain_notices
+            init_notice_queue()
             state = {
                 "claimId": "C-judge-bg-1",
                 "dbClaimId": 1,
@@ -127,6 +129,9 @@ async def test_background_agents_embed_b4_in_findings(monkeypatch):
                 "violations": [],
             }
             result = await complianceNode(state)
+            # Background agents must not emit chat notices
+            notices = drain_notices()
+            assert notices == [], f"Background agents must NOT emit chat notices; got {notices}"
             findings = result.get("complianceFindings", {})
             governance = findings.get("governance", [])
             # Assert a B4 entry embedded (PII-safe control id and signal only)
