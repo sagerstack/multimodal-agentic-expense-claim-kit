@@ -191,6 +191,9 @@ def _extractReviewerExplanation(*results) -> str | None:
 
     Supports multiple attribute/key spellings to avoid tight coupling to runtime internals.
     Returns the first non-empty string found.
+
+    NOTE: This value may be filtered out later if it matches benign allow-only
+    patterns; final persisted explanation is selected by decision-aware precedence.
     """
     candidate_keys = [
         "explanation_reviewer",
@@ -221,6 +224,30 @@ def _extractReviewerExplanation(*results) -> str | None:
         except Exception:
             pass
     return None
+
+
+def _isBenignAllowExplanation(text: str | None) -> bool:
+    """Return True if text is a generic allow-only governance message (low-value for reviewers).
+
+    Examples filtered:
+    - "Control B2: Allow." / "control b2: allow"
+    - "Allow" / "Allowed"
+    The check is conservative to avoid hiding meaningful content.
+    """
+    if not text:
+        return False
+    t = text.strip().lower()
+    if not t:
+        return False
+    if t in ("allow", "allowed", "allow.", "allowed."):
+        return True
+    # "control xyz: allow" style
+    if t.startswith("control ") and ":" in t and "allow" in t:
+        # ensure there's no contradictory cue suggesting escalation/deny
+        bad_cues = ("deny", "escalat", "violation", "duplicate", "fail")
+        if not any(cue in t for cue in bad_cues):
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -493,7 +520,7 @@ async def advisorNode(state: ClaimState) -> dict:
     agent = _getAdvisorAgent()
     agentInput = {"messages": [HumanMessage(content=contextMessage)]}
 
-    # B6 reviewer explanation holder (prefer post-check value if present)
+    # B6 reviewer explanation captured from runtime (not authoritative; filtered later)
     reviewer_explanation: str | None = None
 
     logEvent(
@@ -636,7 +663,7 @@ async def advisorNode(state: ClaimState) -> dict:
                                 "signalValue": control.get("signalValue"),
                             })
                 
-                # Capture reviewer-facing explanation (prefer post over pre)
+                # Capture reviewer-facing explanation (from runtime; will be filtered later)
                 try:
                     post_expl = _extractReviewerExplanation(post_result_b3)
                     if post_expl:
@@ -831,6 +858,19 @@ async def advisorNode(state: ClaimState) -> dict:
     agentMessages = result.get("messages", [])
     advisorSummaryFields = _extractAdvisorSummaryFields(agentMessages)
 
+    # Select meaningful reviewer-facing explanation per precedence:
+    # (a) governance downgrade/escalation reason (e.g., B3 grounding) if present
+    # (b) else advisor reasoning/summary (explains actual decision)
+    # Never persist benign allow-only governance text.
+    selected_explanation = None
+    if grounding_failed:
+        selected_explanation = grounding_override_reason
+    else:
+        selected_explanation = advisorSummaryFields.get("reasoning") or advisorSummaryFields.get("summary") or None
+
+    if _isBenignAllowExplanation(selected_explanation):
+        selected_explanation = None
+
     advisorFindingsPayload = {
         "decision": advisorDecision,
         "reasoning": (
@@ -846,9 +886,9 @@ async def advisorNode(state: ClaimState) -> dict:
         "fraudVerdict": fraudFindings.get("verdict"),
     }
     
-    # Persist reviewerExplanation inside advisorFindings for reviewer surface (optional)
-    if reviewer_explanation:
-        advisorFindingsPayload["reviewerExplanation"] = reviewer_explanation
+    # Persist reviewerExplanation inside advisorFindings (only if meaningful)
+    if selected_explanation:
+        advisorFindingsPayload["reviewerExplanation"] = selected_explanation
     
     # Drain and embed governance findings (B1/B2/B3 from governed LLM + inline checks)
     from agentic_claims.web.governanceNoticeContext import drain_background_governance
@@ -883,8 +923,10 @@ async def advisorNode(state: ClaimState) -> dict:
 
     if dbClaimId is not None:
         try:
-            # Prefer B6 reviewer explanation; fall back to advisor summary reasoning
-            reasoning_for_audit = reviewer_explanation or advisorSummaryFields.get("reasoning", "")
+            # Reasoning for audit must be meaningful: prefer governance downgrade reason (if any), else advisor reasoning/summary
+            reasoning_for_audit = selected_explanation or advisorSummaryFields.get("reasoning") or advisorSummaryFields.get("summary") or ""
+            if _isBenignAllowExplanation(reasoning_for_audit):
+                reasoning_for_audit = ""
             auditValue = json.dumps({
                 "decision": advisorDecision,
                 "complianceVerdict": complianceFindings.get("verdict"),

@@ -490,6 +490,16 @@ async def _runDbQueries(
             amountSgd,
             excludeClaimId=excludeClaimId,
         )
+        # Safety net: ensure the current claim is not considered its own duplicate
+        if excludeClaimId is not None:
+            try:
+                duplicates = [
+                    row for row in duplicates
+                    if isinstance(row, dict) and row.get("id") != excludeClaimId
+                ]
+            except Exception:
+                # If rows are malformed, leave as-is; downstream checks handle errors
+                pass
     except Exception as e:
         logEvent(
             logger,
