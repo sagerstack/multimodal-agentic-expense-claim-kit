@@ -372,6 +372,30 @@ async def complianceNode(state: ClaimState) -> dict:
     # ------------------------------------------------------------------
     complianceFindings = _parseComplianceResponse(rawContent)
 
+    # 5a. B4 judge (observe-only): critique LLM output and record structured signal
+    try:
+        from agentic_claims.core.graph import contentHookRuntime_background
+        from agentic_claims.web.governanceNoticeContext import append_background_governance
+        if contentHookRuntime_background and rawContent:
+            critique = await contentHookRuntime_background.judge(
+                content=str(rawContent),
+                correlation_id=claimId,
+                agent_identity="compliance",
+                context={"agent": "compliance", "background": True},
+            )
+            if critique and getattr(critique, "confidence", None) is not None:
+                result = "concerns-found" if getattr(critique, "concerns", ()) else "no-concerns"
+                append_background_governance({
+                    "control": "B4",
+                    "name": "llm-judge",
+                    "result": result,
+                    "entityTypes": None,
+                    "signalValue": critique.confidence,
+                })
+    except Exception:
+        # Judge failures must never affect user flow
+        pass
+
     # ---------------------------------------------------------------
     # 5b. B3 grounded-output validation (downgrade before persistence)
     # ---------------------------------------------------------------

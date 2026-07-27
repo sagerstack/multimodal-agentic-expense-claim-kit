@@ -1825,6 +1825,18 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
         toolCallCount=len(getattr(hydratedResponse, "tool_calls", []) or []),
         message="intake-gpt reason node llm completed",
     )
+    # B4: LLM judge (observe-only) — run after assembling the assistant reply.
+    try:
+        if contentHookRuntime is not None and getattr(hydratedResponse, "content", None):
+            await contentHookRuntime.judge(
+                content=str(hydratedResponse.content),
+                correlation_id=state.get("claimId"),
+                agent_identity="intake",
+                context={"agent": "intake-gpt"},
+            )
+    except Exception:
+        # Judge failures must never affect user flow
+        pass
     # Post-LLM side-question re-emit:
     # If the LLM answered a side question without re-calling requestHumanInput,
     # deterministically inject a synthetic re-emit so the SSE INTERRUPT event

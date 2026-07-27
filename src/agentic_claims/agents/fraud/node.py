@@ -404,6 +404,30 @@ async def fraudNode(state: ClaimState) -> dict:
     # 6. Parse response
     # ------------------------------------------------------------------
     fraudFindings = _parseFraudResponse(rawContent)
+
+    # 6a. B4 judge (observe-only): critique LLM output and record structured signal
+    try:
+        from agentic_claims.core.graph import contentHookRuntime_background
+        from agentic_claims.web.governanceNoticeContext import append_background_governance
+        if contentHookRuntime_background and rawContent:
+            critique = await contentHookRuntime_background.judge(
+                content=str(rawContent),
+                correlation_id=claimId,
+                agent_identity="fraud",
+                context={"agent": "fraud", "background": True},
+            )
+            if critique and getattr(critique, "confidence", None) is not None:
+                result = "concerns-found" if getattr(critique, "concerns", ()) else "no-concerns"
+                append_background_governance({
+                    "control": "B4",
+                    "name": "llm-judge",
+                    "result": result,
+                    "entityTypes": None,
+                    "signalValue": critique.confidence,
+                })
+    except Exception:
+        # Judge failures must never affect user flow
+        pass
     
     # Drain and embed governance findings (B1/B2 from governed LLM)
     from agentic_claims.web.governanceNoticeContext import drain_background_governance

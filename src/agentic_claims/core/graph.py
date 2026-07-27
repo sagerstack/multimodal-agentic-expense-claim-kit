@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from agentic_governance.adapters.jsonl_audit import JsonlAuditSink
 from agentic_governance.integrations.langgraph_mcp import install, install_content_hooks
+from agentic_governance.adapters.llm_judge import LlmJudge
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from psycopg import AsyncConnection
@@ -68,6 +69,7 @@ def _installGovernedMcpBoundary() -> None:
     """Install governance and replace every bound import of the real MCP boundary."""
     global contentHookRuntime, contentHookRuntime_background
     from agentic_claims.web.governanceNoticeContext import append_notice
+    from agentic_claims.core.config import getSettings
     
     # Build ONE shared audit sink for unified action + content audit correlation
     sharedAuditSink = JsonlAuditSink("./.agentic_governance/")
@@ -77,6 +79,20 @@ def _installGovernedMcpBoundary() -> None:
         """Injected callback: append governance notices to the request queue."""
         for notice in notices:
             append_notice(notice)
+    
+    # Build B4 judge backed by OpenRouter (observe-only; graceful on failure)
+    try:
+        from agentic_claims.infrastructure.openrouter.judge_client import OpenRouterJudgeClient
+        settings = getSettings()
+        judge_client = OpenRouterJudgeClient(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+            timeout=settings.openrouter_timeout,
+        )
+        llm_judge = LlmJudge(llm_client=judge_client, model="openai/gpt-4o-mini")
+    except Exception:
+        # Inert judge (no client) — returns empty critiques; never breaks flow
+        llm_judge = LlmJudge(llm_client=None)
     
     # Group A: action governance (tool-call boundary)
     governedMcpCallTool = install(
@@ -99,6 +115,7 @@ def _installGovernedMcpBoundary() -> None:
     contentHookRuntime = install_content_hooks(
         audit_sink=sharedAuditSink,
         notice_callback=notice_callback,
+        llm_judge=llm_judge,
     )
     
     # Background agent runtime: audit + findings embed, NO chat notices
@@ -106,6 +123,7 @@ def _installGovernedMcpBoundary() -> None:
     contentHookRuntime_background = install_content_hooks(
         audit_sink=sharedAuditSink,
         notice_callback=None,  # No chat notices for background agents
+        llm_judge=llm_judge,
     )
 
 
