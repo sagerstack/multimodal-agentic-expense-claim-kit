@@ -473,7 +473,7 @@ async def advisorNode(state: ClaimState) -> dict:
     # import here creates a circular import. Imported at call time (after graph build),
     # contentHookRuntime_background is set to the real runtime instance.
     from agentic_claims.core.graph import contentHookRuntime_background
-    if contentHookRuntime_background:
+    if contentHookRuntime_background and hasattr(contentHookRuntime_background, "pre_model_check"):
         try:
             pre_result = await contentHookRuntime_background.pre_model_check(
                 content=contextMessage,
@@ -550,7 +550,7 @@ async def advisorNode(state: ClaimState) -> dict:
         
         # Post-check: B2 PII + B3 grounding + B4 judge on advisor output (create_react_agent bypasses wrapper)
         post_result_b3 = None
-        if contentHookRuntime_background and lastContent:
+        if contentHookRuntime_background and hasattr(contentHookRuntime_background, "post_model_check") and lastContent:
             try:
                 # BUG FIX: Normalize advisor output for GroundingValidator
                 # Extract summary fields to get citedClauses (before final extraction below)
@@ -595,7 +595,7 @@ async def advisorNode(state: ClaimState) -> dict:
                         correlation_id=claimId,
                         agent_identity="advisor",
                         context={"agent": "advisor", "background": True},
-                    )
+                    ) if hasattr(contentHookRuntime_background, "judge") else None
                     if critique and getattr(critique, "confidence", None) is not None:
                         result_val = "concerns-found" if getattr(critique, "concerns", ()) else "no-concerns"
                         append_background_governance({
@@ -639,7 +639,7 @@ async def advisorNode(state: ClaimState) -> dict:
                 result = await fallbackAgent.ainvoke(agentInput)
                 
                 # Post-check on fallback result (pre-check already ran before main try)
-                if contentHookRuntime_background:
+                if contentHookRuntime_background and hasattr(contentHookRuntime_background, "post_model_check"):
                     try:
                         fallback_messages = result.get("messages", [])
                         fallback_content = fallback_messages[-1].content if fallback_messages else ""

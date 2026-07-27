@@ -409,7 +409,7 @@ async def fraudNode(state: ClaimState) -> dict:
     try:
         from agentic_claims.core.graph import contentHookRuntime_background
         from agentic_claims.web.governanceNoticeContext import append_background_governance
-        if contentHookRuntime_background and rawContent:
+        if contentHookRuntime_background and hasattr(contentHookRuntime_background, "judge") and rawContent:
             critique = await contentHookRuntime_background.judge(
                 content=str(rawContent),
                 correlation_id=claimId,

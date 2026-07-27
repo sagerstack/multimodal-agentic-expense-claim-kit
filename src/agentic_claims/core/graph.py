@@ -76,9 +76,17 @@ def _installGovernedMcpBoundary() -> None:
     
     # Define the notice callback that feeds into the ContextVar queue
     def notice_callback(notices: list[str]) -> None:
-        """Injected callback: append governance notices to the request queue."""
-        for notice in notices:
-            append_notice(notice)
+        """Injected callback: append governance notices to the request queue.
+        UX rule: ONLY intake-gpt may emit live chat notices. Background agents (compliance,
+        fraud, advisor) must NEVER emit chat notices. Filter by nodeIdentityVar.
+        """
+        identity = nodeIdentityVar.get(None)
+        if identity == "intake":
+            for notice in notices:
+                append_notice(notice)
+        else:
+            # Background agents: suppress chat notices entirely
+            return
     
     # Build B4 judge backed by OpenRouter (observe-only; graceful on failure)
     try:

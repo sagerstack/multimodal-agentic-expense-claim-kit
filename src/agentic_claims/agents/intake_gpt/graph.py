@@ -1654,7 +1654,7 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
             latest_human_text = str(msg.content)
             latest_human_idx = i
     
-    if contentHookRuntime is not None and latest_human_text:
+    if contentHookRuntime is not None and latest_human_text and hasattr(contentHookRuntime, "pre_model_check"):
         pre_result = await contentHookRuntime.pre_model_check(
             content=latest_human_text,
             content_type=ContentType.CHAT_INPUT,
@@ -1722,7 +1722,7 @@ async def reasonNode(state: IntakeGptGraphState, *, llm) -> dict:
     response = await activeLlm.ainvoke(messages)
     
     # Group B POST-MODEL CHECK (B2 PII output, B3 grounding, B4 judge, B5 failure)
-    if contentHookRuntime is not None:
+    if contentHookRuntime is not None and hasattr(contentHookRuntime, "post_model_check"):
         # Extract trusted receipt fields for B3 grounding validation
         trusted_receipt = trustedExtractedReceipt(state)
         trusted_fields = trusted_receipt.get("fields", {}) if trusted_receipt else {}
