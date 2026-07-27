@@ -78,11 +78,21 @@ RETRIEVED_POLICIES = [
      "text": "Meal single transaction cap is SGD 75"},
 ]
 
+RETRIEVED_POLICIES_FULL_TEXT = [
+    {
+        "section": "Section 2: Per-Trip Caps and Limits",
+        "category": "transport",
+        "score": 0.9,
+        "text": "## Section 2: Per-Trip Caps and Limits\n\n### Section 2.1: MRT/Bus Actual Fare\nNo cap applies. Reimburse exact fare as shown on receipt or transport card transaction history.\n\nFor claims without electronic receipt (e.g., cash payment), provide route details and standard fare will be reimbursed based on published LTA fare tables.",
+    }
+]
+
 
 # Compliance LLM output that CLEANLY cites retrieved clauses (no hallucination)
 PASS_VERDICT_CLEAN_CITATIONS = json.dumps({
     "verdict": "pass",
     "violations": [],
+    "citedClauseIds": ["2.1", "2.2"],
     "citedClauses": ["Section 2.1", "Section 2.2"],  # ⊆ retrieved
     "requiresManagerApproval": False,
     "requiresDirectorApproval": False,
@@ -94,7 +104,35 @@ PASS_VERDICT_CLEAN_CITATIONS = json.dumps({
 PASS_VERDICT_HALLUCINATED = json.dumps({
     "verdict": "pass",
     "violations": [],
+    "citedClauseIds": ["99", "2.1"],
     "citedClauses": ["Section 99 (fake)", "Section 2.1"],  # "Section 99" not retrieved
+    "requiresManagerApproval": False,
+    "requiresDirectorApproval": False,
+    "summary": "Claim passes all policy checks.",
+    "requiresReview": False,
+})
+
+# Compliance LLM output that cites the FULL retrieved clause text.
+# This should pass after first-200-char canonicalization on both sides.
+PASS_VERDICT_FULL_TEXT_CITATION = json.dumps({
+    "verdict": "pass",
+    "violations": [],
+    "citedClauses": [
+        "## Section 2: Per-Trip Caps and Limits\n\n### Section 2.1: MRT/Bus Actual Fare\nNo cap applies. Reimburse exact fare as shown on receipt or transport card transaction history.\n\nFor claims without electronic receipt (e.g., cash payment), provide route details and standard fare will be reimbursed based on published LTA fare tables."
+    ],
+    "requiresManagerApproval": False,
+    "requiresDirectorApproval": False,
+    "summary": "Claim passes all policy checks.",
+    "requiresReview": False,
+})
+
+PASS_VERDICT_SECTION_LABELS = json.dumps({
+    "verdict": "pass",
+    "violations": [],
+    "citedClauses": [
+        "Section 3.1: Auto-Approval (Under SGD 200)",
+        "Section 2: Per-Trip Caps and Limits"
+    ],
     "requiresManagerApproval": False,
     "requiresDirectorApproval": False,
     "summary": "Claim passes all policy checks.",
@@ -231,3 +269,77 @@ async def test_compliance_b3_case_b_clean_not_downgraded():
     assert len(b3_entries) == 0, (
         f"Clean compliance should have NO B3 entry, got: {b3_entries}"
     )
+
+
+@pytest.mark.asyncio
+async def test_compliance_b3_full_clause_text_matches_truncated_rag_prefix():
+    """Full clause text citation should match retrieved clause text by first-200-char canonicalization."""
+    state = makeState()
+
+    mockLlmResponse = MagicMock()
+    mockLlmResponse.content = PASS_VERDICT_FULL_TEXT_CITATION
+    mockLlm = AsyncMock()
+    mockLlm.ainvoke = AsyncMock(return_value=mockLlmResponse)
+    mockLlm._default_params = {}
+
+    mockRuntime = _mock_runtime_with_post(_make_mock_post_result(fired_controls=[]))
+    mockMcp = AsyncMock(side_effect=[RETRIEVED_POLICIES_FULL_TEXT, {"ok": True}])
+
+    with patch(
+        "agentic_claims.agents.compliance.node.buildGovernedAgentLlm",
+        return_value=mockLlm,
+    ), patch(
+        "agentic_claims.agents.compliance.node.mcpCallTool",
+        new=mockMcp,
+    ), patch(
+        "agentic_claims.core.graph.contentHookRuntime_background",
+        new=mockRuntime,
+    ):
+        from agentic_claims.agents.compliance.node import complianceNode
+
+        result = await complianceNode(state)
+
+    findings = result["complianceFindings"]
+    assert findings["verdict"] == "pass", findings
+    assert not findings.get("requiresReview"), findings
+    governance = findings.get("governance", [])
+    b3_entries = [g for g in governance if g.get("control") == "B3"]
+    assert len(b3_entries) == 0, (
+        f"Full-text citation should match truncated RAG prefix; got unexpected B3 entries: {b3_entries}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_compliance_b3_section_ids_match_nested_rag_sections():
+    """Section-number grounding should pass for nested clause ids like CLAIM-221 style citations."""
+    state = makeState()
+
+    mockLlmResponse = MagicMock()
+    mockLlmResponse.content = PASS_VERDICT_SECTION_LABELS
+    mockLlm = AsyncMock()
+    mockLlm.ainvoke = AsyncMock(return_value=mockLlmResponse)
+    mockLlm._default_params = {}
+
+    mockRuntime = _mock_runtime_with_post(_make_mock_post_result(fired_controls=[]))
+    mockMcp = AsyncMock(side_effect=[RETRIEVED_POLICIES_FULL_TEXT, {"ok": True}])
+
+    with patch(
+        "agentic_claims.agents.compliance.node.buildGovernedAgentLlm",
+        return_value=mockLlm,
+    ), patch(
+        "agentic_claims.agents.compliance.node.mcpCallTool",
+        new=mockMcp,
+    ), patch(
+        "agentic_claims.core.graph.contentHookRuntime_background",
+        new=mockRuntime,
+    ):
+        from agentic_claims.agents.compliance.node import complianceNode
+
+        result = await complianceNode(state)
+
+    findings = result["complianceFindings"]
+    assert findings["verdict"] == "pass", findings
+    assert findings.get("citedClauseIds") == ["3.1", "2"], findings
+    governance = findings.get("governance", [])
+    b3_entries = [g for g in governance if g.get("control") == "B3"]
+    assert len(b3_entries) == 0, f"Expected no B3 failure, got {b3_entries}"

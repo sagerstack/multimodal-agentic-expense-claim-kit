@@ -105,8 +105,8 @@ async def test_background_agents_embed_b4_in_findings(monkeypatch):
     # Patch background runtime with a fake that returns concerns
     with patch("agentic_claims.core.graph.contentHookRuntime_background", new=_FakeRuntime()):
         # Patch LLM factory to avoid network; return a static JSON body for parse
-        with patch("agentic_claims.agents.shared.llmFactory.buildGovernedAgentLlm") as mock_llm_factory, \
-             patch("agentic_claims.agents.intake.utils.mcpClient.mcpCallTool", new_callable=AsyncMock, return_value={"ok": True}):
+        with patch("agentic_claims.agents.compliance.node.buildGovernedAgentLlm") as mock_llm_factory, \
+             patch("agentic_claims.agents.compliance.node.mcpCallTool", new_callable=AsyncMock, return_value={"ok": True}):
             fake_llm = MagicMock()
             fake_llm.ainvoke = AsyncMock(return_value=AIMessage(content=json.dumps({
                 "verdict": "pass",

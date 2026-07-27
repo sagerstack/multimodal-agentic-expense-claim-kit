@@ -57,6 +57,7 @@ After completing all tool calls, output a final JSON summary (do not wrap in mar
 {
   "decision": "auto_approve" | "return_to_claimant" | "escalate_to_reviewer",
   "reasoning": "One sentence explaining the decision",
+  "citedClauseIds": ["2.1", "3.1"],
   "citedClauses": ["Section X.Y: ...", ...],
   "statusUpdated": true or false,
   "summary": "Human-readable summary for the conversation UI"
@@ -65,6 +66,8 @@ After completing all tool calls, output a final JSON summary (do not wrap in mar
 ## CONSTRAINTS
 
 - Never fabricate policy clause text — only cite clauses that were in the compliance findings
+- You MUST always return `citedClauseIds` with canonical clause numbers only (e.g. ["2.1", "3.1"]) for every cited clause when available
+- `citedClauses` may include human-readable clause text, but `citedClauseIds` is the authoritative grounding field
 - If any tool call fails, log the failure in your final JSON (statusUpdated: false) but still output the decision
 - Do NOT output raw JSON from tool results — translate all tool responses into the final JSON summary
 - Your final response (after all tool calls) must be plain text readable by the claimant in the UI

@@ -24,6 +24,7 @@ from agentic_claims.agents.compliance.prompts.complianceSystemPrompt import COMP
 from agentic_claims.agents.intake.utils import mcpClient as _mcpClientMod
 # Expose symbol for test monkeypatch compatibility
 mcpCallTool = _mcpClientMod.mcpCallTool
+from agentic_claims.agents.shared.citation_ids import derive_cited_clause_ids, extract_rag_clause_ids
 from agentic_claims.agents.shared.llmFactory import buildGovernedAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
 from agentic_claims.core.config import getSettings
@@ -48,10 +49,17 @@ def _parseComplianceResponse(rawContent: str) -> dict:
     if jsonStr:
         try:
             parsed = json.loads(jsonStr)
+            cited_clauses = parsed.get("citedClauses", [])
+            cited_clause_ids = parsed.get("citedClauseIds", [])
+            if not isinstance(cited_clause_ids, list) or not cited_clause_ids:
+                cited_clause_ids = derive_cited_clause_ids(cited_clauses)
+            else:
+                cited_clause_ids = [str(v).strip() for v in cited_clause_ids if str(v).strip()]
             return {
                 "verdict": parsed.get("verdict", "fail"),
                 "violations": parsed.get("violations", []),
-                "citedClauses": parsed.get("citedClauses", []),
+                "citedClauseIds": cited_clause_ids,
+                "citedClauses": cited_clauses,
                 "requiresManagerApproval": parsed.get("requiresManagerApproval", False),
                 "requiresDirectorApproval": parsed.get("requiresDirectorApproval", False),
                 "summary": parsed.get("summary", "Compliance check completed."),
@@ -80,6 +88,7 @@ def _parseComplianceResponse(rawContent: str) -> dict:
     return {
         "verdict": "fail",
         "violations": [],
+        "citedClauseIds": [],
         "citedClauses": [],
         "requiresManagerApproval": False,
         "requiresDirectorApproval": False,
@@ -393,6 +402,11 @@ async def complianceNode(state: ClaimState) -> dict:
                     "result": result,
                     "entityTypes": None,
                     "signalValue": critique.confidence,
+                    "details": {
+                        "concerns": list(getattr(critique, "concerns", ()) or ()),
+                        "flags": list(getattr(critique, "flags", ()) or ()),
+                        "confidence": critique.confidence,
+                    },
                 })
     except Exception:
         # Judge failures must never affect user flow
@@ -427,25 +441,19 @@ async def complianceNode(state: ClaimState) -> dict:
             "currency": receiptFields.get("currency", "SGD"),
         }
 
-    # RAG clauses: extract 'section' from each policyResult compliance actually retrieved
-    # compliance.citedClauses must be a subset of these retrieved sections (otherwise hallucinated citation)
-    rag_clauses_b3 = []
-    if isinstance(policyResults, list):
-        for r in policyResults:
-            if isinstance(r, dict):
-                section = r.get("section")
-                if section:
-                    rag_clauses_b3.append(section)
-                text = r.get("text")
-                if text and isinstance(text, str):
-                    rag_clauses_b3.append(text[:200])  # truncate long text
+    # RAG clauses: compare using canonical clause ids (e.g. 2.1, 3.1), not free text.
+    rag_clause_ids_b3 = extract_rag_clause_ids(policyResults)
+    cited_clause_ids_b3 = complianceFindings.get("citedClauseIds") or derive_cited_clause_ids(
+        complianceFindings.get("citedClauses", [])
+    )
+    complianceFindings["citedClauseIds"] = cited_clause_ids_b3
 
     # Normalized dict for GroundingValidator (MUST use snake_case keys)
     normalized_compliance_output = {
         "amount": trusted_state_b3.get("amount"),
         "date": trusted_state_b3.get("date"),
         "vendor": trusted_state_b3.get("vendor"),
-        "cited_clauses": complianceFindings.get("citedClauses", []),
+        "cited_clauses": cited_clause_ids_b3,
     }
 
     grounding_failed = False
@@ -461,7 +469,7 @@ async def complianceNode(state: ClaimState) -> dict:
                 agent_identity="compliance",
                 context={"agent": "compliance", "background": True, "grounding": "B3"},
                 trusted_state=trusted_state_b3,
-                rag_clauses=rag_clauses_b3 if rag_clauses_b3 else None,
+                rag_clauses=rag_clause_ids_b3 if rag_clause_ids_b3 else None,
                 required_evidence_fields=None,
             )
 
@@ -499,15 +507,15 @@ async def complianceNode(state: ClaimState) -> dict:
                 message="B3 governance check failed - continuing",
             )
 
-    # Inline consistency check: cited_clauses must be subset of retrieved rag_clauses
-    if not grounding_failed and isinstance(policyResults, list) and rag_clauses_b3:
-        cited_set = set(complianceFindings.get("citedClauses", []))
-        retrieved_set = set(rag_clauses_b3)
+    # Inline consistency check: cited clause ids must be subset of retrieved clause ids
+    if not grounding_failed and isinstance(policyResults, list) and rag_clause_ids_b3:
+        cited_set = set(cited_clause_ids_b3)
+        retrieved_set = set(rag_clause_ids_b3)
         if cited_set and not cited_set.issubset(retrieved_set):
             hallucinated = cited_set - retrieved_set
             grounding_failed = True
             grounding_reasons.append(
-                f"cited clauses not in retrieved RAG: {hallucinated}"
+                f"cited clause ids not in retrieved RAG: {hallucinated}"
             )
 
     # DISPOSITION: downgrade verdict on grounding failure (BEFORE audit/persistence)
@@ -543,6 +551,8 @@ async def complianceNode(state: ClaimState) -> dict:
             "entityTypes": None,
             "details": {
                 "reasons": grounding_reasons,
+                "citedClauseIds": cited_clause_ids_b3,
+                "retrievedClauseIds": rag_clause_ids_b3,
             },
         })
 
@@ -554,6 +564,7 @@ async def complianceNode(state: ClaimState) -> dict:
                 "result": c.get("result"),
                 "reason": c.get("name"),
                 "entityTypes": c.get("entityTypes"),
+                "signalValue": c.get("signalValue"),
                 "details": c.get("details"),
             }
             for c in governance_controls
@@ -580,7 +591,10 @@ async def complianceNode(state: ClaimState) -> dict:
             auditValue = json.dumps({
                 "verdict": complianceFindings.get("verdict"),
                 "violations": complianceFindings.get("violations"),
+                "citedClauseIds": complianceFindings.get("citedClauseIds", []),
+                "citedClauses": complianceFindings.get("citedClauses", []),
                 "summary": summary,
+                "governance": complianceFindings.get("governance", []),
             })
             await mcpCallTool(
                 serverUrl=settings.db_mcp_url,

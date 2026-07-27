@@ -129,6 +129,58 @@ def _countMerchantIn30Days(recentClaims: list[dict], merchant: str) -> int:
     )
 
 
+def _resolveFraudAmountSgd(state: ClaimState, receiptFields: dict) -> float:
+    """Resolve the trusted SGD amount for fraud checks.
+
+    Prefer canonical claim-level SGD amounts produced by intake-gpt / currency
+    conversion over raw receipt-native totals. Only fall back to receipt
+    totalAmount when the receipt currency is already SGD (or absent).
+    """
+    intake_gpt = state.get("intakeGpt") or {}
+    slots = intake_gpt.get("slots") if isinstance(intake_gpt, dict) else {}
+    claim_data = slots.get("claimData") if isinstance(slots, dict) else {}
+    if isinstance(claim_data, dict):
+        for key in ("amountSgd", "convertedAmount"):
+            value = claim_data.get(key)
+            if value is not None:
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    pass
+
+    for container in (
+        state.get("currencyConversion"),
+        (state.get("intakeFindings") or {}).get("conversion"),
+    ):
+        if isinstance(container, dict):
+            for key in ("convertedAmount", "amountSgd"):
+                value = container.get(key)
+                if value is not None:
+                    try:
+                        return float(value)
+                    except (TypeError, ValueError):
+                        pass
+
+    for key in ("totalAmountSgd", "amountSgd"):
+        value = receiptFields.get(key)
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                pass
+
+    currency = str(receiptFields.get("currency") or "").strip().upper()
+    if currency in ("", "SGD"):
+        value = receiptFields.get("totalAmount")
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                pass
+
+    return 0.0
+
+
 # ---------------------------------------------------------------------------
 # Node
 # ---------------------------------------------------------------------------
@@ -189,12 +241,7 @@ async def fraudNode(state: ClaimState) -> dict:
     employeeId = intakeFindings.get("employeeId") or receiptFields.get("employeeId", "unknown")
     merchant = receiptFields.get("merchant", "unknown")
     receiptDate = receiptFields.get("date") or receiptFields.get("receiptDate", "")
-    totalAmountSgd = (
-        receiptFields.get("totalAmountSgd")
-        or receiptFields.get("amountSgd")
-        or receiptFields.get("totalAmount")
-        or 0.0
-    )
+    totalAmountSgd = _resolveFraudAmountSgd(state, receiptFields)
 
     logEvent(
         logger,
@@ -424,6 +471,11 @@ async def fraudNode(state: ClaimState) -> dict:
                     "result": result,
                     "entityTypes": None,
                     "signalValue": critique.confidence,
+                    "details": {
+                        "concerns": list(getattr(critique, "concerns", ()) or ()),
+                        "flags": list(getattr(critique, "flags", ()) or ()),
+                        "confidence": critique.confidence,
+                    },
                 })
     except Exception:
         # Judge failures must never affect user flow
@@ -440,6 +492,8 @@ async def fraudNode(state: ClaimState) -> dict:
                 "result": c.get("result"),
                 "reason": c.get("name"),
                 "entityTypes": c.get("entityTypes"),
+                "signalValue": c.get("signalValue"),
+                "details": c.get("details"),
             }
             for c in governance_controls
         ]
@@ -515,6 +569,11 @@ async def _runDbQueries(
 
     try:
         recentClaims = await recentClaimsByEmployee(employeeId, days=30)
+        if excludeClaimId is not None:
+            recentClaims = [
+                row for row in recentClaims
+                if not (isinstance(row, dict) and row.get("id") == excludeClaimId)
+            ]
     except Exception as e:
         logEvent(
             logger,
@@ -530,6 +589,11 @@ async def _runDbQueries(
 
     try:
         merchantHistory = await claimsByMerchantAndEmployee(employeeId, merchant)
+        if excludeClaimId is not None:
+            merchantHistory = [
+                row for row in merchantHistory
+                if not (isinstance(row, dict) and row.get("id") == excludeClaimId)
+            ]
     except Exception as e:
         logEvent(
             logger,
@@ -555,7 +619,9 @@ async def _writeAuditLog(settings, dbClaimId, claimId: str, fraudFindings: dict)
             {
                 "verdict": fraudFindings.get("verdict"),
                 "flags": fraudFindings.get("flags"),
+                "duplicateClaims": fraudFindings.get("duplicateClaims"),
                 "summary": fraudFindings.get("summary"),
+                "governance": fraudFindings.get("governance", []),
             }
         )
         await mcpCallTool(

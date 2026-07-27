@@ -30,6 +30,7 @@ Return ONLY a valid JSON object — no markdown fences, no preamble, no explanat
       "severity": "major" or "minor"
     }
   ],
+  "citedClauseIds": ["2.1", "3.1"],
   "citedClauses": ["Section X.Y: ...", "Section X.Z: ..."],
   "requiresManagerApproval": true or false,
   "requiresDirectorApproval": true or false,
@@ -50,7 +51,8 @@ Return ONLY a valid JSON object — no markdown fences, no preamble, no explanat
 
 - Only cite clauses that were actually present in the retrieved policy rules
 - If no matching policy rule was found for an expense type, note the gap in summary but do NOT auto-fail
-- Quote section numbers when available (e.g. "Section 2.1 of meals.md")
+- You MUST always return `citedClauseIds` with canonical clause numbers only (e.g. ["2.1", "3.1"]) for every cited clause when available
+- `citedClauses` may include human-readable clause text, but `citedClauseIds` is the authoritative grounding field
 - Do not invent policy numbers or limits that were not in the retrieved rules
 
 ## SEVERITY GUIDE

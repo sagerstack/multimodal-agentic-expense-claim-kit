@@ -28,6 +28,7 @@ from agentic_claims.agents.advisor.prompts.advisorSystemPrompt import ADVISOR_SY
 from agentic_claims.agents.advisor.tools.searchPolicies import searchPolicies
 from agentic_claims.agents.advisor.tools.updateClaimStatus import updateClaimStatus
 from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
+from agentic_claims.agents.shared.citation_ids import derive_cited_clause_ids
 from agentic_claims.agents.shared.llmFactory import buildGovernedAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
 from agentic_claims.core.config import getSettings
@@ -168,9 +169,16 @@ def _extractAdvisorSummaryFields(messages: list) -> dict:
         reasoning = parsed.get("reasoning")
         summary = parsed.get("summary")
         citedClauses = parsed.get("citedClauses")
+        citedClauseIds = parsed.get("citedClauseIds")
+        normalized_cited_clause_ids = (
+            [str(v).strip() for v in citedClauseIds if str(v).strip()]
+            if isinstance(citedClauseIds, list) and citedClauseIds
+            else derive_cited_clause_ids(citedClauses if isinstance(citedClauses, list) else [])
+        )
         return {
             "reasoning": str(reasoning).strip() if reasoning else "",
             "summary": str(summary).strip() if summary else "",
+            "citedClauseIds": normalized_cited_clause_ids,
             "citedClauses": citedClauses if isinstance(citedClauses, list) else [],
         }
 
@@ -182,6 +190,7 @@ def _extractAdvisorSummaryFields(messages: list) -> dict:
     return {
         "reasoning": fallbackText,
         "summary": "",
+        "citedClauseIds": [],
         "citedClauses": [],
     }
 
@@ -426,8 +435,10 @@ async def advisorNode(state: ClaimState) -> dict:
         "fraud_verdict": fraud_verdict,
     }
     
-    # B3 grounding: RAG clauses from compliance findings (already verified)
-    rag_clauses_b3 = complianceFindings.get("citedClauses", [])
+    # B3 grounding: canonical clause ids from compliance findings (already verified)
+    rag_clauses_b3 = complianceFindings.get("citedClauseIds") or derive_cited_clause_ids(
+        complianceFindings.get("citedClauses", [])
+    )
 
     # Read dbClaimId directly from state (written by intakeNode after submitClaim)
     dbClaimIdEarly = state.get("dbClaimId")
@@ -561,6 +572,7 @@ async def advisorNode(state: ClaimState) -> dict:
                             "result": result_val,
                             "entityTypes": control.get("entityTypes"),
                             "signalValue": control.get("signalValue"),
+                            "details": control.get("details"),
                         })
             
             # Capture reviewer-facing explanation (if provided by runtime)
@@ -636,7 +648,7 @@ async def advisorNode(state: ClaimState) -> dict:
                     "amount": trusted_state_b3.get("amount"),  # Advisor references the claim amount
                     "date": trusted_state_b3.get("date"),      # Advisor references the receipt date
                     "vendor": trusted_state_b3.get("vendor"),  # Advisor references the merchant
-                    "cited_clauses": temp_summary.get("citedClauses", []),  # ← Key fix: cited_clauses not citedClauses
+                    "cited_clauses": temp_summary.get("citedClauseIds", []),
                 }
                 
                 post_result_b3 = await contentHookRuntime_background.post_model_check(
@@ -661,6 +673,7 @@ async def advisorNode(state: ClaimState) -> dict:
                                 "result": result_val,
                                 "entityTypes": control.get("entityTypes"),
                                 "signalValue": control.get("signalValue"),
+                                "details": control.get("details"),
                             })
                 
                 # Capture reviewer-facing explanation (from runtime; will be filtered later)
@@ -687,6 +700,11 @@ async def advisorNode(state: ClaimState) -> dict:
                             "result": result_val,
                             "entityTypes": None,
                             "signalValue": critique.confidence,
+                            "details": {
+                                "concerns": list(getattr(critique, "concerns", ()) or ()),
+                                "flags": list(getattr(critique, "flags", ()) or ()),
+                                "confidence": critique.confidence,
+                            },
                         })
                 except Exception:
                     pass
@@ -734,7 +752,7 @@ async def advisorNode(state: ClaimState) -> dict:
                                 "amount": trusted_state_b3.get("amount"),
                                 "date": trusted_state_b3.get("date"),
                                 "vendor": trusted_state_b3.get("vendor"),
-                                "cited_clauses": fallback_summary.get("citedClauses", []),
+                                "cited_clauses": fallback_summary.get("citedClauseIds", []),
                             }
                             
                             post_result_b3 = await contentHookRuntime_background.post_model_check(
@@ -759,6 +777,7 @@ async def advisorNode(state: ClaimState) -> dict:
                                             "result": result_val,
                                             "entityTypes": control.get("entityTypes"),
                                             "signalValue": control.get("signalValue"),
+                                            "details": control.get("details"),
                                         })
                     except Exception as gov_exc:
                         logEvent(
@@ -866,7 +885,7 @@ async def advisorNode(state: ClaimState) -> dict:
     if grounding_failed:
         selected_explanation = grounding_override_reason
     else:
-        selected_explanation = advisorSummaryFields.get("reasoning") or advisorSummaryFields.get("summary") or None
+        selected_explanation = reviewer_explanation or advisorSummaryFields.get("reasoning") or advisorSummaryFields.get("summary") or None
 
     if _isBenignAllowExplanation(selected_explanation):
         selected_explanation = None
@@ -879,6 +898,7 @@ async def advisorNode(state: ClaimState) -> dict:
             else advisorSummaryFields.get("reasoning", "")
         ),
         "summary": advisorSummaryFields.get("summary", ""),
+        "citedClauseIds": advisorSummaryFields.get("citedClauseIds", []),
         "citedClauses": advisorSummaryFields.get("citedClauses", []),
         "complianceSummary": complianceFindings.get("summary", ""),
         "fraudSummary": fraudFindings.get("summary", ""),
@@ -916,6 +936,7 @@ async def advisorNode(state: ClaimState) -> dict:
                 "result": c.get("result"),
                 "reason": c.get("name"),
                 "entityTypes": c.get("entityTypes"),
+                "signalValue": c.get("signalValue"),
                 "details": c.get("details"),
             }
             for c in governance_controls
@@ -931,6 +952,9 @@ async def advisorNode(state: ClaimState) -> dict:
                 "decision": advisorDecision,
                 "complianceVerdict": complianceFindings.get("verdict"),
                 "fraudVerdict": fraudFindings.get("verdict"),
+                "citedClauseIds": advisorSummaryFields.get("citedClauseIds", []),
+                "citedClauses": advisorSummaryFields.get("citedClauses", []),
+                "governance": advisorFindingsPayload.get("governance", []),
                 **({"reasoning": reasoning_for_audit} if reasoning_for_audit else {}),
             })
             await mcpCallTool(
