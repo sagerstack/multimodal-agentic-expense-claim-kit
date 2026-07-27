@@ -69,7 +69,8 @@ async def test_b6_reviewer_explanation_written_to_advisor_audit_and_findings():
     # Find insertAuditLog call and inspect payload JSON
     insert_calls = [c for c in mock_mcp.call_args_list if c.kwargs.get("toolName") == "insertAuditLog"]
     assert insert_calls, "Expected an insertAuditLog call for advisor_decision"
-    audit_args = insert_calls[-1].kwargs["arguments"]
+    audit_call = next(c for c in insert_calls if c.kwargs["arguments"]["action"] == "advisor_decision")
+    audit_args = audit_call.kwargs["arguments"]
     assert audit_args["action"] == "advisor_decision"
     audit_payload = json.loads(audit_args["newValue"]) if isinstance(audit_args["newValue"], str) else audit_args["newValue"]
     assert audit_payload.get("reasoning") == "Please review receipt legibility and policy cap.", (

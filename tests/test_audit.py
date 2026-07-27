@@ -152,11 +152,11 @@ def testTimelineEndpointReturnsSteps(client):
 
 
 def testTimelineEndpointHandlesMissingSteps(client):
-    """No audit entries returns all 8 steps as pending."""
+    """No audit entries returns all 9 steps as pending."""
     from agentic_claims.web.routers.audit import _buildTimelineSteps
 
     steps = _buildTimelineSteps([])
-    assert len(steps) == 8
+    assert len(steps) == 9
     for step in steps:
         assert step["status"] == "pending"
     names = [s["name"] for s in steps]
@@ -168,6 +168,7 @@ def testTimelineEndpointHandlesMissingSteps(client):
         "Compliance Agent",
         "Fraud Checking Agent",
         "Advisory Agent",
+        "Governance Oversight",
         "Reviewer Decision",
     ]
 
@@ -337,7 +338,7 @@ def testBuildTimelineStepsPolicyCompliant():
 
 
 def testBuildTimelineAllSevenSteps():
-    """_buildTimelineSteps produces 8 ordered steps when all audit_log actions present."""
+    """_buildTimelineSteps produces 9 ordered steps when all audit_log actions present."""
     from agentic_claims.web.routers.audit import _buildTimelineSteps
 
     rows = [
@@ -359,7 +360,7 @@ def testBuildTimelineAllSevenSteps():
         ),
     ]
     steps = _buildTimelineSteps(rows)
-    assert len(steps) == 8
+    assert len(steps) == 9
     names = [s["name"] for s in steps]
     assert names == [
         "Receipt Uploaded",
@@ -369,11 +370,13 @@ def testBuildTimelineAllSevenSteps():
         "Compliance Agent",
         "Fraud Checking Agent",
         "Advisory Agent",
+        "Governance Oversight",
         "Reviewer Decision",
     ]
-    # All steps except Reviewer Decision should be completed (no reviewer audit row provided)
-    for step in steps[:-1]:
+    # All steps except Governance Oversight and Reviewer Decision should be completed.
+    for step in steps[:-2]:
         assert step["status"] == "completed"
+    assert steps[-2]["status"] == "pending"
     assert steps[-1]["status"] == "pending"
 
 
@@ -422,6 +425,24 @@ def testBuildTimelineAdvisorEscalatedUsesRed():
     advisorStep = next(s for s in steps if s["name"] == "Advisory Agent")
     assert advisorStep["color"] == "red"
     assert advisorStep["advisorDecision"] == "escalate_to_reviewer"
+
+
+def testBuildTimelineGovernanceOversightStep():
+    """Governance oversight renders as a separate step with override metadata."""
+    from agentic_claims.web.routers.audit import _buildTimelineSteps
+
+    rows = [
+        _makeAuditRow(
+            "governance_oversight",
+            '{"decision": "require_human_review", "governance_override": true, "rationale": "Human review required due to: governance-b4:concerns-found", "reasons": ["governance-b4:concerns-found"], "contract": {"contract_id": "ESC-123", "reviewer_role": "reviewer", "advisor_decision": "auto_approve"}}',
+        ),
+    ]
+    steps = _buildTimelineSteps(rows)
+    oversight_step = next(s for s in steps if s["name"] == "Governance Oversight")
+    assert oversight_step["color"] == "red"
+    assert oversight_step["governanceDecision"] == "require_human_review"
+    assert oversight_step["governanceOverride"] is True
+    assert oversight_step["governanceContract"]["contract_id"] == "ESC-123"
 
 
 def testAuditTimelineRendersReviewerExplanationWhenPresent(client):

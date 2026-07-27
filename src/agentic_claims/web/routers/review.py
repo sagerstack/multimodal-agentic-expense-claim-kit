@@ -39,7 +39,7 @@ async def _fetchAgentFindingsFromAuditLog(claimId: int) -> dict:
             select(AuditLog.action, AuditLog.newValue)
             .where(
                 AuditLog.claimId == claimId,
-                AuditLog.action.in_(["compliance_check", "fraud_check", "advisor_decision"]),
+                AuditLog.action.in_(["compliance_check", "fraud_check", "advisor_decision", "governance_oversight"]),
             )
             .order_by(AuditLog.timestamp.asc())
         )
@@ -57,6 +57,8 @@ async def _fetchAgentFindingsFromAuditLog(claimId: int) -> dict:
         elif action == "advisor_decision" and data:
             findings["advisor_decision"] = data.get("decision")
             findings["advisor_findings"] = data
+        elif action == "governance_oversight" and data:
+            findings["governance_oversight"] = data
 
     return findings
 
@@ -99,6 +101,7 @@ async def _fetchClaimDetail(claimId: int) -> dict | None:
     rowDict = dict(row)
 
     # If the advisor never wrote findings to the claims table, reconstruct from audit_log
+    fallback: dict = {}
     needsFallback = (
         rowDict.get("compliance_findings") is None
         or rowDict.get("fraud_findings") is None
@@ -114,6 +117,13 @@ async def _fetchClaimDetail(claimId: int) -> dict | None:
             rowDict["advisor_decision"] = fallback["advisor_decision"]
         if fallback.get("advisor_findings") and rowDict.get("advisor_findings") is None:
             rowDict["advisor_findings"] = fallback["advisor_findings"]
+
+    if rowDict.get("advisor_findings") is None and fallback.get("governance_oversight"):
+        rowDict["advisor_findings"] = {"governanceOversight": fallback["governance_oversight"]}
+    elif fallback.get("governance_oversight"):
+        advisor_findings = _parseJsonField(rowDict.get("advisor_findings")) or {}
+        advisor_findings["governanceOversight"] = fallback["governance_oversight"]
+        rowDict["advisor_findings"] = advisor_findings
 
     return rowDict
 
@@ -285,6 +295,7 @@ def _buildClaimContext(row: dict) -> tuple[dict, dict | None]:
         "fraudFindings": _parseJsonField(row.get("fraud_findings")),
         "advisorDecision": row.get("advisor_decision"),
         "advisorFindings": _parseJsonField(row.get("advisor_findings")),
+        "governanceOversight": (_parseJsonField(row.get("advisor_findings")) or {}).get("governanceOversight"),
         "approvedBy": row.get("approved_by"),
     }
     receipt = None
@@ -342,6 +353,7 @@ async def reviewPage(request: Request, claimId: int):
                 "complianceFindings": None,
                 "fraudFindings": None,
                 "advisorDecision": None,
+                "governanceOversight": None,
             },
             status_code=404,
         )
@@ -376,6 +388,7 @@ async def reviewPage(request: Request, claimId: int):
             "fraudFindings": claim["fraudFindings"],
             "advisorDecision": claim["advisorDecision"],
             "advisorFindings": claim["advisorFindings"],
+            "governanceOversight": claim["governanceOversight"],
         },
     )
 
@@ -412,6 +425,7 @@ async def reviewDetailApi(request: Request, claimId: int):
             "fraudFindings": claim["fraudFindings"],
             "advisorDecision": claim["advisorDecision"],
             "advisorFindings": claim["advisorFindings"],
+            "governanceOversight": claim["governanceOversight"],
         }
     )
 
@@ -443,6 +457,12 @@ async def reviewDecisionApi(
             status_code=422,
         )
 
+    row = await _fetchClaimDetail(claimId)
+    governanceOversight = None
+    if row is not None:
+        advisor_findings = _parseJsonField(row.get("advisor_findings")) or {}
+        governanceOversight = advisor_findings.get("governanceOversight")
+
     newStatus = "manually_approved" if action == "approve" else "manually_rejected"
     auditAction = "claim_approved" if action == "approve" else "claim_rejected"
     newValue = json.dumps(
@@ -450,6 +470,9 @@ async def reviewDecisionApi(
             "action": action,
             **({"rejectionReason": rejectionReason} if action == "reject" else {}),
             **({"reviewerNotes": reviewerNotes} if reviewerNotes else {}),
+            **({"governanceContractId": ((governanceOversight or {}).get("contract") or {}).get("contract_id")} if governanceOversight else {}),
+            **({"advisorDecision": row.get("advisor_decision")} if row is not None else {}),
+            **({"governanceDecision": governanceOversight.get("decision")} if governanceOversight else {}),
         }
     )
     actor = currentUser["displayName"] or currentUser["username"]

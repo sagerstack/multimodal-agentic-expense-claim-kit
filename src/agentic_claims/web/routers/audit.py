@@ -27,6 +27,7 @@ _ACTION_TO_STEP = {
     "compliance_check": "Compliance Agent",
     "fraud_check": "Fraud Checking Agent",
     "advisor_decision": "Advisory Agent",
+    "governance_oversight": "Governance Oversight",
     # Start entries — agent has begun processing
     "compliance_check_start": "Compliance Agent",
     "fraud_check_start": "Fraud Checking Agent",
@@ -47,6 +48,7 @@ _TIMELINE_ORDER = [
     "Compliance Agent",
     "Fraud Checking Agent",
     "Advisory Agent",
+    "Governance Oversight",
     "Reviewer Decision",
 ]
 
@@ -58,6 +60,7 @@ _STEP_ICONS = {
     "Compliance Agent": "policy",
     "Fraud Checking Agent": "shield",
     "Advisory Agent": "gavel",
+    "Governance Oversight": "policy_alert",
     "Reviewer Decision": "person_check",
 }
 
@@ -70,6 +73,7 @@ _STEP_COLORS = {
     "Compliance Agent": "green",  # overridden to red in _buildTimelineSteps when verdict=fail
     "Fraud Checking Agent": "green",  # overridden by verdict in _buildTimelineSteps
     "Advisory Agent": "green",  # overridden to red in _buildTimelineSteps for non-approve
+    "Governance Oversight": "red",
     "Reviewer Decision": "green",  # overridden by action in _buildTimelineSteps
 }
 
@@ -183,6 +187,16 @@ def _buildTimelineSteps(auditRows: list) -> list[dict]:
             stepData["advisorReasoning"] = details.get("reasoning") or ""
             stepData["complianceSummary"] = details.get("complianceSummary") or ""
             stepData["fraudSummary"] = details.get("fraudSummary") or ""
+
+        elif stepName == "Governance Oversight":
+            governanceDecision = details.get("decision") or ""
+            stepData["governanceDecision"] = governanceDecision
+            stepData["governanceOverride"] = bool(details.get("governance_override"))
+            stepData["governanceReasons"] = details.get("reasons") or []
+            stepData["governanceRationale"] = details.get("rationale") or ""
+            stepData["governanceContract"] = details.get("contract") or {}
+            stepData["advisorDecision"] = details.get("contract", {}).get("advisor_decision") or ""
+            stepData["color"] = "red" if governanceDecision == "require_human_review" else "green"
 
         stepMap[stepName] = stepData
         stepAction[stepName] = action

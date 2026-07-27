@@ -338,6 +338,54 @@
               </div>
             {% endif %}
           </section>
+
+          <!-- Governance Oversight -->
+          <section class="agent-card p-5">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                {% if governanceOversight %}
+                  {% set govAllow = governanceOversight.decision == 'allow_advisor_decision' %}
+                  <span class="material-symbols-outlined {% if govAllow %}text-secondary{% else %}text-error{% endif %} text-sm">policy_alert</span>
+                  <h3 class="text-[11px] font-black uppercase tracking-widest {% if govAllow %}text-secondary{% else %}text-error{% endif %}">Governance Oversight</h3>
+                {% else %}
+                  <span class="material-symbols-outlined text-on-surface-variant text-sm">hourglass_empty</span>
+                  <h3 class="text-[11px] font-black uppercase tracking-widest text-on-surface-variant">Governance Oversight</h3>
+                {% endif %}
+              </div>
+            </div>
+            {% if governanceOversight %}
+              {% set govAllow = governanceOversight.decision == 'allow_advisor_decision' %}
+              <div class="bg-surface-container-lowest/50 p-4 rounded border border-outline-variant/20 space-y-3">
+                <h4 class="text-[10px] font-black {% if govAllow %}text-secondary{% else %}text-error{% endif %} uppercase">
+                  {% if govAllow %}Allow advisor decision{% else %}Require human review{% endif %}
+                </h4>
+                {% if governanceOversight.governance_override %}
+                  <p class="text-[11px] text-error leading-relaxed">Governance overrode the advisor recommendation and required human review.</p>
+                {% endif %}
+                {% if governanceOversight.rationale %}
+                  <div class="text-[11px] text-on-surface leading-relaxed whitespace-pre-wrap">{{ governanceOversight.rationale }}</div>
+                {% endif %}
+                {% if governanceOversight.reasons %}
+                  <div class="flex flex-wrap gap-2">
+                    {% for reason in governanceOversight.reasons %}
+                      <span class="px-2 py-1 rounded bg-surface-container text-[10px] font-mono text-on-surface-variant">{{ reason }}</span>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+                {% if governanceOversight.contract %}
+                  <div class="border-t border-outline-variant/10 pt-2 text-[11px] text-on-surface-variant space-y-1">
+                    <p><span class="font-bold text-on-surface">Contract:</span> {{ governanceOversight.contract.contract_id }}</p>
+                    <p><span class="font-bold text-on-surface">Reviewer role:</span> {{ governanceOversight.contract.reviewer_role }}</p>
+                    <p><span class="font-bold text-on-surface">Allowed actions:</span> {{ governanceOversight.contract.allowed_actions | join(', ') }}</p>
+                  </div>
+                {% endif %}
+              </div>
+            {% else %}
+              <div class="bg-surface-container-lowest/50 p-6 rounded border border-outline-variant/10 flex items-center justify-center h-[100px]">
+                <p class="text-[10px] text-on-surface-variant italic font-medium">Awaiting governance oversight.</p>
+              </div>
+            {% endif %}
+          </section>
         </div>
 
       </div>

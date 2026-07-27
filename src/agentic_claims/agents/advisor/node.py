@@ -31,6 +31,7 @@ from agentic_claims.agents.intake.utils.mcpClient import mcpCallTool
 from agentic_claims.agents.shared.citation_ids import derive_cited_clause_ids
 from agentic_claims.agents.shared.llmFactory import buildGovernedAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
+from agentic_governance import OversightRequest, evaluate_oversight
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.logging import logEvent
 from agentic_claims.core.state import ClaimState
@@ -857,8 +858,7 @@ async def advisorNode(state: ClaimState) -> dict:
             message="B3 grounding failed — downgraded decision to escalate_to_reviewer",
         )
     
-    newStatus = DECISION_TO_STATUS.get(advisorDecision, "escalated")
-    approvedBy = "agent" if advisorDecision == "auto_approve" else ""
+    advisorRecommendedDecision = advisorDecision
 
     logEvent(
         logger,
@@ -866,8 +866,7 @@ async def advisorNode(state: ClaimState) -> dict:
         logCategory="agent",
         agent="advisor",
         claimId=claimId,
-        advisorDecision=advisorDecision,
-        newStatus=newStatus,
+        advisorDecision=advisorRecommendedDecision,
         message="Advisor agent completed",
     )
 
@@ -942,6 +941,41 @@ async def advisorNode(state: ClaimState) -> dict:
             for c in governance_controls
         ]
 
+    oversightDecision = evaluate_oversight(
+        OversightRequest(
+            claim_id=claimId,
+            db_claim_id=dbClaimId,
+            claim_number=claimNumber,
+            advisor_decision=advisorRecommendedDecision,
+            advisor_summary=advisorSummaryFields.get("summary", ""),
+            advisor_reasoning=advisorSummaryFields.get("reasoning", ""),
+            amount_sgd=totalAmountSgd,
+            compliance_verdict=complianceFindings.get("verdict"),
+            fraud_verdict=fraudFindings.get("verdict"),
+            compliance_governance=complianceFindings.get("governance", []) or [],
+            fraud_governance=fraudFindings.get("governance", []) or [],
+            advisor_governance=advisorFindingsPayload.get("governance", []) or [],
+        )
+    )
+    advisorFindingsPayload["governanceOversight"] = oversightDecision.as_dict()
+
+    finalStatus = oversightDecision.final_status
+    approvedBy = "agent" if finalStatus == "ai_approved" else ""
+
+    logEvent(
+        logger,
+        "governance.oversight_evaluated",
+        logCategory="governance",
+        agent="advisor",
+        claimId=claimId,
+        advisorDecision=advisorRecommendedDecision,
+        governanceDecision=oversightDecision.decision,
+        governanceOverride=oversightDecision.governance_override,
+        finalStatus=finalStatus,
+        reasons=oversightDecision.reasons,
+        message="Governance oversight evaluated advisor recommendation",
+    )
+
     if dbClaimId is not None:
         try:
             # Reasoning for audit must be meaningful: prefer governance downgrade reason (if any), else advisor reasoning/summary
@@ -949,7 +983,7 @@ async def advisorNode(state: ClaimState) -> dict:
             if _isBenignAllowExplanation(reasoning_for_audit):
                 reasoning_for_audit = ""
             auditValue = json.dumps({
-                "decision": advisorDecision,
+                "decision": advisorRecommendedDecision,
                 "complianceVerdict": complianceFindings.get("verdict"),
                 "fraudVerdict": fraudFindings.get("verdict"),
                 "citedClauseIds": advisorSummaryFields.get("citedClauseIds", []),
@@ -991,16 +1025,41 @@ async def advisorNode(state: ClaimState) -> dict:
             )
 
         try:
+            governanceAuditValue = json.dumps(oversightDecision.as_dict())
+            await mcpCallTool(
+                serverUrl=settings.db_mcp_url,
+                toolName="insertAuditLog",
+                arguments={
+                    "claimId": dbClaimId,
+                    "action": "governance_oversight",
+                    "newValue": governanceAuditValue,
+                    "actor": "governance_group_c",
+                    "oldValue": "",
+                },
+            )
+        except Exception as e:
+            logEvent(
+                logger,
+                "governance.audit_log_error",
+                level=logging.WARNING,
+                logCategory="governance",
+                agent="advisor",
+                claimId=claimId,
+                error=str(e),
+                message="Failed to write governance oversight audit log — continuing",
+            )
+
+        try:
             await mcpCallTool(
                 serverUrl=settings.db_mcp_url,
                 toolName="updateClaimStatus",
                 arguments={
                     "claimId": dbClaimId,
-                    "newStatus": newStatus,
+                    "newStatus": finalStatus,
                     "actor": "advisor_agent",
                     "complianceFindings": complianceFindings,
                     "fraudFindings": fraudFindings,
-                    "advisorDecision": advisorDecision,
+                    "advisorDecision": advisorRecommendedDecision,
                     "advisorFindings": advisorFindingsPayload,
                     "approvedBy": approvedBy,
                 },
@@ -1012,8 +1071,10 @@ async def advisorNode(state: ClaimState) -> dict:
                 logCategory="agent",
                 agent="advisor",
                 claimId=claimId,
-                newStatus=newStatus,
+                newStatus=finalStatus,
                 approvedBy=approvedBy,
+                governanceDecision=oversightDecision.decision,
+                governanceOverride=oversightDecision.governance_override,
                 message="Advisor updateClaimStatus written",
             )
         except Exception as e:
@@ -1031,7 +1092,7 @@ async def advisorNode(state: ClaimState) -> dict:
     # ------------------------------------------------------------------
     # 6. Build human-readable summary — only this message goes into state
     # ------------------------------------------------------------------
-    label = DECISION_LABELS.get(advisorDecision, advisorDecision.upper())
+    label = DECISION_LABELS.get(advisorRecommendedDecision, advisorRecommendedDecision.upper())
     summaryMsg = (
         f"**Advisor Decision**: {label}\n\n"
         f"Compliance: **{complianceFindings.get('verdict', 'unknown').upper()}** — "
@@ -1042,6 +1103,6 @@ async def advisorNode(state: ClaimState) -> dict:
 
     return {
         "messages": [AIMessage(content=summaryMsg, additional_kwargs={"agent": "advisor"})],
-        "advisorDecision": advisorDecision,
-        "status": newStatus,
+        "advisorDecision": advisorRecommendedDecision,
+        "status": finalStatus,
     }
