@@ -184,7 +184,7 @@ def testApproveClaimUpdatesStatusAndCreatesAuditLog(client):
             data={"action": "approve", "reviewerNotes": "Looks good"},
         )
     assert response.status_code == 204
-    assert response.headers.get("HX-Redirect") == "/dashboard"
+    assert response.headers.get("HX-Redirect") == "/manage"
     # Verify session.add was called (audit log entry)
     assert mockSession.add.called
     # Verify commit was called
@@ -228,7 +228,7 @@ def testRejectClaimWithValidReasonSucceeds(client):
             },
         )
     assert response.status_code == 204
-    assert response.headers.get("HX-Redirect") == "/dashboard"
+    assert response.headers.get("HX-Redirect") == "/manage"
     assert mockSession.add.called
 
 

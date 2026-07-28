@@ -32,6 +32,8 @@ from agentic_claims.agents.shared.citation_ids import derive_cited_clause_ids
 from agentic_claims.agents.shared.llmFactory import buildGovernedAgentLlm
 from agentic_claims.agents.shared.utils import extractJsonBlock
 from agentic_governance import OversightRequest, evaluate_oversight
+from agentic_governance.adapters.jsonl_audit import build_custom_audit_event, build_failure_audit_event
+from agentic_governance._version import PACKAGE_VERSION as GOVERNANCE_POLICY_VERSION
 from agentic_claims.core.config import getSettings
 from agentic_claims.core.logging import logEvent
 from agentic_claims.core.state import ClaimState
@@ -236,6 +238,66 @@ def _extractReviewerExplanation(*results) -> str | None:
     return None
 
 
+def _resolveAdvisorClaimData(state: ClaimState) -> dict:
+    """Return canonical claimData for advisor from top-level state or intake-gpt slots."""
+    claim_data = state.get("claimData")
+    if isinstance(claim_data, dict) and claim_data:
+        return claim_data
+
+    intake_gpt = state.get("intakeGpt") or {}
+    slots = intake_gpt.get("slots") if isinstance(intake_gpt, dict) else {}
+    nested_claim_data = slots.get("claimData") if isinstance(slots, dict) else {}
+    return nested_claim_data if isinstance(nested_claim_data, dict) else {}
+
+
+def _resolveAdvisorAmountSgd(state: ClaimState, receipt_fields: dict) -> float:
+    """Resolve trusted SGD amount for advisor context/building.
+
+    Prefer canonical claim-level SGD amounts over raw receipt-native totals.
+    Only fall back to receipt totalAmount when currency is already SGD or absent.
+    """
+    claim_data = _resolveAdvisorClaimData(state)
+    for key in ("amountSgd", "convertedAmount"):
+        value = claim_data.get(key)
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                pass
+
+    for container in (
+        state.get("currencyConversion"),
+        (state.get("intakeFindings") or {}).get("conversion"),
+    ):
+        if isinstance(container, dict):
+            for key in ("convertedAmount", "amountSgd"):
+                value = container.get(key)
+                if value is not None:
+                    try:
+                        return float(value)
+                    except (TypeError, ValueError):
+                        pass
+
+    for key in ("totalAmountSgd", "amountSgd"):
+        value = receipt_fields.get(key)
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                pass
+
+    currency = str(receipt_fields.get("currency") or "").strip().upper()
+    if currency in ("", "SGD"):
+        value = receipt_fields.get("totalAmount")
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                pass
+
+    return 0.0
+
+
 def _isBenignAllowExplanation(text: str | None) -> bool:
     """Return True if text is a generic allow-only governance message (low-value for reviewers).
 
@@ -405,19 +467,19 @@ async def advisorNode(state: ClaimState) -> dict:
     from agentic_claims.agents.intake.extractionContext import extractedReceiptVar
     
     trusted_receipt = extractedReceiptVar.get(None)
-    claim_data = state.get("claimData", {})
+    claim_data = _resolveAdvisorClaimData(state)
     
     # BUG FIX: Source trusted values from state if ContextVar not set (async boundary)
     if trusted_receipt and isinstance(trusted_receipt, dict):
         fields = trusted_receipt.get("fields", {})
-        trusted_amount = claim_data.get("amountSgd") or fields.get("totalAmount")
+        trusted_amount = _resolveAdvisorAmountSgd(state, fields)
         trusted_date = fields.get("date")
         trusted_vendor = fields.get("merchant")
         trusted_currency = fields.get("currency", "SGD")
     else:
         # Fallback to state (extractedReceipt stored in state by intake)
         extracted_from_state = state.get("extractedReceipt", {}).get("fields", {})
-        trusted_amount = claim_data.get("amountSgd") or extracted_from_state.get("totalAmount")
+        trusted_amount = _resolveAdvisorAmountSgd(state, extracted_from_state)
         trusted_date = extracted_from_state.get("date")
         trusted_vendor = extracted_from_state.get("merchant")
         trusted_currency = extracted_from_state.get("currency", "SGD")
@@ -480,12 +542,7 @@ async def advisorNode(state: ClaimState) -> dict:
         or "unknown"
     )
     merchant = receiptFields.get("merchant", "unknown")
-    totalAmountSgd = (
-        receiptFields.get("totalAmountSgd")
-        or receiptFields.get("amountSgd")
-        or receiptFields.get("totalAmount")
-        or 0.0
-    )
+    totalAmountSgd = _resolveAdvisorAmountSgd(state, receiptFields)
 
     logEvent(
         logger,
@@ -976,6 +1033,53 @@ async def advisorNode(state: ClaimState) -> dict:
         message="Governance oversight evaluated advisor recommendation",
     )
 
+    governance_event_ref = None
+    try:
+        from agentic_claims.core.graph import getGovernanceAuditSink
+
+        audit_sink = getGovernanceAuditSink()
+        if audit_sink is not None:
+            governance_event = build_custom_audit_event(
+                event_type="oversight_governance",
+                control_group="C",
+                actor_type="governance",
+                decision=oversightDecision.decision,
+                result=oversightDecision.final_status,
+                reasons=oversightDecision.reasons,
+                correlation_id=claimId,
+                claim_id=claimId,
+                db_claim_id=dbClaimId,
+                policy_version=GOVERNANCE_POLICY_VERSION,
+                payload_ref=oversightDecision.contract.contract_id if oversightDecision.contract else None,
+                agent_identity="governance_group_c",
+                control_id="C",
+                details=oversightDecision.as_dict(),
+            )
+            governance_event_ref = await audit_sink.append_custom(governance_event)
+            advisorFindingsPayload["governanceOversight"]["eventRef"] = {
+                "entryId": governance_event_ref.get("entryId"),
+                "entryHash": governance_event_ref.get("entryHash"),
+            }
+    except Exception as e:
+        try:
+            from agentic_claims.core.graph import getGovernanceAuditSink
+
+            audit_sink = getGovernanceAuditSink()
+            if audit_sink is not None:
+                audit_sink.record_failure_event(
+                    build_failure_audit_event(
+                        claim_id=claimId,
+                        correlation_id=claimId,
+                        db_claim_id=dbClaimId,
+                        component="oversight_governance_emit",
+                        error=str(e),
+                        details={"agent": "advisor"},
+                        policy_version=GOVERNANCE_POLICY_VERSION,
+                    )
+                )
+        except Exception:
+            pass
+
     if dbClaimId is not None:
         try:
             # Reasoning for audit must be meaningful: prefer governance downgrade reason (if any), else advisor reasoning/summary
@@ -1025,7 +1129,13 @@ async def advisorNode(state: ClaimState) -> dict:
             )
 
         try:
-            governanceAuditValue = json.dumps(oversightDecision.as_dict())
+            governance_audit_payload = oversightDecision.as_dict()
+            if governance_event_ref is not None:
+                governance_audit_payload["eventRef"] = {
+                    "entryId": governance_event_ref.get("entryId"),
+                    "entryHash": governance_event_ref.get("entryHash"),
+                }
+            governanceAuditValue = json.dumps(governance_audit_payload)
             await mcpCallTool(
                 serverUrl=settings.db_mcp_url,
                 toolName="insertAuditLog",

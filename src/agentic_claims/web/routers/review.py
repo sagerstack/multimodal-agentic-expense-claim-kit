@@ -11,6 +11,8 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from agentic_claims.infrastructure.database.models import AuditLog, Claim, Receipt, User
 from agentic_claims.web.auth import getCurrentUser
+from agentic_governance.adapters.jsonl_audit import build_custom_audit_event, build_failure_audit_event
+from agentic_governance._version import PACKAGE_VERSION as GOVERNANCE_POLICY_VERSION
 from agentic_claims.web.db import getAsyncSession
 from agentic_claims.web.session import getSessionIds
 from agentic_claims.web.templating import templates
@@ -479,6 +481,63 @@ async def reviewDecisionApi(
     nowUtc = datetime.now(timezone.utc)
 
     reviewerEmployeeId = currentUser["employeeId"]
+    reviewer_event_ref = None
+    try:
+        from agentic_claims.core.graph import getGovernanceAuditSink
+
+        audit_sink = getGovernanceAuditSink()
+        if audit_sink is not None:
+            reviewer_event = build_custom_audit_event(
+                event_type="reviewer_decision",
+                control_group="C",
+                actor_type="reviewer",
+                decision=action,
+                result=newStatus,
+                reasons=[rejectionReason] if action == "reject" and rejectionReason else [action],
+                correlation_id=row.get("claim_number") or str(claimId) if row is not None else str(claimId),
+                claim_id=row.get("claim_number") or str(claimId) if row is not None else str(claimId),
+                db_claim_id=claimId,
+                policy_version=GOVERNANCE_POLICY_VERSION,
+                payload_ref=((governanceOversight or {}).get("contract") or {}).get("contract_id"),
+                reviewer_identity={"employeeId": reviewerEmployeeId, "displayName": actor},
+                control_id="C",
+                details={
+                    "action": action,
+                    "newStatus": newStatus,
+                    "reviewerNotes": reviewerNotes,
+                    "rejectionReason": rejectionReason,
+                    "advisorDecision": row.get("advisor_decision") if row is not None else None,
+                    "governanceDecision": governanceOversight.get("decision") if governanceOversight else None,
+                    "contractId": ((governanceOversight or {}).get("contract") or {}).get("contract_id"),
+                },
+            )
+            reviewer_event_ref = await audit_sink.append_custom(reviewer_event)
+        if reviewer_event_ref is not None:
+            payload = json.loads(newValue)
+            payload["governanceEventRef"] = {
+                "entryId": reviewer_event_ref.get("entryId"),
+                "entryHash": reviewer_event_ref.get("entryHash"),
+            }
+            newValue = json.dumps(payload)
+    except Exception as e:
+        try:
+            from agentic_claims.core.graph import getGovernanceAuditSink
+
+            audit_sink = getGovernanceAuditSink()
+            if audit_sink is not None:
+                audit_sink.record_failure_event(
+                    build_failure_audit_event(
+                        claim_id=row.get("claim_number") or str(claimId) if row is not None else str(claimId),
+                        correlation_id=row.get("claim_number") or str(claimId) if row is not None else str(claimId),
+                        db_claim_id=claimId,
+                        component="reviewer_decision_emit",
+                        error=str(e),
+                        details={"reviewer": reviewerEmployeeId},
+                        policy_version=GOVERNANCE_POLICY_VERSION,
+                    )
+                )
+        except Exception:
+            pass
 
     async with getAsyncSession() as session:
         # Update claim status and set approved_by to reviewer's employee ID

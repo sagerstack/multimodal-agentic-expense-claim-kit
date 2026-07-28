@@ -44,6 +44,7 @@ dbClaimIdVar: ContextVar[int | None] = ContextVar("dbClaimIdVar", default=None)
 
 # Group B content governance runtimes (installed once per graph build)
 contentHookRuntime = None  # Intake: live chat notices
+auditSink = None  # Shared governance audit sink (canonical JSONL spine)
 contentHookRuntime_background = None  # Background agents: audit + findings embed, no chat
 
 _MCP_CALL_TOOL_IMPORTERS = (
@@ -67,12 +68,13 @@ _MCP_CALL_TOOL_IMPORTERS = (
 
 def _installGovernedMcpBoundary() -> None:
     """Install governance and replace every bound import of the real MCP boundary."""
-    global contentHookRuntime, contentHookRuntime_background
+    global contentHookRuntime, contentHookRuntime_background, auditSink
     from agentic_claims.web.governanceNoticeContext import append_notice
     from agentic_claims.core.config import getSettings
     
     # Build ONE shared audit sink for unified action + content audit correlation
     sharedAuditSink = JsonlAuditSink("./.agentic_governance/")
+    auditSink = sharedAuditSink
     
     # Define the notice callback that feeds into the ContextVar queue
     def notice_callback(notices: list[str]) -> None:
@@ -133,6 +135,10 @@ def _installGovernedMcpBoundary() -> None:
         notice_callback=None,  # No chat notices for background agents
         llm_judge=llm_judge,
     )
+
+
+def getGovernanceAuditSink():
+    return auditSink
 
 
 def _withNodeIdentity(nodeName: str, nodeCallable: Callable[..., Any]) -> Callable[..., Any]:
