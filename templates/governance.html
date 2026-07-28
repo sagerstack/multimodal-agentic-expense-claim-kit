@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}Governance{% endblock %}
+{% block content %}
+<div class="h-full overflow-y-auto px-8 py-6" style="-webkit-overflow-scrolling: touch;">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <p class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary">Governance Console</p>
+        <h1 class="text-3xl font-black tracking-tight text-on-surface font-headline mt-1">Runtime Governance Dashboard</h1>
+        <p class="text-sm text-on-surface-variant mt-2">Single-page monitoring console backed by the canonical governance audit spine.</p>
+      </div>
+      <div class="rounded-2xl border border-outline-variant/20 bg-surface-container-low px-4 py-3 min-w-[18rem]">
+        <p class="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant font-bold">Current Scope</p>
+        <p class="text-sm text-on-surface font-semibold mt-1">{{ dashboard.scope.label }}</p>
+      </div>
+    </header>
+
+    <form method="get" action="/governance" class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-end">
+        <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <label class="block">
+            <span class="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant font-bold">Claim Number</span>
+            <input type="text" name="claim" value="{{ dashboard.filters.claim }}" placeholder="CLAIM-224"
+                   class="mt-2 w-full rounded-xl bg-surface-container-high px-4 py-3 text-sm text-on-surface border border-outline-variant/20 focus:outline-none focus:ring-2 focus:ring-primary/40">
+          </label>
+          <label class="block">
+            <span class="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant font-bold">Correlation ID</span>
+            <input type="text" name="correlationId" value="{{ dashboard.filters.correlationId }}" placeholder="753ec4a0-..."
+                   class="mt-2 w-full rounded-xl bg-surface-container-high px-4 py-3 text-sm text-on-surface border border-outline-variant/20 focus:outline-none focus:ring-2 focus:ring-primary/40">
+          </label>
+          <label class="block">
+            <span class="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant font-bold">DB Claim ID</span>
+            <input type="text" name="dbClaimId" value="{{ dashboard.filters.dbClaimId }}" placeholder="202"
+                   class="mt-2 w-full rounded-xl bg-surface-container-high px-4 py-3 text-sm text-on-surface border border-outline-variant/20 focus:outline-none focus:ring-2 focus:ring-primary/40">
+          </label>
+        </div>
+        <div class="flex gap-3">
+          <button type="submit" class="px-5 py-3 rounded-xl bg-gradient-to-r from-primary to-primary-dim text-on-primary text-sm font-bold">Apply Filter</button>
+          <a href="/governance" class="px-5 py-3 rounded-xl bg-surface-container-high text-on-surface text-sm font-bold border border-outline-variant/20">Reset</a>
+        </div>
+      </div>
+    </form>
+
+    <nav class="sticky top-0 z-10 rounded-2xl border border-outline-variant/20 bg-[#0c1730]/95 backdrop-blur px-4 py-3">
+      <div class="flex flex-wrap gap-2 text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant">
+        <a href="#overview" class="px-3 py-1.5 rounded-full hover:bg-surface-container-high hover:text-on-surface">Overview</a>
+        <a href="#action-authorization" class="px-3 py-1.5 rounded-full hover:bg-surface-container-high hover:text-on-surface">Action Authorization</a>
+        <a href="#model-content-safeguards" class="px-3 py-1.5 rounded-full hover:bg-surface-container-high hover:text-on-surface">Model &amp; Content Safeguards</a>
+        <a href="#human-oversight" class="px-3 py-1.5 rounded-full hover:bg-surface-container-high hover:text-on-surface">Human Oversight</a>
+        <a href="#audit-integrity-monitoring" class="px-3 py-1.5 rounded-full hover:bg-surface-container-high hover:text-on-surface">Audit Integrity &amp; Monitoring</a>
+      </div>
+    </nav>
+
+    {% if not dashboard.hasAnyData %}
+      <section class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-10 text-center text-on-surface-variant">
+        <span class="material-symbols-outlined text-5xl mb-4 block">search_off</span>
+        <p class="text-lg font-bold text-on-surface">No governance data matched this filter.</p>
+        <p class="text-sm mt-2">Try a different claim number, correlation id, or db claim id.</p>
+      </section>
+    {% endif %}
+
+    <section id="overview" class="space-y-4 scroll-mt-24">
+      <div>
+        <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Overview</p>
+        <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Overview</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+        {% set cards = [
+          ('Total Governed Events', dashboard.overview.totalEvents, 'database'),
+          ('Escalations', dashboard.overview.escalations, 'escalator_warning'),
+          ('Human Review Required', dashboard.overview.humanReviewRequired, 'approval_delegation'),
+          ('System Failures', dashboard.overview.systemFailures, 'error'),
+          ('Integrity Status', dashboard.overview.integrityStatus, 'verified')
+        ] %}
+        {% for label, value, icon in cards %}
+          <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+            <div class="flex items-center justify-between">
+              <p class="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant font-bold">{{ label }}</p>
+              <span class="material-symbols-outlined text-primary text-lg">{{ icon }}</span>
+            </div>
+            <p class="mt-4 text-2xl font-black text-on-surface">{{ value }}</p>
+          </div>
+        {% endfor %}
+      </div>
+      {% if dashboard.claimLinks %}
+      <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Relevant Claims</h3>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="text-left text-on-surface-variant uppercase text-[10px] tracking-[0.2em]">
+              <tr>
+                <th class="pb-3">Claim</th><th class="pb-3">Status</th><th class="pb-3">Amount</th><th class="pb-3">Last Event</th><th class="pb-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for claim in dashboard.claimLinks %}
+              <tr class="border-t border-outline-variant/10">
+                <td class="py-3 font-semibold text-on-surface">{{ claim.claimNumber }}</td>
+                <td class="py-3 text-on-surface-variant">{{ claim.status }}</td>
+                <td class="py-3 text-on-surface-variant">{{ claim.amount }} {{ claim.currency }}</td>
+                <td class="py-3 text-on-surface-variant">{{ claim.lastEventType }}</td>
+                <td class="py-3 text-right">
+                  <a href="/audit/{{ claim.id }}" class="text-primary font-bold text-xs uppercase tracking-[0.2em]">Open Audit</a>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+    </section>
+
+    <section id="action-authorization" class="space-y-4 scroll-mt-24">
+      <div>
+        <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Action Authorization</p>
+        <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Action Authorization</h2>
+      </div>
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 xl:col-span-1">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Decision Mix</h3>
+          {% for key, value in dashboard.actionAuthorization.byDecision.items() %}
+            <div class="flex justify-between py-2 border-b border-outline-variant/10 text-sm"><span>{{ key }}</span><span class="font-bold">{{ value }}</span></div>
+          {% else %}
+            <p class="text-sm text-on-surface-variant">No action governance events.</p>
+          {% endfor %}
+        </div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Top Agents</h3>
+          {% for row in dashboard.actionAuthorization.topAgents %}
+            <div class="flex justify-between py-2 border-b border-outline-variant/10 text-sm"><span>{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div>
+          {% else %}
+            <p class="text-sm text-on-surface-variant">No agent activity.</p>
+          {% endfor %}
+        </div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Top Tools</h3>
+          {% for row in dashboard.actionAuthorization.topTools %}
+            <div class="flex justify-between py-2 border-b border-outline-variant/10 text-sm"><span>{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div>
+          {% else %}
+            <p class="text-sm text-on-surface-variant">No tool activity.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section id="model-content-safeguards" class="space-y-4 scroll-mt-24">
+      <div>
+        <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Model &amp; Content Safeguards</p>
+        <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Model &amp; Content Safeguards</h2>
+      </div>
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Summary</h3>
+          <div class="space-y-3 text-sm">
+            <div class="flex justify-between"><span>Total Content Events</span><span class="font-bold">{{ dashboard.modelContentSafeguards.totalEvents }}</span></div>
+            <div class="flex justify-between"><span>Actionable Alerts</span><span class="font-bold">{{ dashboard.modelContentSafeguards.actionableAlerts }}</span></div>
+          </div>
+        </div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Top Controls</h3>
+          {% for row in dashboard.modelContentSafeguards.topControls %}
+            <div class="flex justify-between py-2 border-b border-outline-variant/10 text-sm"><span>{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div>
+          {% else %}
+            <p class="text-sm text-on-surface-variant">No control alerts.</p>
+          {% endfor %}
+        </div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Top Surfaces</h3>
+          {% for row in dashboard.modelContentSafeguards.topSurfaces %}
+            <div class="flex justify-between py-2 border-b border-outline-variant/10 text-sm"><span>{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div>
+          {% else %}
+            <p class="text-sm text-on-surface-variant">No surface activity.</p>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+        <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Recent Alerts</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="text-left text-on-surface-variant uppercase text-[10px] tracking-[0.2em]"><tr><th class="pb-3">Time</th><th class="pb-3">Agent</th><th class="pb-3">Surface</th><th class="pb-3">Result</th><th class="pb-3">Claim Ref</th></tr></thead>
+            <tbody>
+            {% for row in dashboard.modelContentSafeguards.recentAlerts %}
+              <tr class="border-t border-outline-variant/10"><td class="py-3">{{ row.timestamp }}</td><td class="py-3">{{ row.agent }}</td><td class="py-3">{{ row.contentType }}</td><td class="py-3">{{ row.result }}</td><td class="py-3">{{ row.claimId }}</td></tr>
+            {% else %}
+              <tr><td colspan="5" class="py-4 text-on-surface-variant">No content alerts.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="human-oversight" class="space-y-4 scroll-mt-24">
+      <div>
+        <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Human Oversight</p>
+        <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Human Oversight</h2>
+      </div>
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+          <div class="space-y-3 text-sm">
+            <div class="flex justify-between"><span>Oversight Events</span><span class="font-bold">{{ dashboard.humanOversight.oversightEvents }}</span></div>
+            <div class="flex justify-between"><span>Reviewer Decisions</span><span class="font-bold">{{ dashboard.humanOversight.reviewerDecisions }}</span></div>
+          </div>
+        </div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Governance Decisions</h3>
+          {% for key, value in dashboard.humanOversight.oversightByDecision.items() %}
+            <div class="flex justify-between py-2 border-b border-outline-variant/10 text-sm"><span>{{ key }}</span><span class="font-bold">{{ value }}</span></div>
+          {% else %}
+            <p class="text-sm text-on-surface-variant">No oversight decisions.</p>
+          {% endfor %}
+        </div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Reviewer Decisions</h3>
+          {% for key, value in dashboard.humanOversight.reviewerByDecision.items() %}
+            <div class="flex justify-between py-2 border-b border-outline-variant/10 text-sm"><span>{{ key }}</span><span class="font-bold">{{ value }}</span></div>
+          {% else %}
+            <p class="text-sm text-on-surface-variant">No reviewer decisions.</p>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+        <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Recent Review Contracts</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="text-left text-on-surface-variant uppercase text-[10px] tracking-[0.2em]"><tr><th class="pb-3">Claim</th><th class="pb-3">Decision</th><th class="pb-3">Contract</th><th class="pb-3">Status</th><th class="pb-3">Reasons</th></tr></thead>
+            <tbody>
+            {% for row in dashboard.humanOversight.contracts %}
+              <tr class="border-t border-outline-variant/10"><td class="py-3">{{ row.claimNumber }}</td><td class="py-3">{{ row.decision }}</td><td class="py-3">{{ row.contractId }}</td><td class="py-3">{{ row.status }}</td><td class="py-3">{{ row.reasons }}</td></tr>
+            {% else %}
+              <tr><td colspan="5" class="py-4 text-on-surface-variant">No review contracts.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="audit-integrity-monitoring" class="space-y-4 scroll-mt-24 pb-6">
+      <div>
+        <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Audit Integrity &amp; Monitoring</p>
+        <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Audit Integrity &amp; Monitoring</h2>
+      </div>
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Reconstruction Readiness</h3>
+          <div class="space-y-3 text-sm">
+            <div class="flex justify-between"><span>Claims Observed</span><span class="font-bold">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.claimsObserved }}</span></div>
+            <div class="flex justify-between"><span>Failure Events</span><span class="font-bold">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.failureEvents }}</span></div>
+            <div class="flex justify-between"><span>Files With Issues</span><span class="font-bold">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.filesWithIssues }}</span></div>
+          </div>
+        </div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 xl:col-span-2">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Canonical Audit Files</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="text-left text-on-surface-variant uppercase text-[10px] tracking-[0.2em]"><tr><th class="pb-3">File</th><th class="pb-3">Events</th><th class="pb-3">Status</th><th class="pb-3">Issues</th></tr></thead>
+              <tbody>
+              {% for row in dashboard.auditIntegrityMonitoring.fileSummaries %}
+                <tr class="border-t border-outline-variant/10"><td class="py-3">{{ row.name }}</td><td class="py-3">{{ row.eventCount }}</td><td class="py-3">{% if row.ok %}<span class="text-secondary font-bold">Healthy{% else %}<span class="text-error font-bold">Issues{% endif %}</span></td><td class="py-3">{{ row.issueCount }}</td></tr>
+              {% else %}
+                <tr><td colspan="4" class="py-4 text-on-surface-variant">No audit files found.</td></tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">System Failure Events</h3>
+          <div class="space-y-3">
+            {% for row in dashboard.auditIntegrityMonitoring.failureEvents %}
+              <div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10">
+                <p class="text-[10px] uppercase tracking-[0.2em] text-error font-bold">{{ row.component }}</p>
+                <p class="text-sm text-on-surface mt-1">{{ row.error }}</p>
+                <p class="text-xs text-on-surface-variant mt-2">{{ row.timestamp }} · claim {{ row.claimId }}</p>
+              </div>
+            {% else %}
+              <p class="text-sm text-on-surface-variant">No system failure events.</p>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Projection &amp; Linkage Warnings</h3>
+          <div class="space-y-3">
+            {% for row in dashboard.auditIntegrityMonitoring.linkageWarnings %}
+              <div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10">
+                <p class="text-[10px] uppercase tracking-[0.2em] text-yellow-400 font-bold">{{ row.severity }}</p>
+                <p class="text-sm text-on-surface mt-1">{{ row.message }}</p>
+                <p class="text-xs text-on-surface-variant mt-2">Claim {{ row.claimNumber }}</p>
+              </div>
+            {% else %}
+              <p class="text-sm text-on-surface-variant">No linkage warnings detected.</p>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

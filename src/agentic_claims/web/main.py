@@ -18,6 +18,7 @@ from agentic_claims.web.routers.audit import router as auditRouter
 from agentic_claims.web.routers.auth import router as authRouter
 from agentic_claims.web.routers.chat import router as chatRouter
 from agentic_claims.web.routers.dashboard import router as dashboardRouter
+from agentic_claims.web.routers.governance import router as governanceRouter
 from agentic_claims.web.routers.manage import router as manageRouter
 from agentic_claims.web.routers.pages import router as pagesRouter
 from agentic_claims.web.routers.review import router as reviewRouter
@@ -139,6 +140,7 @@ app.include_router(authRouter)
 app.include_router(chatRouter)
 app.include_router(auditRouter)
 app.include_router(dashboardRouter)
+app.include_router(governanceRouter)
 app.include_router(reviewRouter)
 app.include_router(manageRouter)
 app.include_router(analyticsRouter)
