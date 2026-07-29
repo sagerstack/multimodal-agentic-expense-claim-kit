@@ -259,49 +259,58 @@ def _build_action_authorization(entries: list[dict[str, Any]]) -> dict[str, Any]
     action_entries = [entry for entry in entries if entry.get("eventType") == "action_governance"]
     by_decision = Counter(entry.get("decision") or "Unknown" for entry in action_entries)
     agent_tool_counts: dict[str, Counter] = defaultdict(Counter)
-    recent = []
-    for entry in action_entries[-12:][::-1]:
+    blocked_by_agent = Counter()
+    blocked_by_tool_by_agent: dict[str, Counter] = defaultdict(Counter)
+
+    for entry in action_entries:
         agent = entry.get("agentIdentity") or {}
         agent_id = agent.get("id") if isinstance(agent, dict) else agent
         agent_id = agent_id or "unknown"
         envelope = entry.get("envelope") or {}
         tool = envelope.get("toolName") or "unknown"
-        agent_tool_counts[agent_id][tool] += 1
-        recent.append(
-            {
-                "timestamp": entry.get("timestamp"),
-                "agent": agent_id,
-                "tool": tool,
-                "decision": entry.get("decision"),
-                "claimId": entry.get("dbClaimId") or entry.get("claimId"),
-            }
-        )
+        decision = entry.get("decision") or "Unknown"
+        result = entry.get("result") or "Unknown"
 
-    agent_profiles = []
+        agent_tool_counts[agent_id][tool] += 1
+        if str(decision).lower() in {"deny", "escalate"} or str(result).lower() in {"deny", "denied", "escalate", "escalated"}:
+            blocked_by_agent[agent_id] += 1
+            blocked_by_tool_by_agent[agent_id][tool] += 1
+
+    agent_distributions = []
     for agent_id, tool_counts in sorted(agent_tool_counts.items()):
         total = sum(tool_counts.values())
-        top_action, top_count = tool_counts.most_common(1)[0]
         distribution = []
-        for tool, count in tool_counts.most_common(5):
+        for tool, count in tool_counts.most_common():
             pct = round((count / total) * 100, 1) if total else 0.0
             distribution.append({"tool": tool, "count": count, "pct": pct})
-        agent_profiles.append(
+        agent_distributions.append(
             {
                 "agent": agent_id,
                 "totalActions": total,
-                "uniqueTools": len(tool_counts),
-                "topAction": top_action,
-                "topActionCount": top_count,
-                "topActionPct": round((top_count / total) * 100, 1) if total else 0.0,
                 "distribution": distribution,
+            }
+        )
+
+    blocked_profiles = []
+    for agent_id in sorted(set(agent_tool_counts.keys()) | set(blocked_by_agent.keys())):
+        blocked_total = blocked_by_agent.get(agent_id, 0)
+        blocked_tools = [
+            {"tool": tool, "count": count}
+            for tool, count in blocked_by_tool_by_agent.get(agent_id, Counter()).most_common()
+        ]
+        blocked_profiles.append(
+            {
+                "agent": agent_id,
+                "blockedCalls": blocked_total,
+                "blockedTools": blocked_tools,
             }
         )
 
     return {
         "totalEvents": len(action_entries),
         "byDecision": dict(by_decision),
-        "agentProfiles": agent_profiles,
-        "recentEvents": recent,
+        "agentDistributions": agent_distributions,
+        "blockedProfiles": blocked_profiles,
     }
 
 
