@@ -1,94 +1,94 @@
 {% extends "base.html" %}
 {% block title %}Governance{% endblock %}
 {% block content %}
-<div class="h-full overflow-y-auto px-8 py-6 bg-[#f8fafc] text-slate-900" style="-webkit-overflow-scrolling: touch;">
+<div class="h-full overflow-y-auto px-8 py-6" style="-webkit-overflow-scrolling: touch;">
   <div class="max-w-7xl mx-auto space-y-6">
     <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <p class="text-[10px] font-bold uppercase tracking-[0.3em] text-blue-600">Governance Console</p>
-        <h1 class="text-3xl font-black tracking-tight text-slate-900 font-headline mt-1">Runtime Governance Dashboard</h1>
-        <p class="text-sm text-slate-600 mt-2">Single-page monitoring console backed by the canonical governance audit spine.</p>
+        <p class="text-[10px] font-bold uppercase tracking-[0.3em] text-primary">Governance Console</p>
+        <h1 class="text-3xl font-black tracking-tight text-on-surface font-headline mt-1">Runtime Governance Dashboard</h1>
+        <p class="text-sm text-on-surface-variant mt-2">Single-page monitoring console backed by the canonical governance audit spine.</p>
       </div>
-      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3 min-w-[18rem]">
-        <p class="text-[10px] uppercase tracking-[0.25em] text-slate-600 font-bold">Current Scope</p>
-        <p class="text-sm text-slate-900 font-semibold mt-1">{{ dashboard.scope.label }}</p>
+      <div class="rounded-2xl border border-outline-variant/20 bg-surface-container-low px-4 py-3 min-w-[18rem]">
+        <p class="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant font-bold">Current Scope</p>
+        <p class="text-sm text-on-surface font-semibold mt-1">{{ dashboard.scope.label }}</p>
       </div>
     </header>
 
-    <form method="get" action="/governance" class="rounded-3xl border border-slate-200 bg-white p-5">
+    <form method="get" action="/governance" class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end">
         <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
           <label class="block">
-            <span class="text-[10px] uppercase tracking-[0.25em] text-slate-600 font-bold">Claim Number</span>
+            <span class="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant font-bold">Claim Number</span>
             <input type="text" name="claim" value="{{ dashboard.filters.claim }}" placeholder="CLAIM-224"
-                   class="mt-2 w-full rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                   class="mt-2 w-full rounded-xl bg-surface-container-high px-4 py-3 text-sm text-on-surface border border-outline-variant/20 focus:outline-none focus:ring-2 focus:ring-primary/40">
           </label>
           <label class="block">
-            <span class="text-[10px] uppercase tracking-[0.25em] text-slate-600 font-bold">Correlation ID</span>
+            <span class="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant font-bold">Correlation ID</span>
             <input type="text" name="correlationId" value="{{ dashboard.filters.correlationId }}" placeholder="753ec4a0-..."
-                   class="mt-2 w-full rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                   class="mt-2 w-full rounded-xl bg-surface-container-high px-4 py-3 text-sm text-on-surface border border-outline-variant/20 focus:outline-none focus:ring-2 focus:ring-primary/40">
           </label>
           <label class="block">
-            <span class="text-[10px] uppercase tracking-[0.25em] text-slate-600 font-bold">DB Claim ID</span>
+            <span class="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant font-bold">DB Claim ID</span>
             <input type="text" name="dbClaimId" value="{{ dashboard.filters.dbClaimId }}" placeholder="202"
-                   class="mt-2 w-full rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-900 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                   class="mt-2 w-full rounded-xl bg-surface-container-high px-4 py-3 text-sm text-on-surface border border-outline-variant/20 focus:outline-none focus:ring-2 focus:ring-primary/40">
           </label>
         </div>
         <div class="flex gap-3 items-end self-end lg:self-auto">
-          <button type="submit" class="h-[50px] px-5 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 text-white text-sm font-bold inline-flex items-center justify-center">Apply Filter</button>
-          <a href="/governance" class="h-[50px] px-5 rounded-xl bg-slate-50 text-slate-900 text-sm font-bold border border-slate-200 inline-flex items-center justify-center">Reset</a>
+          <button type="submit" class="h-[50px] px-5 rounded-xl bg-gradient-to-r from-primary to-primary-dim text-on-primary text-sm font-bold inline-flex items-center justify-center">Apply Filter</button>
+          <a href="/governance" class="h-[50px] px-5 rounded-xl bg-surface-container-high text-on-surface text-sm font-bold border border-outline-variant/20 inline-flex items-center justify-center">Reset</a>
         </div>
       </div>
     </form>
 
     {% if not dashboard.hasAnyData %}
-      <section class="rounded-3xl border border-slate-200 bg-white p-10 text-center text-slate-600">
+      <section class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-10 text-center text-on-surface-variant">
         <span class="material-symbols-outlined text-5xl mb-4 block">search_off</span>
-        <p class="text-lg font-bold text-slate-900">No governance data matched this filter.</p>
+        <p class="text-lg font-bold text-on-surface">No governance data matched this filter.</p>
         <p class="text-sm mt-2">Try a different claim number, correlation id, or db claim id.</p>
       </section>
     {% endif %}
 
     <section id="overview" class="space-y-4 scroll-mt-24">
       <div>
-        <p class="text-[10px] uppercase tracking-[0.3em] text-blue-600 font-bold">Overview</p>
-        <h2 class="text-2xl font-black tracking-tight text-slate-900 mt-1">Overview</h2>
+        <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Overview</p>
+        <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Overview</h2>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
           <div class="flex items-center justify-between gap-4">
             <div>
-              <h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">Agents Monitored</h3>
-              <p class="text-xs text-slate-600 mt-1">Distinct governed agent identities observed in the current scope.</p>
+              <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Agents Monitored</h3>
+              <p class="text-xs text-on-surface-variant mt-1">Distinct governed agent identities observed in the current scope.</p>
             </div>
-            <span class="material-symbols-outlined text-blue-600 text-lg">hub</span>
+            <span class="material-symbols-outlined text-primary text-lg">hub</span>
           </div>
-          <p class="mt-4 text-3xl font-black text-slate-900">{{ dashboard.overview.agentsMonitored }}</p>
+          <p class="mt-4 text-3xl font-black text-on-surface">{{ dashboard.overview.agentsMonitored }}</p>
           <div class="mt-4 flex flex-wrap gap-2">
             {% for agent in dashboard.overview.agentList %}
-              <span class="inline-flex items-center rounded-full bg-slate-50 px-3 py-1 text-[11px] text-slate-900 border border-slate-200">{{ agent }}</span>
+              <span class="inline-flex items-center rounded-full bg-surface-container-high px-3 py-1 text-[11px] text-on-surface border border-outline-variant/10">{{ agent }}</span>
             {% else %}
-              <span class="text-sm text-slate-600">No agents observed.</span>
+              <span class="text-sm text-on-surface-variant">No agents observed.</span>
             {% endfor %}
           </div>
         </div>
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
           <div class="flex items-center justify-between gap-4 mb-4">
             <div>
-              <h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">Agent Activity Trend</h3>
-              <p class="text-xs text-slate-600 mt-1">Governed runtime events by agent over the last 7 days.</p>
+              <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Agent Activity Trend</h3>
+              <p class="text-xs text-on-surface-variant mt-1">Governed runtime events by agent over the last 7 days.</p>
             </div>
-            <span class="material-symbols-outlined text-blue-600 text-lg">timeline</span>
+            <span class="material-symbols-outlined text-primary text-lg">timeline</span>
           </div>
           <div class="space-y-4">
-            {% set trendPalette = ['bg-blue-500', 'bg-green-500', 'bg-orange-400', 'bg-red-400', 'bg-blue-400', 'bg-green-400', 'bg-pink-400', 'bg-cyan-400'] %}
+            {% set trendPalette = ['bg-primary', 'bg-secondary', 'bg-yellow-400', 'bg-red-400', 'bg-blue-400', 'bg-green-400', 'bg-pink-400', 'bg-cyan-400'] %}
             {% for day in dashboard.overview.agentActivityTrend.days %}
               <div>
                 <div class="flex items-center justify-between text-xs mb-2">
-                  <span class="font-bold text-slate-900">{{ day.day }}</span>
-                  <span class="text-slate-600">{{ day.points|sum(attribute='count') }} events</span>
+                  <span class="font-bold text-on-surface">{{ day.day }}</span>
+                  <span class="text-on-surface-variant">{{ day.points|sum(attribute='count') }} events</span>
                 </div>
-                <div class="h-4 rounded-full overflow-hidden bg-slate-200 flex">
+                <div class="h-4 rounded-full overflow-hidden bg-surface-container-highest flex">
                   {% for point in day.points %}
                     {% if point.count > 0 %}
                       <div class="h-full {{ trendPalette[loop.index0 % (trendPalette|length)] }}" style="width: {{ (point.count / (dashboard.overview.agentActivityTrend.maxCount or 1) * 100) }}%" title="{{ point.agent }} · {{ point.count }}"></div>
@@ -97,13 +97,13 @@
                 </div>
               </div>
             {% else %}
-              <p class="text-sm text-slate-600">No trend data available.</p>
+              <p class="text-sm text-on-surface-variant">No trend data available.</p>
             {% endfor %}
             <div class="flex flex-wrap gap-2 pt-2">
               {% for agent in dashboard.overview.agentActivityTrend.agents %}
-                <span class="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-[11px] text-slate-600 border border-slate-200">
+                <span class="inline-flex items-center gap-2 rounded-full bg-surface-container-high px-3 py-1 text-[11px] text-on-surface-variant border border-outline-variant/10">
                   <span class="inline-block w-2.5 h-2.5 rounded-full {{ trendPalette[loop.index0 % (trendPalette|length)] }}"></span>
-                  <span class="text-slate-900">{{ agent }}</span>
+                  <span class="text-on-surface">{{ agent }}</span>
                 </span>
               {% endfor %}
             </div>
@@ -118,39 +118,39 @@
           ('System Failures', dashboard.overview.systemFailures, 'error', 'Canonical governance failure events')
         ] %}
         {% for label, value, icon, detail in overviewPairs %}
-          <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
+          <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
             <div class="flex items-center justify-between gap-4">
               <div>
-                <p class="text-[10px] uppercase tracking-[0.25em] text-slate-600 font-bold">{{ label }}</p>
-                <p class="text-xs text-slate-600 mt-1">{{ detail }}</p>
+                <p class="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant font-bold">{{ label }}</p>
+                <p class="text-xs text-on-surface-variant mt-1">{{ detail }}</p>
               </div>
-              <span class="material-symbols-outlined text-blue-600 text-lg">{{ icon }}</span>
+              <span class="material-symbols-outlined text-primary text-lg">{{ icon }}</span>
             </div>
-            <p class="mt-4 text-2xl font-black text-slate-900">{{ value }}</p>
+            <p class="mt-4 text-2xl font-black text-on-surface">{{ value }}</p>
           </div>
         {% endfor %}
       </div>
       {% if dashboard.claimLinks %}
-      <div class="rounded-3xl border border-slate-200 bg-white p-5">
+      <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">Relevant Claims</h3>
+          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Relevant Claims</h3>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
-            <thead class="text-left text-slate-600 uppercase text-[10px] tracking-[0.2em]">
+            <thead class="text-left text-on-surface-variant uppercase text-[10px] tracking-[0.2em]">
               <tr>
                 <th class="pb-3">Claim</th><th class="pb-3">Status</th><th class="pb-3">Amount</th><th class="pb-3">Last Event</th><th class="pb-3"></th>
               </tr>
             </thead>
             <tbody>
             {% for claim in dashboard.claimLinks %}
-              <tr class="border-t border-slate-200">
-                <td class="py-3 font-semibold text-slate-900">{{ claim.claimNumber }}</td>
-                <td class="py-3 text-slate-600">{{ claim.status }}</td>
-                <td class="py-3 text-slate-600">{{ claim.amount }} {{ claim.currency }}</td>
-                <td class="py-3 text-slate-600">{{ claim.lastEventType }}</td>
+              <tr class="border-t border-outline-variant/10">
+                <td class="py-3 font-semibold text-on-surface">{{ claim.claimNumber }}</td>
+                <td class="py-3 text-on-surface-variant">{{ claim.status }}</td>
+                <td class="py-3 text-on-surface-variant">{{ claim.amount }} {{ claim.currency }}</td>
+                <td class="py-3 text-on-surface-variant">{{ claim.lastEventType }}</td>
                 <td class="py-3 text-right">
-                  <a href="/audit/{{ claim.id }}" class="text-blue-600 font-bold text-xs uppercase tracking-[0.2em]">Open Audit</a>
+                  <a href="/audit/{{ claim.id }}" class="text-primary font-bold text-xs uppercase tracking-[0.2em]">Open Audit</a>
                 </td>
               </tr>
             {% endfor %}
@@ -163,106 +163,106 @@
 
     <section id="action-authorization" class="space-y-4 scroll-mt-24">
       <div>
-        <p class="text-[10px] uppercase tracking-[0.3em] text-blue-600 font-bold">Action Authorization</p>
-        <h2 class="text-2xl font-black tracking-tight text-slate-900 mt-1">Action Authorization</h2>
+        <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Action Authorization</p>
+        <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Action Authorization</h2>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
           <div class="mb-4 flex items-center justify-between gap-4">
             <div>
-              <h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">Action Distribution by Agent</h3>
-              <p class="text-xs text-slate-600 mt-1">How each agent’s governed actions split across all observed tools.</p>
+              <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Action Distribution by Agent</h3>
+              <p class="text-xs text-on-surface-variant mt-1">How each agent’s governed actions split across all observed tools.</p>
             </div>
             <div class="text-right">
-              <p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Governed Actions</p>
-              <p class="text-lg font-black text-slate-900">{{ dashboard.actionAuthorization.totalEvents }}</p>
+              <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Governed Actions</p>
+              <p class="text-lg font-black text-on-surface">{{ dashboard.actionAuthorization.totalEvents }}</p>
             </div>
           </div>
           <div class="grid grid-cols-3 gap-3 mb-5">
-            <div class="rounded-2xl bg-slate-50 p-3">
-              <p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Top Agent</p>
-              <p class="text-sm font-black text-slate-900 mt-1 break-all">{{ dashboard.actionAuthorization.topAgent.agent if dashboard.actionAuthorization.topAgent else '—' }}</p>
+            <div class="rounded-2xl bg-surface-container-high p-3">
+              <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Top Agent</p>
+              <p class="text-sm font-black text-on-surface mt-1 break-all">{{ dashboard.actionAuthorization.topAgent.agent if dashboard.actionAuthorization.topAgent else '—' }}</p>
             </div>
-            <div class="rounded-2xl bg-slate-50 p-3">
-              <p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Agent Actions</p>
-              <p class="text-sm font-black text-slate-900 mt-1">{{ dashboard.actionAuthorization.topAgent.totalActions if dashboard.actionAuthorization.topAgent else 0 }}</p>
+            <div class="rounded-2xl bg-surface-container-high p-3">
+              <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Agent Actions</p>
+              <p class="text-sm font-black text-on-surface mt-1">{{ dashboard.actionAuthorization.topAgent.totalActions if dashboard.actionAuthorization.topAgent else 0 }}</p>
             </div>
-            <div class="rounded-2xl bg-slate-50 p-3">
-              <p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Decision Types</p>
-              <p class="text-sm font-black text-slate-900 mt-1">{{ dashboard.actionAuthorization.byDecision|length }}</p>
+            <div class="rounded-2xl bg-surface-container-high p-3">
+              <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Decision Types</p>
+              <p class="text-sm font-black text-on-surface mt-1">{{ dashboard.actionAuthorization.byDecision|length }}</p>
             </div>
           </div>
           <div class="space-y-5">
             {% for row in dashboard.actionAuthorization.agentDistributions %}
               <div>
                 <div class="flex items-center justify-between text-xs mb-2 gap-4">
-                  <span class="font-bold text-slate-900 uppercase tracking-[0.18em]">{{ row.agent }}</span>
-                  <span class="text-slate-600 whitespace-nowrap">{{ row.totalActions }} total</span>
+                  <span class="font-bold text-on-surface uppercase tracking-[0.18em]">{{ row.agent }}</span>
+                  <span class="text-on-surface-variant whitespace-nowrap">{{ row.totalActions }} total</span>
                 </div>
-                <div class="h-4 rounded-full overflow-hidden bg-slate-200 flex">
-                  {% set palette = ['bg-blue-500', 'bg-green-500', 'bg-orange-400', 'bg-red-400', 'bg-blue-400', 'bg-green-400', 'bg-pink-400', 'bg-cyan-400', 'bg-orange-400', 'bg-violet-400'] %}
+                <div class="h-4 rounded-full overflow-hidden bg-surface-container-highest flex">
+                  {% set palette = ['bg-primary', 'bg-secondary', 'bg-yellow-400', 'bg-red-400', 'bg-blue-400', 'bg-green-400', 'bg-pink-400', 'bg-cyan-400', 'bg-orange-400', 'bg-violet-400'] %}
                   {% for item in row.distribution %}
                     <div class="h-full {{ palette[loop.index0 % (palette|length)] }}" style="width: {{ item.pct }}%" title="{{ item.tool }} · {{ item.count }} ({{ item.pct }}%)"></div>
                   {% endfor %}
                 </div>
                 <div class="mt-2 flex flex-wrap gap-2">
                   {% for item in row.distribution %}
-                    <div class="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-[11px] text-slate-600 border border-slate-200 max-w-full">
+                    <div class="inline-flex items-center gap-2 rounded-full bg-surface-container-high px-3 py-1 text-[11px] text-on-surface-variant border border-outline-variant/10 max-w-full">
                       <span class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0 {{ palette[loop.index0 % (palette|length)] }}"></span>
-                      <span class="font-medium text-slate-900 break-all">{{ item.tool }}</span>
+                      <span class="font-medium text-on-surface break-all">{{ item.tool }}</span>
                       <span class="whitespace-nowrap">{{ item.count }} · {{ item.pct }}%</span>
                     </div>
                   {% endfor %}
                 </div>
               </div>
             {% else %}
-              <p class="text-sm text-slate-600">No agent distributions available.</p>
+              <p class="text-sm text-on-surface-variant">No agent distributions available.</p>
             {% endfor %}
           </div>
         </div>
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
           <div class="mb-4">
-            <h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">Agent vs Blocked Calls</h3>
-            <p class="text-xs text-slate-600 mt-1">Deny and escalate decisions grouped by agent and blocked action.</p>
+            <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Agent vs Blocked Calls</h3>
+            <p class="text-xs text-on-surface-variant mt-1">Deny and escalate decisions grouped by agent and blocked action.</p>
           </div>
           <div class="grid grid-cols-3 gap-3 mb-5">
-            <div class="rounded-2xl bg-slate-50 p-3">
-              <p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Blocked Total</p>
-              <p class="text-sm font-black text-red-600 mt-1">{{ dashboard.actionAuthorization.blockedTotal }}</p>
+            <div class="rounded-2xl bg-surface-container-high p-3">
+              <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Blocked Total</p>
+              <p class="text-sm font-black text-error mt-1">{{ dashboard.actionAuthorization.blockedTotal }}</p>
             </div>
-            <div class="rounded-2xl bg-slate-50 p-3">
-              <p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Agents Affected</p>
-              <p class="text-sm font-black text-slate-900 mt-1">{{ dashboard.actionAuthorization.agentsAffected }}</p>
+            <div class="rounded-2xl bg-surface-container-high p-3">
+              <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Agents Affected</p>
+              <p class="text-sm font-black text-on-surface mt-1">{{ dashboard.actionAuthorization.agentsAffected }}</p>
             </div>
-            <div class="rounded-2xl bg-slate-50 p-3">
-              <p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Top Blocked Tool</p>
-              <p class="text-sm font-black text-slate-900 mt-1 break-all">{{ dashboard.actionAuthorization.topBlockedTool.label if dashboard.actionAuthorization.topBlockedTool else '—' }}</p>
+            <div class="rounded-2xl bg-surface-container-high p-3">
+              <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Top Blocked Tool</p>
+              <p class="text-sm font-black text-on-surface mt-1 break-all">{{ dashboard.actionAuthorization.topBlockedTool.label if dashboard.actionAuthorization.topBlockedTool else '—' }}</p>
             </div>
           </div>
           <div class="space-y-4">
             {% for row in dashboard.actionAuthorization.blockedProfiles %}
-              <div class="rounded-2xl bg-slate-50 p-4 border border-slate-200">
+              <div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10">
                 <div class="flex items-center justify-between gap-4">
-                  <span class="font-bold text-slate-900 uppercase tracking-[0.18em]">{{ row.agent }}</span>
-                  <span class="text-sm font-black {% if row.blockedCalls > 0 %}text-red-600{% else %}text-green-600{% endif %}">{{ row.blockedCalls }}</span>
+                  <span class="font-bold text-on-surface uppercase tracking-[0.18em]">{{ row.agent }}</span>
+                  <span class="text-sm font-black {% if row.blockedCalls > 0 %}text-error{% else %}text-secondary{% endif %}">{{ row.blockedCalls }}</span>
                 </div>
-                <p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 mt-1">blocked calls</p>
-                <div class="mt-2 h-3 rounded-full bg-slate-200 overflow-hidden">
-                  <div class="h-full {% if row.blockedCalls > 0 %}bg-red-500{% else %}bg-green-500{% endif %}" style="width: {{ (row.blockedCalls / (dashboard.actionAuthorization.blockedTotal or 1) * 100) if dashboard.actionAuthorization.blockedTotal else 100 }}%"></div>
+                <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant mt-1">blocked calls</p>
+                <div class="mt-2 h-3 rounded-full bg-surface-container-highest overflow-hidden">
+                  <div class="h-full {% if row.blockedCalls > 0 %}bg-error{% else %}bg-secondary{% endif %}" style="width: {{ (row.blockedCalls / (dashboard.actionAuthorization.blockedTotal or 1) * 100) if dashboard.actionAuthorization.blockedTotal else 100 }}%"></div>
                 </div>
                 <div class="mt-3 space-y-2">
                   {% for item in row.blockedTools %}
-                    <div class="flex items-center justify-between text-sm border-b border-slate-200 pb-2">
-                      <span class="text-slate-900 break-all">{{ item.tool }}</span>
-                      <span class="font-bold text-red-600">{{ item.count }}</span>
+                    <div class="flex items-center justify-between text-sm border-b border-outline-variant/10 pb-2">
+                      <span class="text-on-surface break-all">{{ item.tool }}</span>
+                      <span class="font-bold text-error">{{ item.count }}</span>
                     </div>
                   {% else %}
-                    <p class="text-sm text-slate-600">No blocked calls for this agent.</p>
+                    <p class="text-sm text-on-surface-variant">No blocked calls for this agent.</p>
                   {% endfor %}
                 </div>
               </div>
             {% else %}
-              <p class="text-sm text-slate-600">No blocked-call data available.</p>
+              <p class="text-sm text-on-surface-variant">No blocked-call data available.</p>
             {% endfor %}
           </div>
         </div>
@@ -271,101 +271,101 @@
 
     <section id="model-content-safeguards" class="space-y-4 scroll-mt-24">
       <div>
-        <p class="text-[10px] uppercase tracking-[0.3em] text-blue-600 font-bold">Model &amp; Content Safeguards</p>
-        <h2 class="text-2xl font-black tracking-tight text-slate-900 mt-1">Model &amp; Content Safeguards</h2>
+        <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Model &amp; Content Safeguards</p>
+        <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Model &amp; Content Safeguards</h2>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
-          <div class="flex items-center justify-between mb-4"><div><h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">B1 — Input Attack Detection</h3><p class="text-xs text-slate-600 mt-1">Pass volume and intervention outcomes.</p></div><div class="text-right"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Evaluations</p><p class="text-lg font-black text-slate-900">{{ dashboard.modelContentSafeguards.b1.evaluations }}</p></div></div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="flex items-center justify-between mb-4"><div><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">B1 — Input Attack Detection</h3><p class="text-xs text-on-surface-variant mt-1">Pass volume and intervention outcomes.</p></div><div class="text-right"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Evaluations</p><p class="text-lg font-black text-on-surface">{{ dashboard.modelContentSafeguards.b1.evaluations }}</p></div></div>
           <div class="grid grid-cols-2 gap-4 mb-4">
-            <div class="rounded-2xl bg-slate-50 p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Passes</p><p class="text-2xl font-black text-green-600 mt-1">{{ dashboard.modelContentSafeguards.b1.passes }}</p></div>
-            <div class="rounded-2xl bg-slate-50 p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Interventions</p><p class="text-2xl font-black text-red-600 mt-1">{{ dashboard.modelContentSafeguards.b1.interventions }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Passes</p><p class="text-2xl font-black text-secondary mt-1">{{ dashboard.modelContentSafeguards.b1.passes }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Interventions</p><p class="text-2xl font-black text-error mt-1">{{ dashboard.modelContentSafeguards.b1.interventions }}</p></div>
           </div>
-          <div class="space-y-2">{% for row in dashboard.modelContentSafeguards.b1.outcomes %}<div><div class="flex justify-between text-sm mb-1"><span class="text-slate-900">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-slate-200 overflow-hidden"><div class="h-full {% if row.label in ['allowed','grounded','no-concerns'] %}bg-green-500{% else %}bg-red-500{% endif %}" style="width: {{ (row.count / (dashboard.modelContentSafeguards.b1.evaluations or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-slate-600">No B1 outcomes recorded.</p>{% endfor %}</div>
+          <div class="space-y-2">{% for row in dashboard.modelContentSafeguards.b1.outcomes %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full {% if row.label in ['allowed','grounded','no-concerns'] %}bg-secondary{% else %}bg-error{% endif %}" style="width: {{ (row.count / (dashboard.modelContentSafeguards.b1.evaluations or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No B1 outcomes recorded.</p>{% endfor %}</div>
         </div>
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
-          <div class="flex items-center justify-between mb-4"><div><h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">B2 — PII Minimization</h3><p class="text-xs text-slate-600 mt-1">PII transformations by entity type.</p></div><div class="text-right"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Transformed</p><p class="text-lg font-black text-slate-900">{{ dashboard.modelContentSafeguards.b2.transformed }}</p></div></div>
-          <div class="grid grid-cols-2 gap-4 mb-4"><div class="rounded-2xl bg-slate-50 p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Evaluations</p><p class="text-2xl font-black text-slate-900 mt-1">{{ dashboard.modelContentSafeguards.b2.evaluations }}</p></div><div class="rounded-2xl bg-slate-50 p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Passes</p><p class="text-2xl font-black text-green-600 mt-1">{{ dashboard.modelContentSafeguards.b2.passes }}</p></div></div>
-          <div class="space-y-2">{% for row in dashboard.modelContentSafeguards.b2.entityTypes %}<div><div class="flex justify-between text-sm mb-1"><span class="text-slate-900 break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-slate-200 overflow-hidden"><div class="h-full bg-blue-500" style="width: {{ (row.count / (dashboard.modelContentSafeguards.b2.transformed or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-slate-600">No transformed entity types recorded.</p>{% endfor %}</div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="flex items-center justify-between mb-4"><div><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">B2 — PII Minimization</h3><p class="text-xs text-on-surface-variant mt-1">PII transformations by entity type.</p></div><div class="text-right"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Transformed</p><p class="text-lg font-black text-on-surface">{{ dashboard.modelContentSafeguards.b2.transformed }}</p></div></div>
+          <div class="grid grid-cols-2 gap-4 mb-4"><div class="rounded-2xl bg-surface-container-high p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Evaluations</p><p class="text-2xl font-black text-on-surface mt-1">{{ dashboard.modelContentSafeguards.b2.evaluations }}</p></div><div class="rounded-2xl bg-surface-container-high p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Passes</p><p class="text-2xl font-black text-secondary mt-1">{{ dashboard.modelContentSafeguards.b2.passes }}</p></div></div>
+          <div class="space-y-2">{% for row in dashboard.modelContentSafeguards.b2.entityTypes %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full bg-primary" style="width: {{ (row.count / (dashboard.modelContentSafeguards.b2.transformed or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No transformed entity types recorded.</p>{% endfor %}</div>
         </div>
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
-          <div class="flex items-center justify-between mb-4"><div><h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">B3 — Grounding Validation</h3><p class="text-xs text-slate-600 mt-1">Grounded vs failed grounding outcomes.</p></div><div class="text-right"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Evaluations</p><p class="text-lg font-black text-slate-900">{{ dashboard.modelContentSafeguards.b3.evaluations }}</p></div></div>
-          <div class="grid grid-cols-2 gap-4 mb-4"><div class="rounded-2xl bg-slate-50 p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Grounded Passes</p><p class="text-2xl font-black text-green-600 mt-1">{{ dashboard.modelContentSafeguards.b3.passes }}</p></div><div class="rounded-2xl bg-slate-50 p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Interventions</p><p class="text-2xl font-black text-red-600 mt-1">{{ dashboard.modelContentSafeguards.b3.interventions }}</p></div></div>
-          <div class="space-y-2">{% for row in dashboard.modelContentSafeguards.b3.outcomes %}<div><div class="flex justify-between text-sm mb-1"><span class="text-slate-900">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-slate-200 overflow-hidden"><div class="h-full {% if row.label in ['allowed','grounded'] %}bg-green-500{% else %}bg-red-500{% endif %}" style="width: {{ (row.count / (dashboard.modelContentSafeguards.b3.evaluations or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-slate-600">No B3 outcomes recorded.</p>{% endfor %}</div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="flex items-center justify-between mb-4"><div><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">B3 — Grounding Validation</h3><p class="text-xs text-on-surface-variant mt-1">Grounded vs failed grounding outcomes.</p></div><div class="text-right"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Evaluations</p><p class="text-lg font-black text-on-surface">{{ dashboard.modelContentSafeguards.b3.evaluations }}</p></div></div>
+          <div class="grid grid-cols-2 gap-4 mb-4"><div class="rounded-2xl bg-surface-container-high p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Grounded Passes</p><p class="text-2xl font-black text-secondary mt-1">{{ dashboard.modelContentSafeguards.b3.passes }}</p></div><div class="rounded-2xl bg-surface-container-high p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Interventions</p><p class="text-2xl font-black text-error mt-1">{{ dashboard.modelContentSafeguards.b3.interventions }}</p></div></div>
+          <div class="space-y-2">{% for row in dashboard.modelContentSafeguards.b3.outcomes %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full {% if row.label in ['allowed','grounded'] %}bg-secondary{% else %}bg-error{% endif %}" style="width: {{ (row.count / (dashboard.modelContentSafeguards.b3.evaluations or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No B3 outcomes recorded.</p>{% endfor %}</div>
         </div>
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
-          <div class="flex items-center justify-between mb-4"><div><h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">B4 — Output Critique</h3><p class="text-xs text-slate-600 mt-1">Judge concern flags by type.</p></div><div class="text-right"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Concerns</p><p class="text-lg font-black text-slate-900">{{ dashboard.modelContentSafeguards.b4.concerns }}</p></div></div>
-          <div class="grid grid-cols-2 gap-4 mb-4"><div class="rounded-2xl bg-slate-50 p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Evaluations</p><p class="text-2xl font-black text-slate-900 mt-1">{{ dashboard.modelContentSafeguards.b4.evaluations }}</p></div><div class="rounded-2xl bg-slate-50 p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">No Concerns</p><p class="text-2xl font-black text-green-600 mt-1">{{ dashboard.modelContentSafeguards.b4.passes }}</p></div></div>
-          <div class="space-y-2">{% for row in dashboard.modelContentSafeguards.b4.flags %}<div><div class="flex justify-between text-sm mb-1"><span class="text-slate-900 break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-slate-200 overflow-hidden"><div class="h-full bg-red-500" style="width: {{ (row.count / (dashboard.modelContentSafeguards.b4.concerns or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-slate-600">No B4 flags recorded.</p>{% endfor %}</div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="flex items-center justify-between mb-4"><div><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">B4 — Output Critique</h3><p class="text-xs text-on-surface-variant mt-1">Judge concern flags by type.</p></div><div class="text-right"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Concerns</p><p class="text-lg font-black text-on-surface">{{ dashboard.modelContentSafeguards.b4.concerns }}</p></div></div>
+          <div class="grid grid-cols-2 gap-4 mb-4"><div class="rounded-2xl bg-surface-container-high p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Evaluations</p><p class="text-2xl font-black text-on-surface mt-1">{{ dashboard.modelContentSafeguards.b4.evaluations }}</p></div><div class="rounded-2xl bg-surface-container-high p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">No Concerns</p><p class="text-2xl font-black text-secondary mt-1">{{ dashboard.modelContentSafeguards.b4.passes }}</p></div></div>
+          <div class="space-y-2">{% for row in dashboard.modelContentSafeguards.b4.flags %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full bg-error" style="width: {{ (row.count / (dashboard.modelContentSafeguards.b4.concerns or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No B4 flags recorded.</p>{% endfor %}</div>
         </div>
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
-          <div class="flex items-center justify-between mb-4"><div><h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">B6 — Decision Explanation Coverage</h3><p class="text-xs text-slate-600 mt-1">Reviewer explanation coverage for material decisions.</p></div><div class="text-right"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Material Decisions</p><p class="text-lg font-black text-slate-900">{{ dashboard.modelContentSafeguards.b6.materialDecisions }}</p></div></div>
-          <div class="grid grid-cols-2 gap-4 mb-4"><div class="rounded-2xl bg-slate-50 p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Explanations Present</p><p class="text-2xl font-black text-green-600 mt-1">{{ dashboard.modelContentSafeguards.b6.explanationsPresent }}</p></div><div class="rounded-2xl bg-slate-50 p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Missing</p><p class="text-2xl font-black text-red-600 mt-1">{{ dashboard.modelContentSafeguards.b6.explanationsMissing }}</p></div></div>
-          <div class="space-y-2">{% set total_b6 = dashboard.modelContentSafeguards.b6.materialDecisions or 1 %}<div><div class="flex justify-between text-sm mb-1"><span class="text-slate-900">Explanation present</span><span class="font-bold">{{ dashboard.modelContentSafeguards.b6.explanationsPresent }}</span></div><div class="h-3 rounded-full bg-slate-200 overflow-hidden"><div class="h-full bg-green-500" style="width: {{ (dashboard.modelContentSafeguards.b6.explanationsPresent / total_b6 * 100) }}%"></div></div></div><div><div class="flex justify-between text-sm mb-1"><span class="text-slate-900">Explanation missing</span><span class="font-bold">{{ dashboard.modelContentSafeguards.b6.explanationsMissing }}</span></div><div class="h-3 rounded-full bg-slate-200 overflow-hidden"><div class="h-full bg-red-500" style="width: {{ (dashboard.modelContentSafeguards.b6.explanationsMissing / total_b6 * 100) }}%"></div></div></div></div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="flex items-center justify-between mb-4"><div><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">B6 — Decision Explanation Coverage</h3><p class="text-xs text-on-surface-variant mt-1">Reviewer explanation coverage for material decisions.</p></div><div class="text-right"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Material Decisions</p><p class="text-lg font-black text-on-surface">{{ dashboard.modelContentSafeguards.b6.materialDecisions }}</p></div></div>
+          <div class="grid grid-cols-2 gap-4 mb-4"><div class="rounded-2xl bg-surface-container-high p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Explanations Present</p><p class="text-2xl font-black text-secondary mt-1">{{ dashboard.modelContentSafeguards.b6.explanationsPresent }}</p></div><div class="rounded-2xl bg-surface-container-high p-4"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Missing</p><p class="text-2xl font-black text-error mt-1">{{ dashboard.modelContentSafeguards.b6.explanationsMissing }}</p></div></div>
+          <div class="space-y-2">{% set total_b6 = dashboard.modelContentSafeguards.b6.materialDecisions or 1 %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface">Explanation present</span><span class="font-bold">{{ dashboard.modelContentSafeguards.b6.explanationsPresent }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full bg-secondary" style="width: {{ (dashboard.modelContentSafeguards.b6.explanationsPresent / total_b6 * 100) }}%"></div></div></div><div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface">Explanation missing</span><span class="font-bold">{{ dashboard.modelContentSafeguards.b6.explanationsMissing }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full bg-error" style="width: {{ (dashboard.modelContentSafeguards.b6.explanationsMissing / total_b6 * 100) }}%"></div></div></div></div>
         </div>
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
-          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">Recent Content Alerts</h3><p class="text-xs text-slate-600 mt-1">Latest actionable safeguard interventions.</p></div>
-          <div class="space-y-3">{% for row in dashboard.modelContentSafeguards.recentAlerts %}<div class="rounded-2xl bg-slate-50 p-4 border border-slate-200"><p class="text-[10px] uppercase tracking-[0.2em] text-blue-600 font-bold">{{ row.agent }} · {{ row.contentType }}</p><p class="text-sm text-slate-900 mt-1">{{ row.result }}</p><p class="text-xs text-slate-600 mt-2">{{ row.timestamp }} · claim {{ row.claimId }}</p></div>{% else %}<p class="text-sm text-slate-600">No recent content alerts.</p>{% endfor %}</div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Recent Content Alerts</h3><p class="text-xs text-on-surface-variant mt-1">Latest actionable safeguard interventions.</p></div>
+          <div class="space-y-3">{% for row in dashboard.modelContentSafeguards.recentAlerts %}<div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10"><p class="text-[10px] uppercase tracking-[0.2em] text-primary font-bold">{{ row.agent }} · {{ row.contentType }}</p><p class="text-sm text-on-surface mt-1">{{ row.result }}</p><p class="text-xs text-on-surface-variant mt-2">{{ row.timestamp }} · claim {{ row.claimId }}</p></div>{% else %}<p class="text-sm text-on-surface-variant">No recent content alerts.</p>{% endfor %}</div>
         </div>
       </div>
     </section>
 
     <section id="human-oversight" class="space-y-4 scroll-mt-24">
       <div>
-        <p class="text-[10px] uppercase tracking-[0.3em] text-blue-600 font-bold">Human Oversight</p>
-        <h2 class="text-2xl font-black tracking-tight text-slate-900 mt-1">Human Oversight</h2>
+        <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Human Oversight</p>
+        <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Human Oversight</h2>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
-          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">Advisor vs Governance Decisions</h3><p class="text-xs text-slate-600 mt-1">Oversight decision volumes and review-required escalations.</p></div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Advisor vs Governance Decisions</h3><p class="text-xs text-on-surface-variant mt-1">Oversight decision volumes and review-required escalations.</p></div>
           <div class="grid grid-cols-3 gap-3 mb-5">
-            <div class="rounded-2xl bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Oversight Events</p><p class="text-sm font-black text-slate-900 mt-1">{{ dashboard.humanOversight.oversightEvents }}</p></div>
-            <div class="rounded-2xl bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Review Required</p><p class="text-sm font-black text-red-600 mt-1">{{ dashboard.humanOversight.reviewRequiredCount }}</p></div>
-            <div class="rounded-2xl bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Reviewer Decisions</p><p class="text-sm font-black text-slate-900 mt-1">{{ dashboard.humanOversight.reviewerDecisions }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Oversight Events</p><p class="text-sm font-black text-on-surface mt-1">{{ dashboard.humanOversight.oversightEvents }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Review Required</p><p class="text-sm font-black text-error mt-1">{{ dashboard.humanOversight.reviewRequiredCount }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Reviewer Decisions</p><p class="text-sm font-black text-on-surface mt-1">{{ dashboard.humanOversight.reviewerDecisions }}</p></div>
           </div>
-          <div class="space-y-2">{% for key, value in dashboard.humanOversight.oversightByDecision.items() %}<div><div class="flex justify-between text-sm mb-1"><span class="text-slate-900 break-all">{{ key }}</span><span class="font-bold">{{ value }}</span></div><div class="h-3 rounded-full bg-slate-200 overflow-hidden"><div class="h-full {% if key == 'require_human_review' %}bg-red-500{% else %}bg-green-500{% endif %}" style="width: {{ (value / (dashboard.humanOversight.oversightEvents or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-slate-600">No oversight decisions.</p>{% endfor %}</div>
+          <div class="space-y-2">{% for key, value in dashboard.humanOversight.oversightByDecision.items() %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface break-all">{{ key }}</span><span class="font-bold">{{ value }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full {% if key == 'require_human_review' %}bg-error{% else %}bg-secondary{% endif %}" style="width: {{ (value / (dashboard.humanOversight.oversightEvents or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No oversight decisions.</p>{% endfor %}</div>
         </div>
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
-          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">Review Contracts &amp; Outcomes</h3><p class="text-xs text-slate-600 mt-1">Contract statuses and reviewer outcomes.</p></div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Review Contracts &amp; Outcomes</h3><p class="text-xs text-on-surface-variant mt-1">Contract statuses and reviewer outcomes.</p></div>
           <div class="grid grid-cols-3 gap-3 mb-5">
-            <div class="rounded-2xl bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Contracts</p><p class="text-sm font-black text-slate-900 mt-1">{{ dashboard.humanOversight.contracts|length }}</p></div>
-            <div class="rounded-2xl bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Open</p><p class="text-sm font-black text-red-600 mt-1">{{ dashboard.humanOversight.openContracts }}</p></div>
-            <div class="rounded-2xl bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Reviewer Outcomes</p><p class="text-sm font-black text-slate-900 mt-1">{{ dashboard.humanOversight.reviewerByDecision|length }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Contracts</p><p class="text-sm font-black text-on-surface mt-1">{{ dashboard.humanOversight.contracts|length }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Open</p><p class="text-sm font-black text-error mt-1">{{ dashboard.humanOversight.openContracts }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Reviewer Outcomes</p><p class="text-sm font-black text-on-surface mt-1">{{ dashboard.humanOversight.reviewerByDecision|length }}</p></div>
           </div>
-          <div class="space-y-2 mb-5">{% for row in dashboard.humanOversight.contractStatuses %}<div><div class="flex justify-between text-sm mb-1"><span class="text-slate-900 break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-slate-200 overflow-hidden"><div class="h-full {% if row.label == 'pending_review' %}bg-red-500{% else %}bg-green-500{% endif %}" style="width: {{ (row.count / (dashboard.humanOversight.contracts|length or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-slate-600">No contract statuses.</p>{% endfor %}</div>
-          <div class="space-y-3">{% for row in dashboard.humanOversight.contracts[:5] %}<div class="rounded-2xl bg-slate-50 p-4 border border-slate-200"><p class="text-[10px] uppercase tracking-[0.2em] text-blue-600 font-bold">{{ row.claimNumber }} · {{ row.contractId }}</p><p class="text-sm text-slate-900 mt-1">{{ row.decision }}</p><p class="text-xs text-slate-600 mt-2">{{ row.status }}{% if row.reasons %} · {{ row.reasons }}{% endif %}</p></div>{% else %}<p class="text-sm text-slate-600">No review contracts.</p>{% endfor %}</div>
+          <div class="space-y-2 mb-5">{% for row in dashboard.humanOversight.contractStatuses %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full {% if row.label == 'pending_review' %}bg-error{% else %}bg-secondary{% endif %}" style="width: {{ (row.count / (dashboard.humanOversight.contracts|length or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No contract statuses.</p>{% endfor %}</div>
+          <div class="space-y-3">{% for row in dashboard.humanOversight.contracts[:5] %}<div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10"><p class="text-[10px] uppercase tracking-[0.2em] text-primary font-bold">{{ row.claimNumber }} · {{ row.contractId }}</p><p class="text-sm text-on-surface mt-1">{{ row.decision }}</p><p class="text-xs text-on-surface-variant mt-2">{{ row.status }}{% if row.reasons %} · {{ row.reasons }}{% endif %}</p></div>{% else %}<p class="text-sm text-on-surface-variant">No review contracts.</p>{% endfor %}</div>
         </div>
       </div>
     </section>
 
     <section id="audit-integrity-monitoring" class="space-y-4 scroll-mt-24 pb-6">
       <div>
-        <p class="text-[10px] uppercase tracking-[0.3em] text-blue-600 font-bold">Audit Integrity &amp; Monitoring</p>
-        <h2 class="text-2xl font-black tracking-tight text-slate-900 mt-1">Audit Integrity &amp; Monitoring</h2>
+        <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Audit Integrity &amp; Monitoring</p>
+        <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Audit Integrity &amp; Monitoring</h2>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
-          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">Canonical Audit Health</h3><p class="text-xs text-slate-600 mt-1">Verification state of the canonical governance audit spine.</p></div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Canonical Audit Health</h3><p class="text-xs text-on-surface-variant mt-1">Verification state of the canonical governance audit spine.</p></div>
           <div class="grid grid-cols-3 gap-3 mb-5">
-            <div class="rounded-2xl bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Claims Observed</p><p class="text-sm font-black text-slate-900 mt-1">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.claimsObserved }}</p></div>
-            <div class="rounded-2xl bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Files With Issues</p><p class="text-sm font-black text-red-600 mt-1">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.filesWithIssues }}</p></div>
-            <div class="rounded-2xl bg-slate-50 p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold">Failure Events</p><p class="text-sm font-black text-slate-900 mt-1">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.failureEvents }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Claims Observed</p><p class="text-sm font-black text-on-surface mt-1">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.claimsObserved }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Files With Issues</p><p class="text-sm font-black text-error mt-1">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.filesWithIssues }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Failure Events</p><p class="text-sm font-black text-on-surface mt-1">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.failureEvents }}</p></div>
           </div>
-          <div class="space-y-2">{% for row in dashboard.auditIntegrityMonitoring.fileSummaries %}<div><div class="flex justify-between text-sm mb-1"><span class="text-slate-900 break-all">{{ row.name }}</span><span class="font-bold">{{ row.issueCount }}</span></div><div class="h-3 rounded-full bg-slate-200 overflow-hidden"><div class="h-full {% if row.ok %}bg-green-500{% else %}bg-red-500{% endif %}" style="width: {% if row.ok %}100{% else %}{{ (row.issueCount / (row.eventCount or 1) * 100) }}{% endif %}%"></div></div></div>{% else %}<p class="text-sm text-slate-600">No audit files found.</p>{% endfor %}</div>
+          <div class="space-y-2">{% for row in dashboard.auditIntegrityMonitoring.fileSummaries %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface break-all">{{ row.name }}</span><span class="font-bold">{{ row.issueCount }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full {% if row.ok %}bg-secondary{% else %}bg-error{% endif %}" style="width: {% if row.ok %}100{% else %}{{ (row.issueCount / (row.eventCount or 1) * 100) }}{% endif %}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No audit files found.</p>{% endfor %}</div>
         </div>
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 min-w-0">
-          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-slate-900">System Failures &amp; Linkage Warnings</h3><p class="text-xs text-slate-600 mt-1">Integrity failures by component and projection-linkage warning types.</p></div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">System Failures &amp; Linkage Warnings</h3><p class="text-xs text-on-surface-variant mt-1">Integrity failures by component and projection-linkage warning types.</p></div>
           <div class="grid grid-cols-2 gap-4 mb-5">
             <div>
-              <p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold mb-2">Failure Components</p>
-              <div class="space-y-2">{% for row in dashboard.auditIntegrityMonitoring.failureComponents %}<div><div class="flex justify-between text-sm mb-1"><span class="text-slate-900 break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-slate-200 overflow-hidden"><div class="h-full bg-red-500" style="width: {{ (row.count / (dashboard.auditIntegrityMonitoring.reconstructionReadiness.failureEvents or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-slate-600">No failure components.</p>{% endfor %}</div>
+              <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold mb-2">Failure Components</p>
+              <div class="space-y-2">{% for row in dashboard.auditIntegrityMonitoring.failureComponents %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full bg-error" style="width: {{ (row.count / (dashboard.auditIntegrityMonitoring.reconstructionReadiness.failureEvents or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No failure components.</p>{% endfor %}</div>
             </div>
             <div>
-              <p class="text-[10px] uppercase tracking-[0.2em] text-slate-600 font-bold mb-2">Warning Types</p>
-              <div class="space-y-2">{% for row in dashboard.auditIntegrityMonitoring.warningTypes %}<div><div class="flex justify-between text-sm mb-1"><span class="text-slate-900 break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-slate-200 overflow-hidden"><div class="h-full bg-orange-400" style="width: {{ (row.count / (dashboard.auditIntegrityMonitoring.linkageWarnings|length or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-slate-600">No warning types.</p>{% endfor %}</div>
+              <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold mb-2">Warning Types</p>
+              <div class="space-y-2">{% for row in dashboard.auditIntegrityMonitoring.warningTypes %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full bg-yellow-400" style="width: {{ (row.count / (dashboard.auditIntegrityMonitoring.linkageWarnings|length or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No warning types.</p>{% endfor %}</div>
             </div>
           </div>
-          <div class="space-y-3">{% for row in dashboard.auditIntegrityMonitoring.failureEvents[:4] %}<div class="rounded-2xl bg-slate-50 p-4 border border-slate-200"><p class="text-[10px] uppercase tracking-[0.2em] text-red-600 font-bold">{{ row.component }}</p><p class="text-sm text-slate-900 mt-1">{{ row.error }}</p><p class="text-xs text-slate-600 mt-2">{{ row.timestamp }} · claim {{ row.claimId }}</p></div>{% endfor %}{% for row in dashboard.auditIntegrityMonitoring.linkageWarnings[:4] %}<div class="rounded-2xl bg-slate-50 p-4 border border-slate-200"><p class="text-[10px] uppercase tracking-[0.2em] text-orange-500 font-bold">{{ row.severity }}</p><p class="text-sm text-slate-900 mt-1">{{ row.message }}</p><p class="text-xs text-slate-600 mt-2">Claim {{ row.claimNumber }}</p></div>{% else %}{% if not dashboard.auditIntegrityMonitoring.failureEvents %}<p class="text-sm text-slate-600">No failures or linkage warnings detected.</p>{% endif %}{% endfor %}</div>
+          <div class="space-y-3">{% for row in dashboard.auditIntegrityMonitoring.failureEvents[:4] %}<div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10"><p class="text-[10px] uppercase tracking-[0.2em] text-error font-bold">{{ row.component }}</p><p class="text-sm text-on-surface mt-1">{{ row.error }}</p><p class="text-xs text-on-surface-variant mt-2">{{ row.timestamp }} · claim {{ row.claimId }}</p></div>{% endfor %}{% for row in dashboard.auditIntegrityMonitoring.linkageWarnings[:4] %}<div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10"><p class="text-[10px] uppercase tracking-[0.2em] text-yellow-400 font-bold">{{ row.severity }}</p><p class="text-sm text-on-surface mt-1">{{ row.message }}</p><p class="text-xs text-on-surface-variant mt-2">Claim {{ row.claimNumber }}</p></div>{% else %}{% if not dashboard.auditIntegrityMonitoring.failureEvents %}<p class="text-sm text-on-surface-variant">No failures or linkage warnings detected.</p>{% endif %}{% endfor %}</div>
         </div>
       </div>
     </section>
