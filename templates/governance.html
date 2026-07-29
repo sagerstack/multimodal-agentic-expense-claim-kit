@@ -267,43 +267,25 @@
         <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Human Oversight</p>
         <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Human Oversight</h2>
       </div>
-      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
-          <div class="space-y-3 text-sm">
-            <div class="flex justify-between"><span>Oversight Events</span><span class="font-bold">{{ dashboard.humanOversight.oversightEvents }}</span></div>
-            <div class="flex justify-between"><span>Reviewer Decisions</span><span class="font-bold">{{ dashboard.humanOversight.reviewerDecisions }}</span></div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Advisor vs Governance Decisions</h3><p class="text-xs text-on-surface-variant mt-1">Oversight decision volumes and review-required escalations.</p></div>
+          <div class="grid grid-cols-3 gap-3 mb-5">
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Oversight Events</p><p class="text-sm font-black text-on-surface mt-1">{{ dashboard.humanOversight.oversightEvents }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Review Required</p><p class="text-sm font-black text-error mt-1">{{ dashboard.humanOversight.reviewRequiredCount }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Reviewer Decisions</p><p class="text-sm font-black text-on-surface mt-1">{{ dashboard.humanOversight.reviewerDecisions }}</p></div>
           </div>
+          <div class="space-y-2">{% for key, value in dashboard.humanOversight.oversightByDecision.items() %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface break-all">{{ key }}</span><span class="font-bold">{{ value }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full {% if key == 'require_human_review' %}bg-error{% else %}bg-secondary{% endif %}" style="width: {{ (value / (dashboard.humanOversight.oversightEvents or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No oversight decisions.</p>{% endfor %}</div>
         </div>
-        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
-          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Governance Decisions</h3>
-          {% for key, value in dashboard.humanOversight.oversightByDecision.items() %}
-            <div class="flex justify-between py-2 border-b border-outline-variant/10 text-sm"><span>{{ key }}</span><span class="font-bold">{{ value }}</span></div>
-          {% else %}
-            <p class="text-sm text-on-surface-variant">No oversight decisions.</p>
-          {% endfor %}
-        </div>
-        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
-          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Reviewer Decisions</h3>
-          {% for key, value in dashboard.humanOversight.reviewerByDecision.items() %}
-            <div class="flex justify-between py-2 border-b border-outline-variant/10 text-sm"><span>{{ key }}</span><span class="font-bold">{{ value }}</span></div>
-          {% else %}
-            <p class="text-sm text-on-surface-variant">No reviewer decisions.</p>
-          {% endfor %}
-        </div>
-      </div>
-      <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
-        <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Recent Review Contracts</h3>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead class="text-left text-on-surface-variant uppercase text-[10px] tracking-[0.2em]"><tr><th class="pb-3">Claim</th><th class="pb-3">Decision</th><th class="pb-3">Contract</th><th class="pb-3">Status</th><th class="pb-3">Reasons</th></tr></thead>
-            <tbody>
-            {% for row in dashboard.humanOversight.contracts %}
-              <tr class="border-t border-outline-variant/10"><td class="py-3">{{ row.claimNumber }}</td><td class="py-3">{{ row.decision }}</td><td class="py-3">{{ row.contractId }}</td><td class="py-3">{{ row.status }}</td><td class="py-3">{{ row.reasons }}</td></tr>
-            {% else %}
-              <tr><td colspan="5" class="py-4 text-on-surface-variant">No review contracts.</td></tr>
-            {% endfor %}
-            </tbody>
-          </table>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Review Contracts &amp; Outcomes</h3><p class="text-xs text-on-surface-variant mt-1">Contract statuses and reviewer outcomes.</p></div>
+          <div class="grid grid-cols-3 gap-3 mb-5">
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Contracts</p><p class="text-sm font-black text-on-surface mt-1">{{ dashboard.humanOversight.contracts|length }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Open</p><p class="text-sm font-black text-error mt-1">{{ dashboard.humanOversight.openContracts }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Reviewer Outcomes</p><p class="text-sm font-black text-on-surface mt-1">{{ dashboard.humanOversight.reviewerByDecision|length }}</p></div>
+          </div>
+          <div class="space-y-2 mb-5">{% for row in dashboard.humanOversight.contractStatuses %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full {% if row.label == 'pending_review' %}bg-error{% else %}bg-secondary{% endif %}" style="width: {{ (row.count / (dashboard.humanOversight.contracts|length or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No contract statuses.</p>{% endfor %}</div>
+          <div class="space-y-3">{% for row in dashboard.humanOversight.contracts[:5] %}<div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10"><p class="text-[10px] uppercase tracking-[0.2em] text-primary font-bold">{{ row.claimNumber }} · {{ row.contractId }}</p><p class="text-sm text-on-surface mt-1">{{ row.decision }}</p><p class="text-xs text-on-surface-variant mt-2">{{ row.status }}{% if row.reasons %} · {{ row.reasons }}{% endif %}</p></div>{% else %}<p class="text-sm text-on-surface-variant">No review contracts.</p>{% endfor %}</div>
         </div>
       </div>
     </section>
@@ -313,59 +295,29 @@
         <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Audit Integrity &amp; Monitoring</p>
         <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Audit Integrity &amp; Monitoring</h2>
       </div>
-      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
-          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Reconstruction Readiness</h3>
-          <div class="space-y-3 text-sm">
-            <div class="flex justify-between"><span>Claims Observed</span><span class="font-bold">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.claimsObserved }}</span></div>
-            <div class="flex justify-between"><span>Failure Events</span><span class="font-bold">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.failureEvents }}</span></div>
-            <div class="flex justify-between"><span>Files With Issues</span><span class="font-bold">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.filesWithIssues }}</span></div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Canonical Audit Health</h3><p class="text-xs text-on-surface-variant mt-1">Verification state of the canonical governance audit spine.</p></div>
+          <div class="grid grid-cols-3 gap-3 mb-5">
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Claims Observed</p><p class="text-sm font-black text-on-surface mt-1">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.claimsObserved }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Files With Issues</p><p class="text-sm font-black text-error mt-1">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.filesWithIssues }}</p></div>
+            <div class="rounded-2xl bg-surface-container-high p-3"><p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Failure Events</p><p class="text-sm font-black text-on-surface mt-1">{{ dashboard.auditIntegrityMonitoring.reconstructionReadiness.failureEvents }}</p></div>
           </div>
+          <div class="space-y-2">{% for row in dashboard.auditIntegrityMonitoring.fileSummaries %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface break-all">{{ row.name }}</span><span class="font-bold">{{ row.issueCount }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full {% if row.ok %}bg-secondary{% else %}bg-error{% endif %}" style="width: {% if row.ok %}100{% else %}{{ (row.issueCount / (row.eventCount or 1) * 100) }}{% endif %}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No audit files found.</p>{% endfor %}</div>
         </div>
-        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 xl:col-span-2">
-          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Canonical Audit Files</h3>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="text-left text-on-surface-variant uppercase text-[10px] tracking-[0.2em]"><tr><th class="pb-3">File</th><th class="pb-3">Events</th><th class="pb-3">Status</th><th class="pb-3">Issues</th></tr></thead>
-              <tbody>
-              {% for row in dashboard.auditIntegrityMonitoring.fileSummaries %}
-                <tr class="border-t border-outline-variant/10"><td class="py-3">{{ row.name }}</td><td class="py-3">{{ row.eventCount }}</td><td class="py-3">{% if row.ok %}<span class="text-secondary font-bold">Healthy{% else %}<span class="text-error font-bold">Issues{% endif %}</span></td><td class="py-3">{{ row.issueCount }}</td></tr>
-              {% else %}
-                <tr><td colspan="4" class="py-4 text-on-surface-variant">No audit files found.</td></tr>
-              {% endfor %}
-              </tbody>
-            </table>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="mb-4"><h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">System Failures &amp; Linkage Warnings</h3><p class="text-xs text-on-surface-variant mt-1">Integrity failures by component and projection-linkage warning types.</p></div>
+          <div class="grid grid-cols-2 gap-4 mb-5">
+            <div>
+              <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold mb-2">Failure Components</p>
+              <div class="space-y-2">{% for row in dashboard.auditIntegrityMonitoring.failureComponents %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full bg-error" style="width: {{ (row.count / (dashboard.auditIntegrityMonitoring.reconstructionReadiness.failureEvents or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No failure components.</p>{% endfor %}</div>
+            </div>
+            <div>
+              <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold mb-2">Warning Types</p>
+              <div class="space-y-2">{% for row in dashboard.auditIntegrityMonitoring.warningTypes %}<div><div class="flex justify-between text-sm mb-1"><span class="text-on-surface break-all">{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div><div class="h-3 rounded-full bg-surface-container-highest overflow-hidden"><div class="h-full bg-yellow-400" style="width: {{ (row.count / (dashboard.auditIntegrityMonitoring.linkageWarnings|length or 1) * 100) }}%"></div></div></div>{% else %}<p class="text-sm text-on-surface-variant">No warning types.</p>{% endfor %}</div>
+            </div>
           </div>
-        </div>
-      </div>
-      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
-          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">System Failure Events</h3>
-          <div class="space-y-3">
-            {% for row in dashboard.auditIntegrityMonitoring.failureEvents %}
-              <div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10">
-                <p class="text-[10px] uppercase tracking-[0.2em] text-error font-bold">{{ row.component }}</p>
-                <p class="text-sm text-on-surface mt-1">{{ row.error }}</p>
-                <p class="text-xs text-on-surface-variant mt-2">{{ row.timestamp }} · claim {{ row.claimId }}</p>
-              </div>
-            {% else %}
-              <p class="text-sm text-on-surface-variant">No system failure events.</p>
-            {% endfor %}
-          </div>
-        </div>
-        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
-          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Projection &amp; Linkage Warnings</h3>
-          <div class="space-y-3">
-            {% for row in dashboard.auditIntegrityMonitoring.linkageWarnings %}
-              <div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10">
-                <p class="text-[10px] uppercase tracking-[0.2em] text-yellow-400 font-bold">{{ row.severity }}</p>
-                <p class="text-sm text-on-surface mt-1">{{ row.message }}</p>
-                <p class="text-xs text-on-surface-variant mt-2">Claim {{ row.claimNumber }}</p>
-              </div>
-            {% else %}
-              <p class="text-sm text-on-surface-variant">No linkage warnings detected.</p>
-            {% endfor %}
-          </div>
+          <div class="space-y-3">{% for row in dashboard.auditIntegrityMonitoring.failureEvents[:4] %}<div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10"><p class="text-[10px] uppercase tracking-[0.2em] text-error font-bold">{{ row.component }}</p><p class="text-sm text-on-surface mt-1">{{ row.error }}</p><p class="text-xs text-on-surface-variant mt-2">{{ row.timestamp }} · claim {{ row.claimId }}</p></div>{% endfor %}{% for row in dashboard.auditIntegrityMonitoring.linkageWarnings[:4] %}<div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10"><p class="text-[10px] uppercase tracking-[0.2em] text-yellow-400 font-bold">{{ row.severity }}</p><p class="text-sm text-on-surface mt-1">{{ row.message }}</p><p class="text-xs text-on-surface-variant mt-2">Claim {{ row.claimNumber }}</p></div>{% else %}{% if not dashboard.auditIntegrityMonitoring.failureEvents %}<p class="text-sm text-on-surface-variant">No failures or linkage warnings detected.</p>{% endif %}{% endfor %}</div>
         </div>
       </div>
     </section>

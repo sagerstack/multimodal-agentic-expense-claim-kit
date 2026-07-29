@@ -450,15 +450,18 @@ def _build_human_oversight(entries: list[dict[str, Any]]) -> dict[str, Any]:
     by_decision = Counter(entry.get("decision") or "Unknown" for entry in oversight_entries)
     reviewer_by_decision = Counter(entry.get("decision") or "Unknown" for entry in reviewer_entries)
     contracts = []
+    contract_statuses = Counter()
     for entry in oversight_entries[-12:][::-1]:
         details = entry.get("details") or {}
         contract = details.get("contract") or {}
+        status = contract.get("status") or "unknown"
+        contract_statuses[status] += 1
         contracts.append(
             {
                 "claimNumber": contract.get("claim_number") or entry.get("claimId"),
                 "decision": entry.get("decision"),
                 "contractId": contract.get("contract_id"),
-                "status": contract.get("status"),
+                "status": status,
                 "reasons": ", ".join(details.get("reasons") or []),
             }
         )
@@ -468,6 +471,9 @@ def _build_human_oversight(entries: list[dict[str, Any]]) -> dict[str, Any]:
         "oversightByDecision": dict(by_decision),
         "reviewerByDecision": dict(reviewer_by_decision),
         "contracts": contracts,
+        "contractStatuses": _counter_rows(contract_statuses),
+        "reviewRequiredCount": by_decision.get("require_human_review", 0),
+        "openContracts": contract_statuses.get("pending_review", 0),
     }
 
 
@@ -482,18 +488,23 @@ def _build_audit_integrity(
         for entry in entries
         if entry.get("dbClaimId") is not None or entry.get("claimId") not in (None, "unknown")
     }
+    failure_events = [
+        {
+            "timestamp": entry.get("timestamp"),
+            "component": (entry.get("details") or {}).get("component"),
+            "error": (entry.get("details") or {}).get("error"),
+            "claimId": entry.get("dbClaimId") or entry.get("claimId"),
+        }
+        for entry in failures[-12:][::-1]
+    ]
+    failure_component_counts = Counter(event.get("component") or "unknown" for event in failure_events)
+    warning_counts = Counter(row.get("message") or "warning" for row in linkage_warnings)
     return {
         "fileSummaries": file_summaries[:8],
-        "failureEvents": [
-            {
-                "timestamp": entry.get("timestamp"),
-                "component": (entry.get("details") or {}).get("component"),
-                "error": (entry.get("details") or {}).get("error"),
-                "claimId": entry.get("dbClaimId") or entry.get("claimId"),
-            }
-            for entry in failures[-12:][::-1]
-        ],
+        "failureEvents": failure_events,
+        "failureComponents": _counter_rows(failure_component_counts),
         "linkageWarnings": linkage_warnings,
+        "warningTypes": _counter_rows(warning_counts),
         "reconstructionReadiness": {
             "claimsObserved": len({c for c in claims_seen if c is not None}),
             "failureEvents": len(failures),
