@@ -65,7 +65,7 @@ def _dashboard_payload():
         "filters": {"claim": "CLAIM-224", "correlationId": "", "dbClaimId": "202"},
         "scope": {"isFiltered": True, "label": "CLAIM-224 · escalated", "claim": {"claimNumber": "CLAIM-224"}},
         "overview": {"totalEvents": 12, "escalations": 3, "humanReviewRequired": 1, "systemFailures": 0, "integrityStatus": "Healthy"},
-        "actionAuthorization": {"totalEvents": 5, "byDecision": {"Auto-Execute": 5}, "topAgents": [{"label": "intake", "count": 3}], "topTools": [{"label": "insertAuditLog", "count": 3}], "recentEvents": []},
+        "actionAuthorization": {"totalEvents": 5, "byDecision": {"Auto-Execute": 5}, "agentProfiles": [{"agent": "intake", "totalActions": 3, "uniqueTools": 2, "topAction": "insertAuditLog", "topActionCount": 2, "topActionPct": 66.7, "distribution": [{"tool": "insertAuditLog", "count": 2, "pct": 66.7}, {"tool": "insertClaim", "count": 1, "pct": 33.3}]}], "recentEvents": []},
         "modelContentSafeguards": {"totalEvents": 4, "actionableAlerts": 1, "topAgents": [{"label": "advisor", "count": 1}], "topSurfaces": [{"label": "model_output", "count": 2}], "topControls": [{"label": "B4", "count": 1}], "recentAlerts": []},
         "humanOversight": {"oversightEvents": 1, "reviewerDecisions": 0, "oversightByDecision": {"require_human_review": 1}, "reviewerByDecision": {}, "contracts": []},
         "auditIntegrityMonitoring": {"fileSummaries": [{"name": "audit.jsonl", "eventCount": 12, "ok": True, "issueCount": 0}], "failureEvents": [], "linkageWarnings": [], "reconstructionReadiness": {"claimsObserved": 1, "failureEvents": 0, "filesWithIssues": 0}},
@@ -84,6 +84,10 @@ def test_governance_page_renders_theme_sections_and_filter_scope(client):
     assert response.status_code == 200
     assert "Runtime Governance Dashboard" in response.text
     assert "Action Authorization" in response.text
+    assert "Agent Activity Profile" in response.text
+    assert "Action Distribution by Agent" in response.text
+    assert "insertAuditLog" in response.text
+    assert "is the most common action" in response.text
     assert "Model &amp; Content Safeguards" in response.text
     assert "Human Oversight" in response.text
     assert "Audit Integrity &amp; Monitoring" in response.text

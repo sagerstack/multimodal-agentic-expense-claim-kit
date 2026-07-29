@@ -258,30 +258,49 @@ def _build_overview(entries: list[dict[str, Any]], failures: list[dict[str, Any]
 def _build_action_authorization(entries: list[dict[str, Any]]) -> dict[str, Any]:
     action_entries = [entry for entry in entries if entry.get("eventType") == "action_governance"]
     by_decision = Counter(entry.get("decision") or "Unknown" for entry in action_entries)
-    agent_counter = Counter()
-    tool_counter = Counter()
+    agent_tool_counts: dict[str, Counter] = defaultdict(Counter)
     recent = []
     for entry in action_entries[-12:][::-1]:
         agent = entry.get("agentIdentity") or {}
         agent_id = agent.get("id") if isinstance(agent, dict) else agent
-        agent_counter[agent_id or "unknown"] += 1
+        agent_id = agent_id or "unknown"
         envelope = entry.get("envelope") or {}
         tool = envelope.get("toolName") or "unknown"
-        tool_counter[tool] += 1
+        agent_tool_counts[agent_id][tool] += 1
         recent.append(
             {
                 "timestamp": entry.get("timestamp"),
-                "agent": agent_id or "unknown",
+                "agent": agent_id,
                 "tool": tool,
                 "decision": entry.get("decision"),
                 "claimId": entry.get("dbClaimId") or entry.get("claimId"),
             }
         )
+
+    agent_profiles = []
+    for agent_id, tool_counts in sorted(agent_tool_counts.items()):
+        total = sum(tool_counts.values())
+        top_action, top_count = tool_counts.most_common(1)[0]
+        distribution = []
+        for tool, count in tool_counts.most_common(5):
+            pct = round((count / total) * 100, 1) if total else 0.0
+            distribution.append({"tool": tool, "count": count, "pct": pct})
+        agent_profiles.append(
+            {
+                "agent": agent_id,
+                "totalActions": total,
+                "uniqueTools": len(tool_counts),
+                "topAction": top_action,
+                "topActionCount": top_count,
+                "topActionPct": round((top_count / total) * 100, 1) if total else 0.0,
+                "distribution": distribution,
+            }
+        )
+
     return {
         "totalEvents": len(action_entries),
         "byDecision": dict(by_decision),
-        "topAgents": _counter_rows(agent_counter),
-        "topTools": _counter_rows(tool_counter),
+        "agentProfiles": agent_profiles,
         "recentEvents": recent,
     }
 

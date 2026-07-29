@@ -118,30 +118,70 @@
         <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Action Authorization</p>
         <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Action Authorization</h2>
       </div>
-      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 xl:col-span-1">
-          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Decision Mix</h3>
-          {% for key, value in dashboard.actionAuthorization.byDecision.items() %}
-            <div class="flex justify-between py-2 border-b border-outline-variant/10 text-sm"><span>{{ key }}</span><span class="font-bold">{{ value }}</span></div>
-          {% else %}
-            <p class="text-sm text-on-surface-variant">No action governance events.</p>
-          {% endfor %}
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Agent Activity Profile</h3>
+              <p class="text-xs text-on-surface-variant mt-1">Most common action each agent takes at runtime.</p>
+            </div>
+            <div class="text-right">
+              <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant font-bold">Governed Actions</p>
+              <p class="text-lg font-black text-on-surface">{{ dashboard.actionAuthorization.totalEvents }}</p>
+            </div>
+          </div>
+          <div class="space-y-3">
+            {% for row in dashboard.actionAuthorization.agentProfiles %}
+              <div class="rounded-2xl bg-surface-container-high p-4 border border-outline-variant/10">
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <p class="text-[10px] uppercase tracking-[0.2em] text-primary font-bold">{{ row.agent }}</p>
+                    <p class="text-sm text-on-surface mt-1"><span class="font-bold">{{ row.topAction }}</span> is the most common action.</p>
+                    <p class="text-xs text-on-surface-variant mt-1">{{ row.topActionCount }} of {{ row.totalActions }} actions · {{ row.topActionPct }}% share · {{ row.uniqueTools }} tool{{ '' if row.uniqueTools == 1 else 's' }}</p>
+                  </div>
+                  <div class="min-w-[5rem] text-right">
+                    <p class="text-2xl font-black text-on-surface">{{ row.topActionCount }}</p>
+                    <p class="text-[10px] uppercase tracking-[0.2em] text-on-surface-variant">top action count</p>
+                  </div>
+                </div>
+              </div>
+            {% else %}
+              <p class="text-sm text-on-surface-variant">No action governance events.</p>
+            {% endfor %}
+          </div>
         </div>
         <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
-          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Top Agents</h3>
-          {% for row in dashboard.actionAuthorization.topAgents %}
-            <div class="flex justify-between py-2 border-b border-outline-variant/10 text-sm"><span>{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div>
-          {% else %}
-            <p class="text-sm text-on-surface-variant">No agent activity.</p>
-          {% endfor %}
-        </div>
-        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
-          <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface mb-4">Top Tools</h3>
-          {% for row in dashboard.actionAuthorization.topTools %}
-            <div class="flex justify-between py-2 border-b border-outline-variant/10 text-sm"><span>{{ row.label }}</span><span class="font-bold">{{ row.count }}</span></div>
-          {% else %}
-            <p class="text-sm text-on-surface-variant">No tool activity.</p>
-          {% endfor %}
+          <div class="mb-4">
+            <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Action Distribution by Agent</h3>
+            <p class="text-xs text-on-surface-variant mt-1">How each agent’s governed actions split across its most-used tools.</p>
+          </div>
+          <div class="space-y-4">
+            {% for row in dashboard.actionAuthorization.agentProfiles %}
+              <div>
+                <div class="flex items-center justify-between text-xs mb-2">
+                  <span class="font-bold text-on-surface uppercase tracking-[0.18em]">{{ row.agent }}</span>
+                  <span class="text-on-surface-variant">{{ row.totalActions }} total</span>
+                </div>
+                <div class="h-3 rounded-full overflow-hidden bg-surface-container-highest flex">
+                  {% set palette = ['bg-primary', 'bg-secondary', 'bg-yellow-400', 'bg-red-400', 'bg-blue-400'] %}
+                  {% for item in row.distribution %}
+                    <div class="h-full {{ palette[loop.index0 % (palette|length)] }}" style="width: {{ item.pct }}%" title="{{ item.tool }} · {{ item.count }} ({{ item.pct }}%)"></div>
+                  {% endfor %}
+                </div>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  {% for item in row.distribution %}
+                    <div class="inline-flex items-center gap-2 rounded-full bg-surface-container-high px-3 py-1 text-[11px] text-on-surface-variant border border-outline-variant/10">
+                      <span class="inline-block w-2.5 h-2.5 rounded-full {{ palette[loop.index0 % (palette|length)] }}"></span>
+                      <span class="font-medium text-on-surface">{{ item.tool }}</span>
+                      <span>{{ item.count }} · {{ item.pct }}%</span>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            {% else %}
+              <p class="text-sm text-on-surface-variant">No agent distributions available.</p>
+            {% endfor %}
+          </div>
         </div>
       </div>
     </section>
