@@ -334,11 +334,25 @@ def _build_action_authorization(entries: list[dict[str, Any]]) -> dict[str, Any]
             }
         )
 
+    top_agent = max(agent_distributions, key=lambda row: row["totalActions"], default=None)
+    top_blocked_tool = None
+    blocked_tool_counter = Counter()
+    for row in blocked_profiles:
+        for item in row["blockedTools"]:
+            blocked_tool_counter[item["tool"]] += item["count"]
+    if blocked_tool_counter:
+        label, count = blocked_tool_counter.most_common(1)[0]
+        top_blocked_tool = {"label": label, "count": count}
+
     return {
         "totalEvents": len(action_entries),
         "byDecision": dict(by_decision),
         "agentDistributions": agent_distributions,
         "blockedProfiles": blocked_profiles,
+        "blockedTotal": sum(blocked_by_agent.values()),
+        "agentsAffected": sum(1 for row in blocked_profiles if row["blockedCalls"] > 0),
+        "topAgent": top_agent,
+        "topBlockedTool": top_blocked_tool,
     }
 
 

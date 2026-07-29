@@ -48,7 +48,7 @@ async def governancePage(request: Request):
             "filters": {"claim": claim or "", "correlationId": correlation_id or "", "dbClaimId": db_claim_id_raw or ""},
             "scope": {"isFiltered": bool(claim or correlation_id or db_claim_id_raw), "label": "Governance dashboard unavailable", "claim": None},
             "overview": {"totalEvents": 0, "escalations": 0, "humanReviewRequired": 0, "systemFailures": 0, "integrityStatus": "Unavailable"},
-            "actionAuthorization": {"totalEvents": 0, "byDecision": {}, "topAgents": [], "topTools": [], "recentEvents": []},
+            "actionAuthorization": {"totalEvents": 0, "byDecision": {}, "agentDistributions": [], "blockedProfiles": [], "blockedTotal": 0, "agentsAffected": 0, "topAgent": None, "topBlockedTool": None},
             "modelContentSafeguards": {"totalEvents": 0, "actionableAlerts": 0, "b1": {"evaluations": 0, "passes": 0, "interventions": 0, "outcomes": []}, "b2": {"evaluations": 0, "passes": 0, "transformed": 0, "entityTypes": []}, "b3": {"evaluations": 0, "passes": 0, "interventions": 0, "outcomes": []}, "b4": {"evaluations": 0, "passes": 0, "concerns": 0, "flags": []}, "b6": {"materialDecisions": 0, "explanationsPresent": 0, "explanationsMissing": 0}, "recentAlerts": []},
             "humanOversight": {"oversightEvents": 0, "reviewerDecisions": 0, "oversightByDecision": {}, "reviewerByDecision": {}, "contracts": []},
             "auditIntegrityMonitoring": {"fileSummaries": [], "failureEvents": [], "linkageWarnings": [], "reconstructionReadiness": {"claimsObserved": 0, "failureEvents": 0, "filesWithIssues": 0}},
