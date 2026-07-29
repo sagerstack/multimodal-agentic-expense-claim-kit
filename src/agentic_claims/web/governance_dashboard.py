@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -268,18 +269,32 @@ def _build_overview(entries: list[dict[str, Any]], failures: list[dict[str, Any]
         for entry in entries
         if entry.get("eventType") == "oversight_governance" and entry.get("decision") == "require_human_review"
     }
-    escalations = sum(
-        1
-        for entry in entries
-        if str(entry.get("decision", "")).lower() in {"escalate", "require_human_review"}
-        or str(entry.get("result", "")).lower() in {"escalate", "escalated"}
-    )
+    distinct_agents = []
+    for entry in entries:
+        agent = entry.get("agentIdentity")
+        if isinstance(agent, dict):
+            agent = agent.get("id")
+        if agent and agent not in distinct_agents:
+            distinct_agents.append(agent)
+
+    action_authorizations = sum(1 for entry in entries if entry.get("eventType") == "action_governance")
+    content_safeguards = sum(1 for entry in entries if entry.get("eventType") == "content_governance")
+    human_oversight = sum(1 for entry in entries if entry.get("eventType") in {"oversight_governance", "reviewer_decision"})
+
+    trend = _build_agent_activity_trend(entries)
+
     return {
+        "agentsMonitored": len(distinct_agents),
+        "agentList": distinct_agents,
+        "agentActivityTrend": trend,
+        "agentAuthorizations": action_authorizations,
+        "contentSafeguards": content_safeguards,
+        "humanOversight": human_oversight,
+        "auditIntegrity": "Healthy" if integrity_issue_count == 0 else "Issues detected",
+        "auditIntegrityIssues": integrity_issue_count,
         "totalEvents": len(entries),
-        "escalations": escalations,
-        "humanReviewRequired": len({c for c in human_review_claims if c is not None}),
         "systemFailures": len(failures),
-        "integrityStatus": "Healthy" if integrity_issue_count == 0 else "Issues detected",
+        "humanReviewRequired": len({c for c in human_review_claims if c is not None}),
     }
 
 
@@ -578,6 +593,43 @@ async def _build_linkage_warnings(filters: GovernanceFilters, claim_context: dic
                 }
             )
     return warnings[:12]
+
+
+def _build_agent_activity_trend(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    today = datetime.now(timezone.utc).date()
+    days = [today - timedelta(days=offset) for offset in range(6, -1, -1)]
+    by_day_agent: dict[tuple[str, str], int] = defaultdict(int)
+    agent_totals = Counter()
+
+    for entry in entries:
+        timestamp = entry.get("timestamp")
+        if not timestamp:
+            continue
+        try:
+            dt = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        day = dt.date()
+        if day not in days:
+            continue
+        agent = entry.get("agentIdentity")
+        if isinstance(agent, dict):
+            agent = agent.get("id")
+        agent = agent or "unknown"
+        by_day_agent[(day.isoformat(), agent)] += 1
+        agent_totals[agent] += 1
+
+    agents = [agent for agent, _ in agent_totals.most_common()]
+    max_count = max(agent_totals.values()) if agent_totals else 0
+    trend = []
+    for day in days:
+        iso = day.isoformat()
+        points = []
+        for agent in agents:
+            count = by_day_agent.get((iso, agent), 0)
+            points.append({"agent": agent, "count": count})
+        trend.append({"day": iso, "points": points})
+    return [{"days": trend, "agents": agents, "maxCount": max_count}][0]
 
 
 def _counter_rows(counter: Counter) -> list[dict[str, Any]]:

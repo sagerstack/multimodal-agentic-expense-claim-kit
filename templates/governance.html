@@ -41,16 +41,6 @@
       </div>
     </form>
 
-    <nav class="sticky top-0 z-10 rounded-2xl border border-outline-variant/20 bg-[#0c1730]/95 backdrop-blur px-4 py-3">
-      <div class="flex flex-wrap gap-2 text-xs font-bold uppercase tracking-[0.2em] text-on-surface-variant">
-        <a href="#overview" class="px-3 py-1.5 rounded-full hover:bg-surface-container-high hover:text-on-surface">Overview</a>
-        <a href="#action-authorization" class="px-3 py-1.5 rounded-full hover:bg-surface-container-high hover:text-on-surface">Action Authorization</a>
-        <a href="#model-content-safeguards" class="px-3 py-1.5 rounded-full hover:bg-surface-container-high hover:text-on-surface">Model &amp; Content Safeguards</a>
-        <a href="#human-oversight" class="px-3 py-1.5 rounded-full hover:bg-surface-container-high hover:text-on-surface">Human Oversight</a>
-        <a href="#audit-integrity-monitoring" class="px-3 py-1.5 rounded-full hover:bg-surface-container-high hover:text-on-surface">Audit Integrity &amp; Monitoring</a>
-      </div>
-    </nav>
-
     {% if not dashboard.hasAnyData %}
       <section class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-10 text-center text-on-surface-variant">
         <span class="material-symbols-outlined text-5xl mb-4 block">search_off</span>
@@ -64,18 +54,76 @@
         <p class="text-[10px] uppercase tracking-[0.3em] text-primary font-bold">Overview</p>
         <h2 class="text-2xl font-black tracking-tight text-on-surface mt-1">Overview</h2>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-        {% set cards = [
-          ('Total Governed Events', dashboard.overview.totalEvents, 'database'),
-          ('Escalations', dashboard.overview.escalations, 'escalator_warning'),
-          ('Human Review Required', dashboard.overview.humanReviewRequired, 'approval_delegation'),
-          ('System Failures', dashboard.overview.systemFailures, 'error'),
-          ('Integrity Status', dashboard.overview.integrityStatus, 'verified')
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Agents Monitored</h3>
+              <p class="text-xs text-on-surface-variant mt-1">Distinct governed agent identities observed in the current scope.</p>
+            </div>
+            <span class="material-symbols-outlined text-primary text-lg">hub</span>
+          </div>
+          <p class="mt-4 text-3xl font-black text-on-surface">{{ dashboard.overview.agentsMonitored }}</p>
+          <div class="mt-4 flex flex-wrap gap-2">
+            {% for agent in dashboard.overview.agentList %}
+              <span class="inline-flex items-center rounded-full bg-surface-container-high px-3 py-1 text-[11px] text-on-surface border border-outline-variant/10">{{ agent }}</span>
+            {% else %}
+              <span class="text-sm text-on-surface-variant">No agents observed.</span>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+          <div class="flex items-center justify-between gap-4 mb-4">
+            <div>
+              <h3 class="text-sm font-black uppercase tracking-[0.25em] text-on-surface">Agent Activity Trend</h3>
+              <p class="text-xs text-on-surface-variant mt-1">Governed runtime events by agent over the last 7 days.</p>
+            </div>
+            <span class="material-symbols-outlined text-primary text-lg">timeline</span>
+          </div>
+          <div class="space-y-4">
+            {% set trendPalette = ['bg-primary', 'bg-secondary', 'bg-yellow-400', 'bg-red-400', 'bg-blue-400', 'bg-green-400', 'bg-pink-400', 'bg-cyan-400'] %}
+            {% for day in dashboard.overview.agentActivityTrend.days %}
+              <div>
+                <div class="flex items-center justify-between text-xs mb-2">
+                  <span class="font-bold text-on-surface">{{ day.day }}</span>
+                  <span class="text-on-surface-variant">{{ day.points|sum(attribute='count') }} events</span>
+                </div>
+                <div class="h-4 rounded-full overflow-hidden bg-surface-container-highest flex">
+                  {% for point in day.points %}
+                    {% if point.count > 0 %}
+                      <div class="h-full {{ trendPalette[loop.index0 % (trendPalette|length)] }}" style="width: {{ (point.count / (dashboard.overview.agentActivityTrend.maxCount or 1) * 100) }}%" title="{{ point.agent }} · {{ point.count }}"></div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              </div>
+            {% else %}
+              <p class="text-sm text-on-surface-variant">No trend data available.</p>
+            {% endfor %}
+            <div class="flex flex-wrap gap-2 pt-2">
+              {% for agent in dashboard.overview.agentActivityTrend.agents %}
+                <span class="inline-flex items-center gap-2 rounded-full bg-surface-container-high px-3 py-1 text-[11px] text-on-surface-variant border border-outline-variant/10">
+                  <span class="inline-block w-2.5 h-2.5 rounded-full {{ trendPalette[loop.index0 % (trendPalette|length)] }}"></span>
+                  <span class="text-on-surface">{{ agent }}</span>
+                </span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% set overviewPairs = [
+          ('Agent Authorizations', dashboard.overview.agentAuthorizations, 'gavel', 'Action-time authorization decisions'),
+          ('Content Safeguards', dashboard.overview.contentSafeguards, 'shield', 'Content-governance safeguard decisions'),
+          ('Human Oversight', dashboard.overview.humanOversight, 'approval_delegation', 'Oversight + reviewer governance decisions'),
+          ('Audit Integrity', dashboard.overview.auditIntegrity, 'verified', dashboard.overview.auditIntegrityIssues ~ ' integrity issues'),
+          ('Total Governed Events', dashboard.overview.totalEvents, 'database', 'All canonical governance events in scope'),
+          ('System Failures', dashboard.overview.systemFailures, 'error', 'Canonical governance failure events')
         ] %}
-        {% for label, value, icon in cards %}
-          <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5">
-            <div class="flex items-center justify-between">
-              <p class="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant font-bold">{{ label }}</p>
+        {% for label, value, icon, detail in overviewPairs %}
+          <div class="rounded-3xl border border-outline-variant/20 bg-surface-container-low p-5 min-w-0">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-[10px] uppercase tracking-[0.25em] text-on-surface-variant font-bold">{{ label }}</p>
+                <p class="text-xs text-on-surface-variant mt-1">{{ detail }}</p>
+              </div>
               <span class="material-symbols-outlined text-primary text-lg">{{ icon }}</span>
             </div>
             <p class="mt-4 text-2xl font-black text-on-surface">{{ value }}</p>
