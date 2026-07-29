@@ -55,6 +55,7 @@ async def buildGovernanceDashboard(filters: GovernanceFilters) -> dict[str, Any]
     filtered_entries = [record.entry for record in filtered_records]
 
     claim_metadata = await _fetch_claim_metadata(claim_context.get("db_claim_ids", set()))
+    claim_governance_rows = await _fetch_claim_governance_rows(claim_context.get("db_claim_ids", set()))
     failure_records = []
     for path in audit_files:
         failure_records.extend(load_failure_records(path))
@@ -88,7 +89,7 @@ async def buildGovernanceDashboard(filters: GovernanceFilters) -> dict[str, Any]
         "scope": _build_scope(filters, claim_context, claim_metadata),
         "overview": _build_overview(filtered_entries, failure_entries, integrity_issue_count),
         "actionAuthorization": _build_action_authorization(filtered_entries),
-        "modelContentSafeguards": _build_model_content(filtered_entries),
+        "modelContentSafeguards": _build_model_content(filtered_entries, claim_governance_rows),
         "humanOversight": _build_human_oversight(filtered_entries),
         "auditIntegrityMonitoring": _build_audit_integrity(filtered_entries, failure_entries, file_summaries, linkage_warnings),
         "claimLinks": _build_claim_links(filtered_entries, claim_metadata),
@@ -182,10 +183,8 @@ def _filter_records(records: list[Any], filters: GovernanceFilters, claim_contex
 
 
 async def _fetch_claim_metadata(db_claim_ids: set[int]) -> dict[int, dict[str, Any]]:
-    if not db_claim_ids:
-        return {}
     async with getAsyncSession() as session:
-        result = await session.execute(
+        query = (
             select(
                 Claim.id,
                 Claim.claimNumber,
@@ -197,8 +196,10 @@ async def _fetch_claim_metadata(db_claim_ids: set[int]) -> dict[int, dict[str, A
                 User.displayName,
             )
             .outerjoin(User, User.employeeId == Claim.employeeId)
-            .where(Claim.id.in_(db_claim_ids))
         )
+        if db_claim_ids:
+            query = query.where(Claim.id.in_(db_claim_ids))
+        result = await session.execute(query)
         rows = result.all()
     metadata = {}
     for row in rows:
@@ -213,6 +214,33 @@ async def _fetch_claim_metadata(db_claim_ids: set[int]) -> dict[int, dict[str, A
             "advisorDecision": row.advisorDecision,
         }
     return metadata
+
+
+async def _fetch_claim_governance_rows(db_claim_ids: set[int]) -> list[dict[str, Any]]:
+    async with getAsyncSession() as session:
+        query = select(
+            Claim.id,
+            Claim.claimNumber,
+            Claim.advisorDecision,
+            Claim.advisorFindings,
+            Claim.complianceFindings,
+            Claim.fraudFindings,
+        )
+        if db_claim_ids:
+            query = query.where(Claim.id.in_(db_claim_ids))
+        result = await session.execute(query)
+        rows = result.all()
+    return [
+        {
+            "id": row.id,
+            "claimNumber": row.claimNumber,
+            "advisorDecision": row.advisorDecision,
+            "advisorFindings": row.advisorFindings,
+            "complianceFindings": row.complianceFindings,
+            "fraudFindings": row.fraudFindings,
+        }
+        for row in rows
+    ]
 
 
 def _build_scope(filters: GovernanceFilters, claim_context: dict[str, Any], claim_metadata: dict[int, dict[str, Any]]) -> dict[str, Any]:
@@ -314,36 +342,91 @@ def _build_action_authorization(entries: list[dict[str, Any]]) -> dict[str, Any]
     }
 
 
-def _build_model_content(entries: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_model_content(entries: list[dict[str, Any]], claim_governance_rows: list[dict[str, Any]]) -> dict[str, Any]:
     content_entries = [entry for entry in entries if entry.get("eventType") == "content_governance"]
     actionable = [entry for entry in content_entries if entry.get("result") in _ACTIONABLE_CONTENT_RESULTS]
-    by_agent = Counter((entry.get("agentIdentity") or "unknown") for entry in actionable)
-    by_surface = Counter((entry.get("contentType") or "unknown") for entry in content_entries)
-    by_control = Counter()
+    controls: dict[str, dict[str, Any]] = {
+        "B1": {"evaluations": 0, "passes": 0, "interventions": 0, "outcomes": Counter()},
+        "B2": {"evaluations": 0, "passes": 0, "interventions": 0, "outcomes": Counter(), "entityTypes": Counter()},
+        "B3": {"evaluations": 0, "passes": 0, "interventions": 0, "outcomes": Counter()},
+        "B4": {"evaluations": 0, "passes": 0, "interventions": 0, "outcomes": Counter(), "flags": Counter()},
+        "B6": {"materialDecisions": 0, "explanationsPresent": 0, "explanationsMissing": 0},
+    }
     alerts = []
-    for entry in actionable[-12:][::-1]:
+    for entry in content_entries:
         fired_controls = ((entry.get("disposition") or {}).get("firedControls") or [])
         for control in fired_controls:
-            result = control.get("result")
-            if result in {"allowed", "grounded", "no-concerns"}:
+            control_id = control.get("controlId")
+            if control_id not in controls or control_id == "B6":
                 continue
-            by_control[control.get("controlId") or "unknown"] += 1
-        alerts.append(
-            {
-                "timestamp": entry.get("timestamp"),
-                "agent": entry.get("agentIdentity") or "unknown",
-                "contentType": entry.get("contentType") or "unknown",
-                "result": entry.get("result"),
-                "claimId": entry.get("dbClaimId") or entry.get("claimId"),
-            }
-        )
+            result = str(control.get("result") or "unknown")
+            controls[control_id]["evaluations"] += 1
+            controls[control_id]["outcomes"][result] += 1
+            if result in {"allowed", "grounded", "no-concerns"}:
+                controls[control_id]["passes"] += 1
+            else:
+                controls[control_id]["interventions"] += 1
+            if control_id == "B2":
+                for entity_type in control.get("entityTypes") or []:
+                    controls[control_id]["entityTypes"][entity_type] += 1
+        if entry in actionable:
+            alerts.append(
+                {
+                    "timestamp": entry.get("timestamp"),
+                    "agent": entry.get("agentIdentity") or "unknown",
+                    "contentType": entry.get("contentType") or "unknown",
+                    "result": entry.get("result"),
+                    "claimId": entry.get("dbClaimId") or entry.get("claimId"),
+                }
+            )
+
+    for row in claim_governance_rows:
+        for findings_key in ("complianceFindings", "advisorFindings", "fraudFindings"):
+            findings = row.get(findings_key) or {}
+            for governance_item in findings.get("governance") or []:
+                if governance_item.get("control") == "B4":
+                    for flag in (governance_item.get("details") or {}).get("flags") or []:
+                        controls["B4"]["flags"][flag] += 1
+        if row.get("advisorDecision"):
+            controls["B6"]["materialDecisions"] += 1
+            if (row.get("advisorFindings") or {}).get("reviewerExplanation"):
+                controls["B6"]["explanationsPresent"] += 1
+            else:
+                controls["B6"]["explanationsMissing"] += 1
+
     return {
         "totalEvents": len(content_entries),
         "actionableAlerts": len(actionable),
-        "topAgents": _counter_rows(by_agent),
-        "topSurfaces": _counter_rows(by_surface),
-        "topControls": _counter_rows(by_control),
-        "recentAlerts": alerts,
+        "b1": {
+            "evaluations": controls["B1"]["evaluations"],
+            "passes": controls["B1"]["passes"],
+            "interventions": controls["B1"]["interventions"],
+            "outcomes": _counter_rows(controls["B1"]["outcomes"]),
+        },
+        "b2": {
+            "evaluations": controls["B2"]["evaluations"],
+            "passes": controls["B2"]["passes"],
+            "transformed": controls["B2"]["outcomes"].get("transformed", 0),
+            "entityTypes": _counter_rows(controls["B2"]["entityTypes"]),
+        },
+        "b3": {
+            "evaluations": controls["B3"]["evaluations"],
+            "passes": controls["B3"]["passes"],
+            "interventions": controls["B3"]["interventions"],
+            "outcomes": _counter_rows(controls["B3"]["outcomes"]),
+        },
+        "b4": {
+            "evaluations": controls["B4"]["evaluations"],
+            "passes": controls["B4"]["passes"],
+            "concerns": controls["B4"]["outcomes"].get("concerns-found", 0),
+            "flags": _counter_rows(controls["B4"]["flags"]),
+        },
+        "b6": {
+            "materialDecisions": controls["B6"]["materialDecisions"],
+            "explanationsPresent": controls["B6"]["explanationsPresent"],
+            "explanationsMissing": controls["B6"]["explanationsMissing"],
+        },
+        "recentAlerts": alerts[-8:][::-1],
     }
 
 

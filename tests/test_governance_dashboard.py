@@ -66,7 +66,7 @@ def _dashboard_payload():
         "scope": {"isFiltered": True, "label": "CLAIM-224 · escalated", "claim": {"claimNumber": "CLAIM-224"}},
         "overview": {"totalEvents": 12, "escalations": 3, "humanReviewRequired": 1, "systemFailures": 0, "integrityStatus": "Healthy"},
         "actionAuthorization": {"totalEvents": 5, "byDecision": {"Auto-Execute": 4, "Escalate": 1}, "agentDistributions": [{"agent": "intake", "totalActions": 3, "distribution": [{"tool": "insertAuditLog", "count": 2, "pct": 66.7}, {"tool": "insertClaim", "count": 1, "pct": 33.3}]}, {"agent": "advisor", "totalActions": 2, "distribution": [{"tool": "updateClaimStatus", "count": 1, "pct": 50.0}, {"tool": "insertAuditLog", "count": 1, "pct": 50.0}]}], "blockedProfiles": [{"agent": "advisor", "blockedCalls": 1, "blockedTools": [{"tool": "updateClaimStatus", "count": 1}]}, {"agent": "intake", "blockedCalls": 0, "blockedTools": []}]},
-        "modelContentSafeguards": {"totalEvents": 4, "actionableAlerts": 1, "topAgents": [{"label": "advisor", "count": 1}], "topSurfaces": [{"label": "model_output", "count": 2}], "topControls": [{"label": "B4", "count": 1}], "recentAlerts": []},
+        "modelContentSafeguards": {"totalEvents": 4, "actionableAlerts": 1, "b1": {"evaluations": 2, "passes": 2, "interventions": 0, "outcomes": [{"label": "allowed", "count": 2}]}, "b2": {"evaluations": 2, "passes": 1, "transformed": 1, "entityTypes": [{"label": "EMAIL_ADDRESS", "count": 1}]}, "b3": {"evaluations": 1, "passes": 1, "interventions": 0, "outcomes": [{"label": "grounded", "count": 1}]}, "b4": {"evaluations": 1, "passes": 0, "concerns": 1, "flags": [{"label": "inconsistency", "count": 1}]}, "b6": {"materialDecisions": 1, "explanationsPresent": 1, "explanationsMissing": 0}, "recentAlerts": [{"timestamp": "2026-07-28T05:53:01Z", "agent": "advisor", "contentType": "model_output", "result": "concerns-found", "claimId": 202}]},
         "humanOversight": {"oversightEvents": 1, "reviewerDecisions": 0, "oversightByDecision": {"require_human_review": 1}, "reviewerByDecision": {}, "contracts": []},
         "auditIntegrityMonitoring": {"fileSummaries": [{"name": "audit.jsonl", "eventCount": 12, "ok": True, "issueCount": 0}], "failureEvents": [], "linkageWarnings": [], "reconstructionReadiness": {"claimsObserved": 1, "failureEvents": 0, "filesWithIssues": 0}},
         "claimLinks": [{"id": 202, "claimNumber": "CLAIM-224", "status": "escalated", "amount": 19.36, "currency": "SGD", "displayName": "Alice Tan", "lastEventType": "oversight_governance"}],
@@ -90,6 +90,11 @@ def test_governance_page_renders_theme_sections_and_filter_scope(client):
     assert "updateClaimStatus" in response.text
     assert "blocked calls" in response.text
     assert "Model &amp; Content Safeguards" in response.text
+    assert "B1 — Input Attack Detection" in response.text
+    assert "B2 — PII Minimization" in response.text
+    assert "B3 — Grounding Validation" in response.text
+    assert "B4 — Output Critique" in response.text
+    assert "B6 — Decision Explanation Coverage" in response.text
     assert "Human Oversight" in response.text
     assert "Audit Integrity &amp; Monitoring" in response.text
     assert "CLAIM-224 · escalated" in response.text
