@@ -31,10 +31,8 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from deepeval import evaluate  # noqa: E402
-
 from eval.src.capture.enrichment import enrichCapturedResult  # noqa: E402
-from eval.src.capture.runner import runCapture  # noqa: E402
+from eval.src.capture.playwrightCapture import runCapture  # noqa: E402
 from eval.src.capture.subagent import (  # noqa: E402
     loadAllCapturedResults,
     loadCapturedResult,
@@ -207,52 +205,58 @@ def stepScore(
 
     print(f"Scoring {len(testCases)} test case(s)...")
 
-    try:
-        evalResults = evaluate(
-            test_cases=testCases,
-            metrics=[m for metricList in testCaseMetrics for m in metricList],
-            identifier="MMGA-Evaluation-Run",
-            hyperparameters={
-                "judgeModel": "openrouter/openai/gpt-4o",
-                "appVersion": "phase-12",
-            },
-        )
-    except Exception as exc:
-        logger.error("deepeval evaluate() failed: %s", exc)
-        return results
-
-    # Extract scores back into result dicts
-    # evalResults is EvaluationResult in deepeval 3.x; iterate over test_results
-    testResultsList = []
-    if hasattr(evalResults, "test_results"):
-        testResultsList = evalResults.test_results or []
-    elif hasattr(evalResults, "__iter__"):
-        testResultsList = list(evalResults)
+    # Metrics are measured synchronously, one at a time, instead of through
+    # deepeval.evaluate(). Its parallel async path fails under this interpreter
+    # with "APIError: OpenrouterException - Timeout should be used inside a
+    # task" for EVERY judge call, which silently produced an all-zero scorecard
+    # that looked like total system failure rather than a harness fault.
+    testResultsList: list = []
+    for i, benchmarkId in enumerate(testCaseBenchmarkIds):
+        for metric in testCaseMetrics[i]:
+            if hasattr(metric, "async_mode"):
+                metric.async_mode = False
+            try:
+                metric.measure(testCases[i])
+            except Exception as exc:
+                logger.error("Metric %s failed for %s: %s", type(metric).__name__, benchmarkId, exc)
 
     for i, benchmarkId in enumerate(testCaseBenchmarkIds):
         result = resultById.get(benchmarkId)
         if result is None:
             continue
 
-        # Collect metrics for this test case
-        metricsForThisCase = testCaseMetrics[i]
+        # Preferred source: EvaluationResult.test_results[i].metrics_data.
+        # deepeval runs metrics in async_mode, which scores COPIES of the metric
+        # objects -- the originals in testCaseMetrics keep score=None, so reading
+        # metric.score silently produced null scores for every benchmark.
         metricSummaries = []
-        for metric in metricsForThisCase:
-            metricScore = getattr(metric, "score", 0.0)
-            metricReason = getattr(metric, "reason", "")
-            metricName = getattr(metric, "__name__", type(metric).__name__)
+        testResult = testResultsList[i] if i < len(testResultsList) else None
+        for metricData in getattr(testResult, "metrics_data", None) or []:
             metricSummaries.append({
-                "metric": metricName,
-                "score": metricScore,
-                "reason": metricReason,
+                "metric": metricData.name,
+                "score": metricData.score,
+                "reason": metricData.reason,
             })
 
-            if verbose and metricReason:
-                print(f"  [{benchmarkId}] {metricName}: {metricScore:.2f} — {metricReason}")
+        # Fallback: read the metric objects directly (older deepeval behaviour).
+        if not metricSummaries:
+            for metric in testCaseMetrics[i]:
+                metricSummaries.append({
+                    "metric": getattr(metric, "__name__", type(metric).__name__),
+                    "score": getattr(metric, "score", None),
+                    "reason": getattr(metric, "reason", ""),
+                })
 
-        # Primary score = first metric
-        primaryScore = metricSummaries[0]["score"] if metricSummaries else 0.0
-        result["score"] = primaryScore
+        if verbose:
+            for summary in metricSummaries:
+                scoreText = (
+                    f"{summary['score']:.2f}" if summary["score"] is not None else "n/a"
+                )
+                print(f"  [{benchmarkId}] {summary['metric']}: {scoreText} — {summary['reason']}")
+
+        # Primary score = first metric; unscored benchmarks count as 0.0
+        primaryScore = metricSummaries[0]["score"] if metricSummaries else None
+        result["score"] = 0.0 if primaryScore is None else primaryScore
         result["metrics"] = metricSummaries
 
     print(f"Scoring complete for {len(testCaseBenchmarkIds)} benchmark(s).")
@@ -278,7 +282,7 @@ async def main() -> None:
         print(f"\nERROR: {exc}")
         print("\nRequired environment variables:")
         print("  OPENROUTER_API_KEY  -- judge LLM (gpt-4o via OpenRouter)")
-        print("  ANTHROPIC_API_KEY   -- Claude subagent invocation")
+        print("  (ANTHROPIC_API_KEY must NOT be set -- capture uses your claude CLI login)")
         sys.exit(1)
 
     # Determine which benchmarks to run
@@ -344,6 +348,17 @@ async def main() -> None:
         skipPush=args.skip_push,
         verbose=args.verbose,
     )
+
+    # -----------------------------------------------------------------------
+    # Step 4b: PERSIST
+    # -----------------------------------------------------------------------
+    # ENRICH and SCORE mutate the result dicts in memory only -- the files on
+    # disk are written back in STEP 1 and would otherwise keep score=null and
+    # unenriched fields, which makes saved runs non-comparable with each other.
+    print("\n=== STEP 4b: PERSIST ===")
+    for result in results:
+        saveCapturedResult(result, config.resultsDir)
+    print(f"Persisted {len(results)} enriched + scored result(s) to {config.resultsDir}")
 
     # -----------------------------------------------------------------------
     # Step 5: REPORT

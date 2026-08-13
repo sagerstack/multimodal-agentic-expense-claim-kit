@@ -277,20 +277,29 @@ def _build_overview(entries: list[dict[str, Any]], failures: list[dict[str, Any]
         if agent and agent not in distinct_agents:
             distinct_agents.append(agent)
 
-    action_authorizations = sum(1 for entry in entries if entry.get("eventType") == "action_governance")
-    content_safeguards = sum(1 for entry in entries if entry.get("eventType") == "content_governance")
-    human_oversight = sum(1 for entry in entries if entry.get("eventType") in {"oversight_governance", "reviewer_decision"})
+    action_entries = [entry for entry in entries if entry.get("eventType") == "action_governance"]
+    action_allowed = sum(1 for entry in action_entries if str(entry.get("decision") or "").lower() in {"auto-execute", "observe"})
+    action_blocked = len(action_entries) - action_allowed
 
+    content_entries = [entry for entry in entries if entry.get("eventType") == "content_governance"]
+    content_passed = sum(1 for entry in content_entries if str(entry.get("result") or "").lower() in {"allow", "allowed"})
+    content_intervened = len(content_entries) - content_passed
+
+    human_oversight = sum(1 for entry in entries if entry.get("eventType") in {"oversight_governance", "reviewer_decision"})
     trend = _build_agent_activity_trend(entries)
 
     return {
         "agentsMonitored": len(distinct_agents),
         "agentList": distinct_agents,
         "agentActivityTrend": trend,
-        "agentAuthorizations": action_authorizations,
-        "contentSafeguards": content_safeguards,
+        "agentAuthorizations": action_entries.__len__(),
+        "agentAuthorizationsAllowed": action_allowed,
+        "agentAuthorizationsBlocked": action_blocked,
+        "contentSafeguards": len(content_entries),
+        "contentSafeguardsPassed": content_passed,
+        "contentSafeguardsIntervened": content_intervened,
         "humanOversight": human_oversight,
-        "auditIntegrity": "Healthy" if integrity_issue_count == 0 else "Issues detected",
+        "auditIntegrity": "Healthy" if integrity_issue_count == 0 else f"{integrity_issue_count} issues detected",
         "auditIntegrityIssues": integrity_issue_count,
         "totalEvents": len(entries),
         "systemFailures": len(failures),
@@ -595,7 +604,7 @@ async def _build_linkage_warnings(filters: GovernanceFilters, claim_context: dic
     return warnings[:12]
 
 
-def _build_agent_activity_trend(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_agent_activity_trend(entries: list[dict[str, Any]]) -> dict[str, Any]:
     today = datetime.now(timezone.utc).date()
     days = [today - timedelta(days=offset) for offset in range(6, -1, -1)]
     by_day_agent: dict[tuple[str, str], int] = defaultdict(int)
@@ -629,7 +638,23 @@ def _build_agent_activity_trend(entries: list[dict[str, Any]]) -> list[dict[str,
             count = by_day_agent.get((iso, agent), 0)
             points.append({"agent": agent, "count": count})
         trend.append({"day": iso, "points": points})
-    return [{"days": trend, "agents": agents, "maxCount": max_count}][0]
+
+    chart_width = 520
+    chart_height = 180
+    left_pad = 16
+    usable_width = chart_width - (left_pad * 2)
+    usable_height = chart_height - 24
+    lines = []
+    for agent_index, agent in enumerate(agents):
+        line_points = []
+        for idx, day in enumerate(days):
+            count = by_day_agent.get((day.isoformat(), agent), 0)
+            x = left_pad + (usable_width * idx / max(len(days) - 1, 1))
+            y = chart_height - 12 if max_count == 0 else 12 + (usable_height * (1 - (count / max_count)))
+            line_points.append(f"{x:.1f},{y:.1f}")
+        lines.append({"agent": agent, "points": " ".join(line_points), "index": agent_index})
+
+    return {"days": trend, "agents": agents, "maxCount": max_count, "lines": lines, "chartWidth": chart_width, "chartHeight": chart_height}
 
 
 def _counter_rows(counter: Counter) -> list[dict[str, Any]]:

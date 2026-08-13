@@ -1,0 +1,702 @@
+{
+  "schemaVersion": 1,
+  "servers": {
+    "rag": {
+      "env": "RAG_MCP_URL",
+      "default": "http://mcp-rag:8000/mcp/"
+    },
+    "db": {
+      "env": "DB_MCP_URL",
+      "default": "http://mcp-db:8000/mcp/"
+    },
+    "currency": {
+      "env": "CURRENCY_MCP_URL",
+      "default": "http://mcp-currency:8000/mcp/"
+    }
+  },
+  "controls": {
+    "A5": {
+      "name": "allowlist",
+      "modeEnv": "AGENTIC_GOV_ENABLE_ALLOWLIST",
+      "defaultMode": "enforce"
+    },
+    "A3": {
+      "name": "identity",
+      "modeEnv": "AGENTIC_GOV_ENABLE_IDENTITY",
+      "defaultMode": "enforce"
+    },
+    "A4": {
+      "name": "mandate",
+      "modeEnv": "AGENTIC_GOV_ENABLE_MANDATE",
+      "defaultMode": "enforce"
+    },
+    "A2": {
+      "name": "integrity",
+      "modeEnv": "AGENTIC_GOV_ENABLE_INTEGRITY",
+      "defaultMode": "enforce"
+    },
+    "A7": {
+      "name": "exposure",
+      "modeEnv": "AGENTIC_GOV_ENABLE_EXPOSURE",
+      "defaultMode": "enforce"
+    },
+    "A8": {
+      "name": "rate",
+      "modeEnv": "AGENTIC_GOV_ENABLE_RATE",
+      "defaultMode": "enforce"
+    },
+    "A9": {
+      "name": "evidence",
+      "modeEnv": "AGENTIC_GOV_ENABLE_EVIDENCE",
+      "defaultMode": "enforce"
+    },
+    "A10": {
+      "name": "input-schema-and-trusted-server",
+      "modeEnv": "AGENTIC_GOV_ENABLE_SCHEMA",
+      "defaultMode": "enforce"
+    },
+    "A12": {
+      "name": "fail-closed-floor",
+      "modeEnv": "AGENTIC_GOV_ENABLE_FAIL_CLOSED",
+      "defaultMode": "enforce"
+    }
+  },
+  "trustedServers": [
+    "rag",
+    "db",
+    "currency"
+  ],
+  "allowlist": [
+    {
+      "server": "rag",
+      "tools": [
+        "searchPolicies"
+      ]
+    },
+    {
+      "server": "db",
+      "tools": [
+        "insertClaim",
+        "updateClaimStatus",
+        "executeQuery",
+        "getClaimSchema",
+        "insertAuditLog"
+      ]
+    },
+    {
+      "server": "currency",
+      "tools": [
+        "convertCurrency"
+      ]
+    }
+  ],
+  "identities": [
+    {
+      "id": "intake",
+      "role": "claim-intake-agent",
+      "dept": "claims"
+    },
+    {
+      "id": "compliance",
+      "role": "policy-compliance-agent",
+      "dept": "risk"
+    },
+    {
+      "id": "fraud",
+      "role": "fraud-detection-agent",
+      "dept": "risk"
+    },
+    {
+      "id": "advisor",
+      "role": "claim-advisor-agent",
+      "dept": "claims"
+    },
+    {
+      "id": "humanEscalation",
+      "role": "human-escalation-workflow",
+      "dept": "claims"
+    },
+    {
+      "id": "markAiReviewed",
+      "role": "review-status-workflow",
+      "dept": "claims"
+    },
+    {
+      "id": "application",
+      "role": "web-application",
+      "dept": "platform"
+    }
+  ],
+  "mandates": {
+    "intake": [
+      {
+        "server": "db",
+        "tools": [
+          "getClaimSchema",
+          "insertClaim",
+          "insertAuditLog"
+        ]
+      },
+      {
+        "server": "rag",
+        "tools": [
+          "searchPolicies"
+        ]
+      },
+      {
+        "server": "currency",
+        "tools": [
+          "convertCurrency"
+        ]
+      }
+    ],
+    "compliance": [
+      {
+        "server": "rag",
+        "tools": [
+          "searchPolicies"
+        ]
+      },
+      {
+        "server": "db",
+        "tools": [
+          "insertAuditLog"
+        ]
+      }
+    ],
+    "fraud": [
+      {
+        "server": "db",
+        "tools": [
+          "executeQuery",
+          "insertAuditLog"
+        ]
+      }
+    ],
+    "advisor": [
+      {
+        "server": "rag",
+        "tools": [
+          "searchPolicies"
+        ]
+      },
+      {
+        "server": "db",
+        "tools": [
+          "updateClaimStatus",
+          "insertAuditLog"
+        ]
+      }
+    ],
+    "humanEscalation": [
+      {
+        "server": "db",
+        "tools": [
+          "updateClaimStatus"
+        ]
+      }
+    ],
+    "markAiReviewed": [
+      {
+        "server": "db",
+        "tools": [
+          "updateClaimStatus"
+        ]
+      }
+    ],
+    "application": [
+      {
+        "server": "db",
+        "tools": [
+          "insertClaim",
+          "executeQuery",
+          "insertAuditLog"
+        ]
+      }
+    ]
+  },
+  "schemas": [
+    {
+      "server": "rag",
+      "tool": "searchPolicies",
+      "schema": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    {
+      "server": "currency",
+      "tool": "convertCurrency",
+      "schema": {
+        "type": "object",
+        "required": [
+          "amount",
+          "fromCurrency"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "fromCurrency": {
+            "type": "string",
+            "minLength": 1
+          },
+          "toCurrency": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "server": "db",
+      "tool": "getClaimSchema",
+      "schema": {
+        "type": "object",
+        "required": [],
+        "additionalProperties": false,
+        "properties": {}
+      }
+    },
+    {
+      "server": "db",
+      "tool": "executeQuery",
+      "schema": {
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "server": "db",
+      "tool": "insertAuditLog",
+      "schema": {
+        "type": "object",
+        "required": [
+          "claimId",
+          "action",
+          "newValue",
+          "actor"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "claimId": {
+            "type": "integer"
+          },
+          "action": {
+            "type": "string",
+            "minLength": 1
+          },
+          "newValue": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string",
+            "minLength": 1
+          },
+          "oldValue": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "server": "db",
+      "tool": "updateClaimStatus",
+      "schema": {
+        "type": "object",
+        "required": [
+          "claimId",
+          "newStatus",
+          "actor"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "claimId": {
+            "type": "integer"
+          },
+          "newStatus": {
+            "type": "string",
+            "minLength": 1
+          },
+          "actor": {
+            "type": "string",
+            "minLength": 1
+          },
+          "complianceFindings": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "fraudFindings": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "advisorDecision": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "advisorFindings": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "approvedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "server": "db",
+      "tool": "insertClaim",
+      "schema": {
+        "type": "object",
+        "required": [
+          "employeeId",
+          "status",
+          "totalAmount"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "employeeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1
+          },
+          "totalAmount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "intakeFindings": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "claimNumber": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "idempotencyKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "receiptNumber": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "merchant": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "receiptDate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "receiptTotalAmount": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "receiptCurrency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lineItems": {
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "imagePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "paymentMethod": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "taxAmount": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "originalAmount": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "originalCurrency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "convertedAmount": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "convertedCurrency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "exchangeRate": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "conversionDate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "exposure": [
+    {
+      "description": "EVAL OVERRIDE: per-action and aggregate exposure thresholds raised so high-value benchmark receipts (Contoso SGD 1542-3225) can reach submission. Without this, ER-005/011/013/015/016/020 dead-end before a claim exists and duplicate detection + approval routing cannot be measured at all. Shipped policy is unchanged; this file is eval-only.",
+      "server": "db",
+      "tool": "insertClaim",
+      "identities": [
+        "intake"
+      ],
+      "valuePath": "totalAmount",
+      "currency": "SGD",
+      "perAction": {
+        "escalateAbove": "1000000.00",
+        "hardDenyAbove": "5000000.00",
+        "ceilingDisposition": "Escalate",
+        "hardCapDisposition": "Deny"
+      },
+      "aggregate": {
+        "limit": "1000000.00",
+        "windowSeconds": 86400,
+        "keyPaths": [
+          "employeeId"
+        ],
+        "exceededDisposition": "Escalate"
+      }
+    }
+  ],
+  "rate": [
+    {
+      "description": "EVAL OVERRIDE: rate cap raised from 5/hour so a 19-benchmark suite can run back-to-back. Throughput guard only; no claim-quality control is altered. Do not use outside the eval harness.",
+      "server": "db",
+      "tool": "insertClaim",
+      "identities": [
+        "intake"
+      ],
+      "keyPaths": [
+        "employeeId",
+        "sessionClaimId"
+      ],
+      "maxAttempts": 1000,
+      "windowSeconds": 3600,
+      "exceededDisposition": "Deny"
+    }
+  ],
+  "evidence": [
+    {
+      "description": "Receipt-confidence-only POC; cited-policy evidence is deferred",
+      "server": "db",
+      "tool": "insertClaim",
+      "identities": [
+        "intake"
+      ],
+      "confidencePath": "extractedReceipt.confidence",
+      "requiredConfidenceFields": [
+        "merchant",
+        "date",
+        "totalAmount",
+        "currency"
+      ],
+      "requiredEvidencePaths": [
+        "extractedReceipt.fields.merchant",
+        "extractedReceipt.fields.date",
+        "extractedReceipt.fields.totalAmount",
+        "extractedReceipt.fields.currency"
+      ],
+      "minimumConfidence": "0.70",
+      "insufficientDisposition": "Escalate"
+    }
+  ],
+  "integrityRules": [
+    {
+      "server": "db",
+      "tool": "insertClaim",
+      "identities": [
+        "application"
+      ],
+      "checks": [
+        {
+          "declared": "employeeId",
+          "trusted": "employeeId",
+          "operator": "exact",
+          "required": true
+        },
+        {
+          "declared": "status",
+          "constant": "draft",
+          "operator": "exact",
+          "required": true
+        },
+        {
+          "declared": "totalAmount",
+          "constant": 0,
+          "operator": "decimal",
+          "absoluteTolerance": "0.00",
+          "required": true
+        },
+        {
+          "declared": "currency",
+          "constant": "SGD",
+          "operator": "currency",
+          "required": true
+        }
+      ]
+    },
+    {
+      "server": "db",
+      "tool": "insertClaim",
+      "identities": [
+        "intake"
+      ],
+      "checks": [
+        {
+          "declared": "employeeId",
+          "trusted": "employeeId",
+          "operator": "exact",
+          "required": true
+        }
+      ]
+    },
+    {
+      "server": "db",
+      "tool": "updateClaimStatus",
+      "identities": [
+        "advisor",
+        "humanEscalation",
+        "markAiReviewed"
+      ],
+      "checks": [
+        {
+          "declared": "claimId",
+          "trusted": "dbClaimId",
+          "operator": "integer",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "contentControls": {
+    "B1": {
+      "name": "input-attack-detection",
+      "modeEnv": "AGENTIC_GOV_ENABLE_B1",
+      "defaultMode": "observe"
+    },
+    "B2": {
+      "name": "pii-minimization",
+      "modeEnv": "AGENTIC_GOV_ENABLE_B2",
+      "defaultMode": "enforce"
+    },
+    "B3": {
+      "name": "grounded-output-validation",
+      "modeEnv": "AGENTIC_GOV_ENABLE_B3",
+      "defaultMode": "enforce"
+    },
+    "B4": {
+      "name": "llm-judge",
+      "modeEnv": "AGENTIC_GOV_ENABLE_B4",
+      "defaultMode": "observe"
+    },
+    "B5": {
+      "name": "graceful-failure",
+      "modeEnv": "AGENTIC_GOV_ENABLE_B5",
+      "defaultMode": "enforce"
+    },
+    "B6": {
+      "name": "material-explanations",
+      "modeEnv": "AGENTIC_GOV_ENABLE_B6",
+      "defaultMode": "enforce"
+    }
+  }
+}

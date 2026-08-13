@@ -4,7 +4,7 @@ All 20 benchmark definitions transcribed from eval/MMGA_evaluation_v2.pdf.
 Ground truth source: Expense Report Benchmark Pack v2, Section 2.
 """
 
-from typing import Optional, TypedDict
+from typing import NotRequired, Optional, TypedDict
 
 
 class Benchmark(TypedDict):
@@ -19,6 +19,13 @@ class Benchmark(TypedDict):
     passCriteria: str
     companionMetadata: Optional[dict]
     groundTruthFacts: Optional[list]
+    # Per-field ground truth for FieldExtractionMetric (ER-005/006/010 only).
+    # Keys are exactly the fields named in that benchmark's `question`; values
+    # are read off the receipt image itself. Transcribed 2026-08-04 because the
+    # MMGA pack ships no per-field ground truth and the previous values were
+    # misaligned with the files (ER-006 expected a limo-service merchant for a
+    # parking ticket).
+    expectedFields: NotRequired[dict]
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +147,16 @@ BENCHMARKS: list[Benchmark] = [
         passCriteria="Exact or normalized field match",
         companionMetadata=None,
         groundTruthFacts=None,
+        # 5.png -- Contoso receipt, 6/10/2019: Surface Pro 6 $999.00 +
+        # SurfacePen $99.99, Sub-Total $1098.99, Tax $104.40, Total $1203.39.
+        expectedFields={
+            "merchant": "Contoso",
+            "date": "2019-06-10",
+            "subtotal": 1098.99,
+            "tax": 104.40,
+            "total": 1203.39,
+            "currency": "USD",
+        },
     ),
     Benchmark(
         benchmarkId="ER-006",
@@ -153,6 +170,17 @@ BENCHMARKS: list[Benchmark] = [
         passCriteria="Exact or normalized field match",
         companionMetadata=None,
         groundTruthFacts=None,
+        # 6.png -- City of Palo Alto parking permit, purchased 01:34pm
+        # Aug 19 2024. Total Due/Paid $15.00, "Pmt Type: CC (Swipe)", card
+        # "#****-1224, Visa". The question asks for the payment TYPE, which the
+        # receipt gives as CC -- i.e. a credit card. "Visa" is the card brand,
+        # not the type, so it is not the answer being asked for.
+        expectedFields={
+            "merchant": "City of Palo Alto",
+            "date": "2024-08-19",
+            "total": 15.00,
+            "paymentMethod": "Credit Card",
+        },
     ),
     Benchmark(
         benchmarkId="ER-010",
@@ -166,6 +194,14 @@ BENCHMARKS: list[Benchmark] = [
         passCriteria="Exact or normalized field match",
         companionMetadata=None,
         groundTruthFacts=None,
+        # 10.jpg -- Petron Bkt Lanjan SB (Malaysia), 01/02/2018 (DD/MM).
+        # GST RM 0.28, Total RM inc.GST 4.90. Receipt prints "RM"; the ISO code
+        # is MYR and the matcher is containment-based, so both forms match.
+        expectedFields={
+            "currency": "MYR",
+            "tax": 0.28,
+            "total": 4.90,
+        },
     ),
     Benchmark(
         benchmarkId="ER-011",

@@ -29,12 +29,14 @@ def _extractScore(result: dict) -> float:
     Returns:
         Float score in range [0.0, 1.0].
     """
-    if "score" in result:
+    # A failed capture scores None, not a number -- float(None) raised TypeError
+    # and aborted the whole REPORT step. Treat unscored as 0.0.
+    if result.get("score") is not None:
         return float(result["score"])
     metrics = result.get("metrics")
     if isinstance(metrics, list) and metrics:
         firstMetric = metrics[0]
-        if isinstance(firstMetric, dict) and "score" in firstMetric:
+        if isinstance(firstMetric, dict) and firstMetric.get("score") is not None:
             return float(firstMetric["score"])
     return 0.0
 

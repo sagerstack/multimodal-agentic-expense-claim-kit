@@ -19,6 +19,71 @@ from agentic_claims.core.logging import logEvent
 
 logger = logging.getLogger(__name__)
 
+_OPENROUTER_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def detectMimeType(fileBytes: bytes) -> str:
+    """Identify an uploaded receipt by magic bytes.
+
+    Uploads were previously labelled "image/jpeg" unconditionally, so PDFs were
+    sent to the VLM as image data and rejected with HTTP 400 ("Provider returned
+    error"). PDFs need the OpenRouter file-parser path instead.
+    """
+    if fileBytes.startswith(b"%PDF"):
+        return "application/pdf"
+    if fileBytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if fileBytes.startswith(b"GIF8"):
+        return "image/gif"
+    if fileBytes.startswith(b"RIFF") and fileBytes[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/jpeg"
+
+
+async def callVlmWithPdf(pdfB64: str, model: str, apiKey: str, maxTokens: int) -> str:
+    """Send a PDF receipt to OpenRouter using the file-parser plugin.
+
+    Vision models cannot accept a PDF through an image_url part. OpenRouter
+    exposes PDFs via a "file" content part combined with the file-parser plugin,
+    which extracts the document before the model sees it.
+
+    Returns the assistant's raw text content.
+    """
+    payload = {
+        "model": model,
+        "max_tokens": maxTokens,
+        "temperature": 0.0,
+        "plugins": [{"id": "file-parser", "pdf": {"engine": "pdf-text"}}],
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": VLM_EXTRACTION_PROMPT},
+                    {
+                        "type": "file",
+                        "file": {
+                            "filename": "receipt.pdf",
+                            "file_data": f"data:application/pdf;base64,{pdfB64}",
+                        },
+                    },
+                ],
+            }
+        ],
+    }
+    # verify=False mirrors the Zscaler corporate-proxy workaround used below.
+    async with httpx.AsyncClient(verify=False, follow_redirects=True, timeout=180.0) as client:
+        response = await client.post(
+            _OPENROUTER_COMPLETIONS_URL,
+            json=payload,
+            headers={"Authorization": f"Bearer {apiKey}", "Content-Type": "application/json"},
+        )
+        response.raise_for_status()
+        body = response.json()
+
+    if "error" in body:
+        raise RuntimeError(f"OpenRouter error: {body['error'].get('message', body['error'])}")
+    return body["choices"][0]["message"]["content"]
+
 
 @tool
 async def extractReceiptFields(claimId: str) -> dict:
@@ -67,6 +132,27 @@ async def extractReceiptFields(claimId: str) -> dict:
         #     },
         # )
 
+        mimeType = detectMimeType(imageBytes)
+
+        # PDFs cannot travel through an image_url part -- route them to the
+        # OpenRouter file-parser plugin instead of the vision path.
+        if mimeType == "application/pdf":
+            logEvent(
+                logger,
+                "tool.extractReceiptFields.pdf_path",
+                logCategory="tool",
+                toolName="extractReceiptFields",
+                claimId=claimId,
+                mimeType=mimeType,
+            )
+            rawContent = await callVlmWithPdf(
+                pdfB64=imageB64,
+                model=settings.openrouter_model_vlm,
+                apiKey=settings.openrouter_api_key,
+                maxTokens=settings.openrouter_vlm_max_tokens,
+            )
+            return await _finaliseExtraction(rawContent, claimId, toolStart)
+
         # Step 3: Instantiate VLM using ChatOpenRouter
         vlm = ChatOpenRouter(
             model=settings.openrouter_model_vlm,
@@ -87,7 +173,7 @@ async def extractReceiptFields(claimId: str) -> dict:
                 {"type": "text", "text": VLM_EXTRACTION_PROMPT},
                 {
                     "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{imageB64}"},
+                    "image_url": {"url": f"data:{mimeType};base64,{imageB64}"},
                 },
             ]
         )
@@ -137,7 +223,20 @@ async def extractReceiptFields(claimId: str) -> dict:
             elapsed=f"{time.time() - toolStart:.2f}s",
         )
 
-        rawContent = response.content.strip()
+        return await _finaliseExtraction(response.content, claimId, toolStart)
+
+    except Exception as e:
+        return {"error": f"Extraction failed: {str(e)}"}
+
+
+async def _finaliseExtraction(rawContent: str, claimId: str, toolStart: float) -> dict:
+    """Strip fences, run the B1 injection check, parse JSON, publish the result.
+
+    Shared by the image (ChatOpenRouter) and PDF (file-parser) extraction paths
+    so both behave identically downstream.
+    """
+    try:
+        rawContent = (rawContent or "").strip()
         if rawContent.startswith("```"):
             # Remove opening ```json or ``` and closing ```
             lines = rawContent.split("\n")

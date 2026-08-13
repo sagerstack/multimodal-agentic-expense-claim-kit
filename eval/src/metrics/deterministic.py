@@ -51,14 +51,36 @@ class DocumentTypeMetric(BaseMetric):
         agentDecision = str(metadata.get("agentDecision", "")).strip().lower()
         expectedDecision = str(metadata.get("expectedDecision", "")).strip().lower()
 
-        matched = self._matchesExpected(agentDecision, expectedDecision)
+        # Primary signal: did the system accept the document as a claimable
+        # receipt? The app never emits a document-type label -- agentDecision is
+        # either a sentence ("your claim has been submitted successfully...") or,
+        # after enrichment, a workflow verdict ("auto_approve"). Neither contains
+        # the words this metric used to grep for, so keyword matching scored
+        # ER-001 as a failure no matter how well the agent performed. Creating a
+        # claim IS the classification: accepted => receipt, rejected => not one.
+        claimId = metadata.get("claimId")
+        acceptedAsReceipt = bool(claimId)
+        expectsReceipt = "receipt" in expectedDecision and "not" not in expectedDecision
 
+        if expectsReceipt:
+            matched = acceptedAsReceipt
+        elif expectedDecision:
+            # "Not a receipt / Needs Review" and "Unsupported document" both mean
+            # the document must NOT become a claim. Fall back to the wording
+            # check so an explicit refusal still counts when no claim was made.
+            matched = not acceptedAsReceipt or self._matchesExpected(
+                agentDecision, expectedDecision
+            )
+        else:
+            matched = False
+
+        outcome = f"claimId={claimId!r} ({'accepted' if acceptedAsReceipt else 'rejected'})"
         self.score = 1.0 if matched else 0.0
         self.success = self.score >= self.threshold
         self.reason = (
-            f"Agent decision '{agentDecision}' matches expected '{expectedDecision}'"
+            f"{outcome} matches expected '{expectedDecision}'"
             if matched
-            else f"Agent decision '{agentDecision}' does NOT match expected '{expectedDecision}'"
+            else f"{outcome} does NOT match expected '{expectedDecision}'"
         )
         return self.score
 

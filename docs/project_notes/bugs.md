@@ -79,6 +79,17 @@ Bugs discovered during Phase 2.3 UAT testing. Resolved bugs documented for refer
 - **File**: `src/agentic_claims/app.py`
 - **Phase**: 2.4
 
+### BUG-027: Eval judge cannot see post-submission agent output
+- **Found**: 2026-08-05, System A/B governance comparison
+- **Symptom**: Benchmarks whose answer is produced by the compliance/fraud/advisor agents scored near zero. ER-013 scored 15.9% with the judge's stated reason being "the agent failed to identify the submission as a duplicate" — while the fraud agent had returned `verdict: duplicate`, "Exact duplicate of: CLAIM-279", and the advisor had escalated. The "Duplicate detection >= 90%" primary target was therefore reporting a failure for a working capability.
+- **Root cause**: `buildTestCase` in `eval/src/metrics/__init__.py` sets `actual_output` to the intake chat transcript alone. Compliance/fraud/advisor findings are enriched into `additional_metadata`, which only the deterministic metrics read. Any benchmark answered *after* submission was judged on a transcript that by design cannot contain the answer.
+- **Fix**: Added `_POST_SUBMISSION_SECTIONS` (per-benchmark allowlist) and `_formatPostSubmission()`, appending the relevant findings to `actual_output` under a `[Post-submission pipeline output]` header. Allowlisted: ER-013 (fraud+advisor), ER-016 (compliance+advisor), ER-019 (advisor). **Deliberately excluded**: ER-012, ER-015, ER-020 — the fixture set reuses three receipts so every post-submission capture carries `fraudVerdict: duplicate`; a blanket append would hand reconciliation/consistency benchmarks a duplicate flag as if it answered their question.
+- **Impact**: System A ER-013 15.9% -> 92.6% (primary target now passes, 5 failed targets -> 4); ER-016 36.2% -> 63.3%; ER-019 14.2% -> 29.0%. System B ER-013 correctly *fell* 71.9% -> 59.2% (B1 blocked the file, so nothing was ever detected). Overall A 53.0% -> 60.0%, B 62.1% -> 62.6%; the A/B gap closed from 9.1pp to 2.5pp, i.e. the bulk of the apparent governance effect was this defect.
+- **Severity**: High — invalidated a primary target and inflated a system-comparison result
+- **Files**: `eval/src/metrics/__init__.py`
+- **Related caveat (not a bug in our code)**: the GEval judge is nondeterministic. Rescoring identical captures drifted up to 15.2pp (System B ER-012 73.6% -> 58.4%), mean absolute drift 2.7pp across 16 unchanged benchmark-arm pairs. Single-run per-benchmark deltas under ~15pp on semantic benchmarks are not interpretable; only the deterministic metrics (ER-001..006, ER-010, ER-015) are exact. Any A/B claim on a semantic benchmark needs n>=3 per arm with a stated spread.
+
+
 ## Open
 
 ### BUG-018: Duplicate intake audit entries (receipt_uploaded, ai_extraction) — **RESOLVED Phase 8 QA**
@@ -196,3 +207,12 @@ Bugs discovered during Phase 2.3 UAT testing. Resolved bugs documented for refer
 - **Severity**: High — blocks entire claim flow with no user feedback
 - **Suggested fix**: Add timeout to OpenRouter client calls. Emit SSE error event if no `astream_events` output within N seconds.
 - **Files**: `src/agentic_claims/infrastructure/openrouter/client.py`, `src/agentic_claims/web/sseHelpers.py`
+
+### BUG-028: Playwright capture sources extraction fields from the wrong table
+- **Found**: 2026-08-05, reading `playwrightCapture.py` against the System B captures
+- **Symptom**: None yet — latent. No capture on disk was produced by this path.
+- **Root cause**: `_fetchExtractedFields` in `eval/src/capture/playwrightCapture.py` reads the `receipts` row, which has no `tax` and no `paymentMethod` columns. Those are exactly the fields ER-005/ER-010 (tax) and ER-006 (paymentMethod) are scored on. The values do exist, in `claims.intake_findings.extractedFields`.
+- **Impact if triggered**: ER-005/006/010 would lose points to the instrument rather than the app. Only fires the first time anyone runs `run_eval.py` *without* `--skip-capture`; the documented procedure always passes it.
+- **Suggested fix**: Source from `claims.intake_findings.extractedFields` + `.conversion` + `.confidenceScores`, as `eval/src/capture/buildCapture.py` already does.
+- **Severity**: Medium — latent, but silently corrupts extraction scores when it fires
+- **Files**: `eval/src/capture/playwrightCapture.py`

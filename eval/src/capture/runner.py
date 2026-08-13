@@ -9,10 +9,13 @@ This module is fully decoupled from the app -- no imports from agentic_claims.
 import asyncio
 import json
 import logging
+import os
 import re
+from pathlib import Path
 from typing import Optional
 
 from claude_code_sdk import query
+from claude_code_sdk._errors import MessageParseError
 from claude_code_sdk.types import (
     AssistantMessage,
     ClaudeCodeOptions,
@@ -26,6 +29,74 @@ from eval.src.config import EvalConfig
 from eval.src.dataset import Benchmark
 
 logger = logging.getLogger(__name__)
+
+# Project root -- used as the subagent cwd so the Playwright MCP server's
+# workspace-root file access covers eval/invoices/ for receipt uploads.
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+# Playwright MCP server, passed explicitly to the SDK subprocess. The SDK does
+# not inherit the interactive CLI's MCP registry, so without this the subagent
+# has no browser and every capture fails with an SDK error.
+PLAYWRIGHT_MCP_SERVER: dict = {
+    "playwright": {
+        "type": "stdio",
+        "command": "npx",
+        "args": [
+            "-y",
+            "@playwright/mcp@latest",
+            "--headless",
+            "--isolated",
+            "--viewport-size=1280x900",
+        ],
+    }
+}
+
+# Both forms are supplied: the bare server name allows every tool the server
+# exposes, the wildcard covers permission-rule style matching.
+PLAYWRIGHT_ALLOWED_TOOLS = ["mcp__playwright", "mcp__playwright__*"]
+
+
+def _subprocessEnv() -> dict[str, str]:
+    """Environment for the spawned `claude` CLI, with Anthropic auth cleared.
+
+    The CLI authenticates via the local subscription login. If ANTHROPIC_API_KEY
+    is set it switches to API-key auth instead and dies with "Invalid API key"
+    unless the value is a real key -- surfacing here as the opaque
+    "Command failed with exit code 1". Clearing it keeps subscription auth.
+    """
+    env = dict(os.environ)
+    env.pop("ANTHROPIC_API_KEY", None)
+    env.pop("ANTHROPIC_AUTH_TOKEN", None)
+    return env
+
+
+def _installTolerantMessageParser() -> None:
+    """Make claude-code-sdk 0.0.25 skip message types it does not recognise.
+
+    The SDK is end-of-life at 0.0.25 while the `claude` CLI keeps adding message
+    types. `rate_limit_event` is emitted on ordinary queries and raises
+    MessageParseError, which aborts the capture stream mid-run. Unknown types
+    carry no data this runner consumes, so dropping them is safe and keeps the
+    capture path working without a dependency migration.
+    """
+    from claude_code_sdk._internal import client as sdkClient
+    from claude_code_sdk._internal.message_parser import parse_message as originalParse
+
+    if getattr(sdkClient.parse_message, "_toleratesUnknownTypes", False):
+        return
+
+    def tolerantParse(data):
+        try:
+            return originalParse(data)
+        except MessageParseError:
+            logger.debug(
+                "Skipping unrecognised SDK message type: %s",
+                data.get("type") if isinstance(data, dict) else "?",
+            )
+            return None
+
+    tolerantParse._toleratesUnknownTypes = True
+    sdkClient.parse_message = tolerantParse
 
 
 # ---------------------------------------------------------------------------
@@ -61,20 +132,20 @@ def parseSubagentResponse(responseText: str, benchmark: Benchmark) -> dict:
     # Try 1: direct JSON parse
     parsed = _tryParseJson(text)
     if parsed is not None:
-        return parsed
+        return _normaliseResult(parsed, benchmark)
 
     # Try 2: strip markdown code fences
     fenceMatch = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if fenceMatch:
         parsed = _tryParseJson(fenceMatch.group(1))
         if parsed is not None:
-            return parsed
+            return _normaliseResult(parsed, benchmark)
 
     # Try 3: find the largest top-level JSON object in the text
     # Walk character by character to find balanced braces
     parsed = _extractFirstJsonObject(text)
     if parsed is not None:
-        return parsed
+        return _normaliseResult(parsed, benchmark)
 
     logger.warning(
         "parseSubagentResponse: could not extract JSON for %s. "
@@ -86,6 +157,22 @@ def parseSubagentResponse(responseText: str, benchmark: Benchmark) -> dict:
         benchmark,
         f"JSON parse failed. Response snippet: {text[:200]}",
     )
+
+
+def _normaliseResult(parsed: dict, benchmark: Benchmark) -> dict:
+    """Coerce an abort-shaped subagent response into the standard error schema.
+
+    The capture prompt tells the subagent to bail out with
+    {"error": ..., "capture": null} on login failure, a missing receipt file, or
+    a pipeline timeout. That shape is not the captured-result schema: downstream
+    code (and this module's own progress printing) assumes result["capture"] is
+    a dict, so passing it through raised AttributeError and aborted the whole
+    run instead of failing just this benchmark.
+    """
+    if parsed.get("error") or parsed.get("capture") is None:
+        message = parsed.get("error") or "Subagent returned no capture payload"
+        return _buildErrorResult(benchmark, str(message))
+    return parsed
 
 
 def _tryParseJson(text: str) -> Optional[dict]:
@@ -213,15 +300,24 @@ async def runSingleCapture(benchmark: Benchmark, config: EvalConfig) -> dict:
     else:
         prompt = buildCapturePrompt(benchmark, config)
 
+    _installTolerantMessageParser()
+
     options = ClaudeCodeOptions(
-        allowed_tools=["mcp__playwright__*"],
+        mcp_servers=PLAYWRIGHT_MCP_SERVER,
+        allowed_tools=PLAYWRIGHT_ALLOWED_TOOLS,
         max_turns=50,
+        cwd=_PROJECT_ROOT,
+        env=_subprocessEnv(),
     )
 
     collectedMessages: list = []
 
     try:
         async for event in query(prompt=prompt, options=options):
+            # Unrecognised message types are dropped by the tolerant parser
+            if event is None:
+                continue
+
             collectedMessages.append(event)
 
             # Log tool use activity for visibility
@@ -303,7 +399,7 @@ async def runCapture(
         if "captureError" in result:
             print(f"  ERROR: {result['captureError']}")
         else:
-            agentDecision = result.get("capture", {}).get("agentDecision", "")
+            agentDecision = (result.get("capture") or {}).get("agentDecision", "")
             print(f"  Decision: {agentDecision or 'N/A'}")
 
         results.append(result)

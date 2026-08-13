@@ -34,6 +34,8 @@ services:
       - ./templates:/app/templates
       - ./static:/app/static
       - ./.governance-audit:/app/.agentic_governance
+      # Eval-only governance policy override (rate cap). See eval/governance_policy_eval.json
+      - ./eval/governance_policy_eval.json:/app/eval_governance_policy.json:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 10s
